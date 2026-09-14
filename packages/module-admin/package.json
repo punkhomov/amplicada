@@ -23,11 +23,9 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
+    "@amplicada/platform-core": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
-    "@amplicada/platform-core": "workspace:*",
-    "@tanstack/react-table": "^8.21.0",
-    "@tanstack/react-virtual": "^3.13.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.0.0",
     "lucide-react": "^1.17.0",
@@ -37,23 +35,23 @@
   },
   "dependencies": {
     "@dnd-kit/utilities": "^3.2.2",
-    "@tanstack/react-table": "^8.21.0",
-    "@tanstack/react-virtual": "^3.13.0"
+    "@tanstack/react-table": "^9.1.2",
+    "@tanstack/react-virtual": "^3.14.9"
   },
   "devDependencies": {
+    "@amplicada/platform-core": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
-    "@amplicada/platform-core": "workspace:*",
-    "@types/node": "^22.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^5.0.0",
-    "i18next": "^26.3.4",
-    "lucide-react": "^1.17.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^7.0.0",
-    "typescript": "^7.0.0"
+    "fastify": "^5.12.0",
+    "i18next": "^26.3.6",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.2",
+    "typescript": "^7.0.2"
   }
 }
