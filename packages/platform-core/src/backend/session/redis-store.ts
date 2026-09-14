@@ -19,8 +19,8 @@ interface RedisClient {
   set(key: string, value: string, options?: { EX?: number }): Promise<string | null>;
   del(keys: string[]): Promise<number>;
   mGet(keys: string[]): Promise<(string | null)[]>;
-  expire(key: string, seconds: number): Promise<boolean>;
-  scanIterator(options: { MATCH: string; COUNT: number }): AsyncIterable<string>;
+  expire(key: string, seconds: number): Promise<number>;
+  scanIterator(options: { MATCH: string; COUNT: number }): AsyncIterable<string[]>;
 }
 
 interface RedisStoreOptions {
@@ -181,8 +181,8 @@ export class RedisStore implements SessionStore {
     // biome-ignore lint/style/useTemplate: мне такой стиль нравится больше в данном случае
     const pattern = this.prefix + '*';
     const set = new Set<string>();
-    for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: this.scanCount })) {
-      set.add(key);
+    for await (const keys of this.client.scanIterator({ MATCH: pattern, COUNT: this.scanCount })) {
+      for (const key of keys) set.add(key);
     }
     return set.size > 0 ? Array.from(set) : [];
   }

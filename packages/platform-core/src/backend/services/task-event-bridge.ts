@@ -1,11 +1,9 @@
-import type { createClient } from 'redis';
+import type { RedisClientType } from 'redis';
 import type { EventBus } from '../../contracts/event-bus.js';
 import { TASK_EVENTS_CHANNEL } from '../task-events.js';
 
-type RedisClient = ReturnType<typeof createClient>;
-
 export interface TaskEventBridgeDeps {
-  redis: RedisClient;
+  redis: RedisClientType;
   eventBus: EventBus;
 }
 
@@ -17,7 +15,7 @@ export interface TaskEventBridgeDeps {
  * никакой ветки "эта роль эмитит напрямую, эта через Redis" нет.
  */
 export class TaskEventBridge {
-  private subscriber: RedisClient | undefined;
+  private subscriber: RedisClientType | undefined;
 
   constructor(private deps: TaskEventBridgeDeps) {}
 

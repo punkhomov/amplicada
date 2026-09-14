@@ -40,6 +40,7 @@
 
 | Файл | Статус | Описание |
 |------|--------|----------|
+| `plans/2026-09-14-module-lifecycle-review.md` | `draft` | Первый архитектурный разбор: зависимости и порядок загрузки, дефект shutdown, владение ресурсами и удаление модулей; предложения и следующие итерации, без изменения runtime |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |
 | `plans/2026-07-13-frontend-core-reorg.md` | `implemented` | Реорганизация core/sdk (выполнен) |
 | `plans/2026-07-13-server-sessions.md` | `implemented` | Безопасные серверные сессии (Redis + @fastify/session + bcrypt) |

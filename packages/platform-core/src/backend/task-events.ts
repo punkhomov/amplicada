@@ -1,6 +1,4 @@
-import type { createClient } from 'redis';
-
-type RedisClient = ReturnType<typeof createClient>;
+import type { RedisClientType } from 'redis';
 
 export const TASK_EVENTS_CHANNEL = 'task:events';
 
@@ -11,6 +9,6 @@ export const TASK_EVENTS_CHANNEL = 'task:events';
  * Так поведение одинаково для web/worker/all — нет отдельной ветки "эмитить и локально, и в Redis
  * одновременно", которая раньше требовала спецкейса на ROLE=all, чтобы не задвоить доставку.
  */
-export function emitTaskEvent<T>(redis: RedisClient, type: string, payload: T): void {
+export function emitTaskEvent<T>(redis: RedisClientType, type: string, payload: T): void {
   redis.publish(TASK_EVENTS_CHANNEL, JSON.stringify({ type, payload })).catch(() => {});
 }

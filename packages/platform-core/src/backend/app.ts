@@ -10,7 +10,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
-import { createClient } from 'redis';
+import { createClient, type RedisClientType } from 'redis';
 import {
   type BackendDbService,
   type BackendDocumentRuntime,
@@ -173,7 +173,7 @@ export async function createApp(): Promise<App> {
 export async function bootstrap(app: FastifyInstance, modules: BackendModule[], context: BackendSetupContext): Promise<void> {
   const db = context.services.resolve<BackendDbService>('db');
   const pool = context.services.resolve<Pool>('pg-pool');
-  const redisClient = context.services.resolve<ReturnType<typeof createClient>>('redis');
+  const redisClient = context.services.resolve<RedisClientType>('redis');
   const s3Client = context.services.resolve<S3Client>('s3-client');
 
   registerCoreDocuments(context.documents);

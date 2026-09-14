@@ -1,5 +1,5 @@
 import { DEFAULT_EXTENSION_KEY, type FilterTree } from '@amplicada/platform-core/contracts';
-import type { VisibilityState } from '@tanstack/react-table';
+import type { ColumnVisibilityState as VisibilityState } from '@tanstack/react-table';
 
 export interface TableSettings {
   paginationMode: 'infinite' | 'pages';

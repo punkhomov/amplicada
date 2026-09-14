@@ -1,6 +1,6 @@
 import { Cron } from 'croner';
 import { eq } from 'drizzle-orm';
-import type { createClient } from 'redis';
+import type { RedisClientType } from 'redis';
 import type { BackendDbService } from '../../contracts/backend/db.js';
 import type { TaskRunTrigger } from '../../contracts/backend/tasks.js';
 import { documentIndex, scheduledTasks } from '../schemas/index.js';
@@ -12,8 +12,6 @@ const POLL_INTERVAL_MS = 5_000;
 export const RUN_NOW_CHANNEL = 'task:run-now';
 export const CANCEL_RUN_CHANNEL = 'task:cancel-run';
 
-type RedisClient = ReturnType<typeof createClient>;
-
 interface ScheduledJob {
   job: Cron;
   schedule: string;
@@ -23,7 +21,7 @@ export interface TaskSchedulerDeps {
   db: BackendDbService;
   registry: TaskRegistryImpl;
   runner: TaskRunner;
-  redis: RedisClient;
+  redis: RedisClientType;
 }
 
 export function validateCronSchedule(schedule: string): string | null {
@@ -38,7 +36,7 @@ export function validateCronSchedule(schedule: string): string | null {
 export class TaskScheduler {
   private jobs = new Map<string, ScheduledJob>();
   private pollTimer: NodeJS.Timeout | undefined;
-  private subscriber: RedisClient | undefined;
+  private subscriber: RedisClientType | undefined;
 
   constructor(private deps: TaskSchedulerDeps) {}
 

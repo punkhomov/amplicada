@@ -32,13 +32,20 @@ import {
   type ColumnDef,
   type ColumnResizeMode,
   type ColumnSizingState,
+  columnOrderingFeature,
+  columnResizingFeature,
+  columnSizingFeature,
+  columnVisibilityFeature,
   flexRender,
-  getCoreRowModel,
   type PaginationState,
   type RowSelectionState,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
   type SortingState,
-  useReactTable,
-  type VisibilityState,
+  tableFeatures,
+  useTable,
+  type ColumnVisibilityState as VisibilityState,
 } from '@tanstack/react-table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type Params, useNavigate, useParams } from 'react-router-dom';
@@ -117,6 +124,16 @@ export function adminDocumentListPagesQueryOptions(
       }),
   };
 }
+
+const features = tableFeatures({
+  columnOrderingFeature,
+  columnResizingFeature,
+  columnSizingFeature,
+  columnVisibilityFeature,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
+});
 
 export function AdminDocumentList() {
   const { t } = useTranslation('admin');
@@ -279,8 +296,8 @@ export function AdminDocumentList() {
 
   // --- Columns ---
 
-  const tableColumns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
-    const cols: ColumnDef<Record<string, unknown>>[] = [
+  const tableColumns = useMemo<ColumnDef<typeof features, Record<string, unknown>>[]>(() => {
+    const cols: ColumnDef<typeof features, Record<string, unknown>>[] = [
       {
         id: 'select',
         size: 32,
@@ -444,7 +461,8 @@ export function AdminDocumentList() {
     ],
   );
 
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data: items,
     columns: tableColumns,
     columnResizeMode,
@@ -478,7 +496,6 @@ export function AdminDocumentList() {
     ...(paginationMode === 'pages'
       ? { manualPagination: true, manualSorting: true, pageCount: queryData?.pagination?.totalPages ?? 0 }
       : {}),
-    getCoreRowModel: getCoreRowModel(),
   });
 
   const rows = table.getRowModel().rows;
@@ -731,7 +748,7 @@ export function AdminDocumentList() {
           paginationMode={paginationMode}
           total={totalCount}
           selectedCount={Object.keys(rowSelection).length}
-          currentPage={table.getState().pagination.pageIndex}
+          currentPage={table.state.pagination.pageIndex}
           totalPages={table.getPageCount()}
           pageSize={pagination.pageSize}
           onPageSizeChange={size => setPagination(p => ({ ...p, pageSize: size, pageIndex: 0 }))}

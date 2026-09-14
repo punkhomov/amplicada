@@ -1,6 +1,4 @@
-import type { createClient } from 'redis';
-
-type RedisClient = ReturnType<typeof createClient>;
+import type { RedisClientType } from 'redis';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TTL_SECONDS = 90;
@@ -11,7 +9,7 @@ export class WorkerHeartbeat {
   private timer: NodeJS.Timeout | undefined;
 
   constructor(
-    private redis: RedisClient,
+    private redis: RedisClientType,
     private workerId: string,
   ) {}
 

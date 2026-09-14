@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import type { createClient } from 'redis';
+import type { RedisClientType } from 'redis';
 import type { BackendDbService } from '../contracts/backend/db.js';
 import { TASK_EVENTS, type TaskRunStatus, type TaskRunTrigger } from '../contracts/backend/tasks.js';
 import { runWithTaskLogger, type TaskLogSink } from './logger.js';
@@ -9,14 +9,12 @@ import type { TaskRegistration } from './services/task-registry.js';
 import { emitTaskEvent } from './task-events.js';
 import type { TaskLock } from './task-lock.js';
 
-type RedisClient = ReturnType<typeof createClient>;
-
 export const LOCK_GRACE_MS = 15_000;
 const LOCK_EXTEND_DIVISOR = 3;
 
 export interface TaskRunnerDeps {
   db: BackendDbService;
-  redis: RedisClient;
+  redis: RedisClientType;
   lock: TaskLock;
   workerId: string;
 }

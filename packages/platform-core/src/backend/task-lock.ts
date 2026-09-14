@@ -1,6 +1,4 @@
-import type { createClient } from 'redis';
-
-type RedisClient = ReturnType<typeof createClient>;
+import type { RedisClientType } from 'redis';
 
 const EXTEND_SCRIPT = `
 if redis.call("GET", KEYS[1]) == ARGV[1] then
@@ -24,7 +22,7 @@ export interface TaskLockHandle {
 }
 
 export class TaskLock {
-  constructor(private redis: RedisClient) {}
+  constructor(private redis: RedisClientType) {}
 
   private keyFor(taskId: string): string {
     return `task-lock:${taskId}`;
