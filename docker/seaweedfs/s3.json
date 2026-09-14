@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "amplicada",
+      "credentials": [{ "accessKey": "amplicada", "secretKey": "amplicada" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

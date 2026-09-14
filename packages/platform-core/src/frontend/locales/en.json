@@ -1,0 +1,15 @@
+{
+  "loading": "Loading...",
+  "not_found": "Not found",
+  "common_save": "Save",
+  "common_cancel": "Cancel",
+  "common_delete": "Delete",
+  "common_confirm": "Confirm",
+  "home_title": "Home",
+  "home_greeting_prefix": "Logged in as",
+  "home_logout": "Log out",
+  "home_logout_pending": "Logging out...",
+  "theme_light": "Light",
+  "theme_dark": "Dark",
+  "theme_system": "System"
+}

@@ -1,0 +1,12 @@
+{
+  "request_type_label": "Request types",
+  "group_type_form": "Form fields",
+  "field_code": "Code",
+  "field_code_help": "Must match the workflow process code this request will follow",
+  "field_label": "Name",
+  "field_title_template": "Title template",
+  "field_title_template_help": "Placeholders {fieldKey}; empty — uses the type name",
+  "field_portal_enabled": "Show on portal",
+  "list_field_portal_enabled": "On portal",
+  "field_created": "Created"
+}

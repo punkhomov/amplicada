@@ -1,0 +1,18 @@
+{
+  "workflow_label": "Processes (templates)",
+  "page_editor": "Graph editor",
+  "field_code": "Code",
+  "field_code_help": "Unique process code (e.g. training-request)",
+  "field_name": "Name",
+  "field_description": "Description",
+  "field_active": "Active",
+  "field_created": "Created",
+
+  "process_label": "Requests",
+  "page_timeline": "Timeline",
+  "field_process": "Process",
+  "field_current_state": "Current stage",
+  "field_stage": "Stage",
+  "field_created_fem": "Created",
+  "field_completed": "Completed"
+}

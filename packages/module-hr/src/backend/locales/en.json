@@ -1,0 +1,77 @@
+{
+  "dashboard_section": "HR structure",
+
+  "field_code": "Code",
+  "field_name": "Name",
+  "field_description": "Description",
+  "field_active": "Active",
+  "field_short_name": "Short name",
+  "field_type": "Type",
+  "field_order": "Order",
+  "field_head": "Head",
+  "field_legal_entity": "Legal entity",
+  "field_family": "Family",
+  "field_min_salary": "Min. salary",
+  "field_max_salary": "Max. salary",
+  "field_valid_from": "Valid from",
+  "field_valid_to": "Valid to",
+  "field_category": "Category",
+  "field_scope": "Scope",
+  "field_department": "Department",
+  "field_template": "Position template",
+  "field_grade": "Grade",
+  "field_inn": "Tax ID (INN)",
+
+  "department_label": "Departments",
+  "department_field_parent": "Parent department",
+
+  "cost_center_label": "Cost center",
+  "cost_center_field_parent": "Parent cost center",
+
+  "job_family_label": "Job families",
+
+  "legal_entity_label": "Legal entities",
+  "legal_entity_field_full_name": "Full name",
+  "field_kpp": "Tax registration reason code (KPP)",
+
+  "position_grade_label": "Grades",
+
+  "position_template_label": "Position templates",
+
+  "role_label": "Roles",
+
+  "staff_unit_label": "Staff units",
+  "staff_unit_field_quantity": "Headcount",
+  "staff_unit_list_field_quantity": "Headcount",
+
+  "tag_label": "Tags",
+  "tag_scope_department": "Department",
+  "tag_scope_user": "Employee",
+  "tag_scope_staff_unit": "Staff unit",
+
+  "user_field_employee_code": "Employee ID",
+  "user_field_gender": "Gender",
+  "user_field_birth_date": "Date of birth",
+  "user_field_last_name": "Last name",
+  "user_field_first_name": "First name",
+  "user_field_middle_name": "Middle name",
+  "user_field_hire_date": "Hire date",
+  "user_field_position_start_date": "Position start date",
+  "user_field_termination_date": "Termination date",
+  "user_field_is_terminated": "Terminated",
+  "user_field_phone": "Phone",
+  "user_field_email": "Email",
+  "user_field_internal_phone": "Internal phone",
+  "user_field_internal_email": "Internal email",
+  "user_field_residential_address": "Residential address",
+  "user_field_registration_address": "Registration address",
+
+  "virtual_team_label": "Virtual teams",
+  "virtual_team_field_department": "Sponsoring department",
+  "virtual_team_field_project_start": "Project start date",
+  "virtual_team_field_project_end": "Project end date",
+
+  "work_schedule_label": "Work schedules",
+  "work_schedule_field_hours": "Hours per week",
+  "work_schedule_list_field_hours": "Hours/week"
+}

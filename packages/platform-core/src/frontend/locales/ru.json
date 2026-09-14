@@ -1,0 +1,15 @@
+{
+  "loading": "Загрузка...",
+  "not_found": "Не найдено",
+  "common_save": "Сохранить",
+  "common_cancel": "Отмена",
+  "common_delete": "Удалить",
+  "common_confirm": "Подтвердить",
+  "home_title": "Главная",
+  "home_greeting_prefix": "Вы вошли как",
+  "home_logout": "Выйти",
+  "home_logout_pending": "Выход...",
+  "theme_light": "Светлая",
+  "theme_dark": "Тёмная",
+  "theme_system": "Системная"
+}

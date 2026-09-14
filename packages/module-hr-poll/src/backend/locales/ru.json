@@ -1,0 +1,25 @@
+{
+  "poll_label": "Опросы",
+  "group_questions": "Вопросы",
+  "field_code": "Код",
+  "field_code_help": "Человекочитаемый идентификатор опроса",
+  "field_title": "Название",
+  "field_description": "Описание",
+  "field_status": "Статус",
+  "field_status_help": "draft — вопросы редактируемы; published — вопросы заморожены (кнопка «Опубликовать» на панели сверху)",
+  "field_active": "Активен",
+  "field_active_help": "Показывать пользователям (учитывается только для published)",
+  "field_starts_at": "Начало показа",
+  "field_ends_at": "Окончание показа",
+  "help_empty_unlimited": "Пусто — без ограничения",
+  "field_allow_repeat": "Разрешить повторные ответы",
+  "field_anonymous": "Анонимный опрос",
+  "field_anonymous_help": "Не связывать ответы с автором",
+  "field_created": "Создан",
+
+  "response_label": "Ответы на опросы",
+  "field_poll_id": "Опрос (id)",
+  "field_user_id": "Пользователь (id)",
+  "field_answers": "Ответы (JSON)",
+  "field_submitted_at": "Отправлен"
+}

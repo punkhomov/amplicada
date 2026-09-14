@@ -1,0 +1,30 @@
+{
+  "course_label": "Курсы",
+  "field_code": "Код",
+  "field_code_help": "Человекочитаемый идентификатор курса",
+  "field_title": "Название",
+  "field_description": "Описание",
+  "field_active": "Активен",
+  "field_active_help": "Показывать курс в каталоге",
+  "field_self_enrollable": "Открыт для самозаписи",
+  "field_self_enrollable_help": "Можно записаться самому, без назначения",
+  "field_created": "Создан",
+
+  "group_content": "Контент курса",
+
+  "attempt_label": "Попытки прохождения",
+  "field_user": "Пользователь",
+  "field_course": "Курс",
+  "field_user_id": "Пользователь (id)",
+  "field_course_id": "Курс (id)",
+  "field_completion": "Прохождение",
+  "field_success": "Результат",
+  "field_score": "Балл",
+  "field_score_help": "Присылается самим курсом. По спецификации SCORM балл клиент-авторитетен — это не проверенная оценка",
+  "field_total_time": "Время в курсе (сек)",
+  "field_manual_override": "Проставлено вручную",
+  "field_started": "Начата",
+  "field_completed": "Завершена",
+  "field_cmi": "Состояние SCORM (JSON)",
+  "field_cmi_help": "Сырое состояние от курса, только для разбора проблем"
+}

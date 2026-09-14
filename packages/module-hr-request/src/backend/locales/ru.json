@@ -1,0 +1,12 @@
+{
+  "request_type_label": "Типы заявок",
+  "group_type_form": "Поля формы",
+  "field_code": "Код",
+  "field_code_help": "Должен совпадать с кодом процесса (workflow), по которому пойдёт заявка",
+  "field_label": "Название",
+  "field_title_template": "Шаблон заголовка",
+  "field_title_template_help": "Подстановки {ключПоля}; пусто — используется название типа",
+  "field_portal_enabled": "Показывать на портале",
+  "list_field_portal_enabled": "На портале",
+  "field_created": "Создан"
+}

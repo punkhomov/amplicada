@@ -1,0 +1,32 @@
+{
+  "page_default": "General information",
+  "group_default": "General",
+  "field_id": "ID",
+  "field_name": "Name",
+  "field_description": "Description",
+  "field_login": "Login",
+  "field_created_at": "Created at",
+
+  "scheduled_task_label": "Background tasks",
+  "scheduled_task_runs_page": "Run history",
+  "scheduled_task_field_code": "Task code",
+  "scheduled_task_field_timeout": "Timeout (ms)",
+  "scheduled_task_field_timeout_help": "0 — no limit. Environment-specific (resources/load), set manually",
+  "scheduled_task_field_alert": "Alert on failure",
+  "scheduled_task_field_schedule": "Schedule (cron)",
+  "scheduled_task_field_schedule_help": "Empty — task is inactive",
+  "scheduled_task_field_active": "Active",
+  "scheduled_task_field_stale": "Stale (not in code)",
+  "scheduled_task_list_field_schedule": "Schedule",
+  "scheduled_task_list_field_stale": "Stale",
+
+  "user_group_label": "User group",
+  "group_members": "Members",
+
+  "user_label": "User",
+  "page_user_access": "Access",
+  "page_user_log": "Logging",
+  "group_security": "Security",
+  "group_access_rights": "Access rights",
+  "group_auth_log": "Authentication"
+}

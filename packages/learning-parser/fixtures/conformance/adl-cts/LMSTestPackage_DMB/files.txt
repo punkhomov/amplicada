@@ -1,0 +1,10 @@
+imsmanifest.xml
+resources/DMBehaviorTest1.htm
+resources/DMBehaviorTest2.htm
+resources/DMBehaviorTest3.htm
+resources/DMBehaviorTest4.htm
+resources/DMBehaviorTest5.htm
+resources/DMBehaviorTest6.htm
+resources/DMBehaviorTest7.htm
+resources/DMBehaviorTest8.htm
+resources/DMBehaviorTest9.htm

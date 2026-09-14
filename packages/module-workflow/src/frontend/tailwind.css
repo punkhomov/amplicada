@@ -1,0 +1,5 @@
+/* Стили канваса React Flow — импорт здесь, а не в tsx модуля: tsc модуля не умеет css-импорты.
+   @import обязан стоять до @source (CSS: @import предшествует прочим at-rules). */
+@import "@xyflow/react/dist/style.css";
+
+@source "../";

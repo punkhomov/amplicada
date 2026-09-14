@@ -1,0 +1,6 @@
+lesson.au
+lesson.crs
+lesson.cst
+lesson.des
+lesson.ort
+lesson.pre

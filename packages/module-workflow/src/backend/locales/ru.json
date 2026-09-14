@@ -1,0 +1,18 @@
+{
+  "workflow_label": "Процессы (шаблоны)",
+  "page_editor": "Редактор графа",
+  "field_code": "Код",
+  "field_code_help": "Уникальный код процесса (напр. training-request)",
+  "field_name": "Название",
+  "field_description": "Описание",
+  "field_active": "Активен",
+  "field_created": "Создан",
+
+  "process_label": "Заявки",
+  "page_timeline": "Таймлайн",
+  "field_process": "Процесс",
+  "field_current_state": "Текущий этап",
+  "field_stage": "Этап",
+  "field_created_fem": "Создана",
+  "field_completed": "Завершена"
+}

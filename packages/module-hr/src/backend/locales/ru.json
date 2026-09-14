@@ -1,0 +1,77 @@
+{
+  "dashboard_section": "HR-структура",
+
+  "field_code": "Код",
+  "field_name": "Название",
+  "field_description": "Описание",
+  "field_active": "Активно",
+  "field_short_name": "Краткое название",
+  "field_type": "Тип",
+  "field_order": "Порядок",
+  "field_head": "Руководитель",
+  "field_legal_entity": "Юрлицо",
+  "field_family": "Семейство",
+  "field_min_salary": "Мин. оклад",
+  "field_max_salary": "Макс. оклад",
+  "field_valid_from": "Действует с",
+  "field_valid_to": "Действует по",
+  "field_category": "Категория",
+  "field_scope": "Область",
+  "field_department": "Подразделение",
+  "field_template": "Типовая должность",
+  "field_grade": "Грейд",
+  "field_inn": "ИНН",
+
+  "department_label": "Подразделения",
+  "department_field_parent": "Вышестоящее подразделение",
+
+  "cost_center_label": "ЦФО",
+  "cost_center_field_parent": "Вышестоящий ЦФО",
+
+  "job_family_label": "Семейства должностей",
+
+  "legal_entity_label": "Юридические лица",
+  "legal_entity_field_full_name": "Полное название",
+  "field_kpp": "КПП",
+
+  "position_grade_label": "Грейды",
+
+  "position_template_label": "Типовые должности",
+
+  "role_label": "Роли",
+
+  "staff_unit_label": "Штатные единицы",
+  "staff_unit_field_quantity": "Количество ставок",
+  "staff_unit_list_field_quantity": "Ставок",
+
+  "tag_label": "Теги",
+  "tag_scope_department": "Подразделение",
+  "tag_scope_user": "Сотрудник",
+  "tag_scope_staff_unit": "Штатная единица",
+
+  "user_field_employee_code": "Табельный номер",
+  "user_field_gender": "Пол",
+  "user_field_birth_date": "Дата рождения",
+  "user_field_last_name": "Фамилия",
+  "user_field_first_name": "Имя",
+  "user_field_middle_name": "Отчество",
+  "user_field_hire_date": "Дата приема",
+  "user_field_position_start_date": "Дата вступления в должность",
+  "user_field_termination_date": "Дата увольнения",
+  "user_field_is_terminated": "Уволен",
+  "user_field_phone": "Телефон",
+  "user_field_email": "Email",
+  "user_field_internal_phone": "Внутренний телефон",
+  "user_field_internal_email": "Внутренний email",
+  "user_field_residential_address": "Адрес (проживания)",
+  "user_field_registration_address": "Адрес (регистрации)",
+
+  "virtual_team_label": "Виртуальные команды",
+  "virtual_team_field_department": "Курирующий отдел",
+  "virtual_team_field_project_start": "Дата старта проекта",
+  "virtual_team_field_project_end": "Дата закрытия проекта",
+
+  "work_schedule_label": "Графики работы",
+  "work_schedule_field_hours": "Часов в неделю",
+  "work_schedule_list_field_hours": "Часов/нед"
+}

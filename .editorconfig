@@ -1,0 +1,28 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+# Корпус настоящих пакетов — чужие файлы, их байты и есть предмет проверки.
+#
+# Правила выше здесь враждебны: `end_of_line = lf` переписал бы 14 описателей, пришедших с CRLF,
+# `insert_final_newline` и `trim_trailing_whitespace` меняли бы байты, а `charset` мог бы
+# перекодировать описатель в windows-1251 — ровно то, определение чего проверяет разбор. Достаточно
+# один раз открыть фикстуру в редакторе и сохранить.
+#
+# Парная защита от git — в `.gitattributes`. Происхождение — в `fixtures/PROVENANCE.md`.
+[packages/learning-parser/fixtures/**]
+charset = unset
+end_of_line = unset
+indent_style = unset
+indent_size = unset
+trim_trailing_whitespace = false
+insert_final_newline = false

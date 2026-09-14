@@ -1,0 +1,59 @@
+{
+  "name": "@amplicada/module-admin",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./backend": {
+      "types": "./dist/backend/index.d.ts",
+      "import": "./dist/backend/index.js"
+    },
+    "./frontend": {
+      "types": "./dist/frontend/index.d.ts",
+      "import": "./dist/frontend/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "import": "./dist/contracts/index.js"
+    },
+    "./frontend/tailwind.css": "./src/frontend/tailwind.css"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@amplicada/platform-core": "workspace:*",
+    "@tanstack/react-table": "^8.21.0",
+    "@tanstack/react-virtual": "^3.13.0",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.0.0",
+    "lucide-react": "^1.17.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.0"
+  },
+  "dependencies": {
+    "@dnd-kit/utilities": "^3.2.2",
+    "@tanstack/react-table": "^8.21.0",
+    "@tanstack/react-virtual": "^3.13.0"
+  },
+  "devDependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@amplicada/platform-core": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.0.0",
+    "i18next": "^26.3.4",
+    "lucide-react": "^1.17.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.0",
+    "typescript": "^7.0.0"
+  }
+}

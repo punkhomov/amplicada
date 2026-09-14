@@ -1,0 +1,16 @@
+{
+  "login_title": "Sign in",
+  "login_field_login": "Login",
+  "login_field_password": "Password",
+  "login_submit": "Sign in",
+  "login_submit_pending": "Signing in...",
+  "login_error_invalid": "Invalid login or password",
+  "login_error_server": "Server error",
+  "change_password_action": "Change password",
+  "change_password_title": "Change password",
+  "change_password_description": "Enter a new password. Once confirmed, the hash will be written to the form — click \"Save\" to apply it.",
+  "change_password_field": "New password",
+  "change_password_placeholder": "Enter password",
+  "change_password_error": "Error hashing password",
+  "change_password_pending": "Hashing..."
+}

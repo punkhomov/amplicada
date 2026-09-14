@@ -1,0 +1,32 @@
+{
+  "page_default": "Основная информация",
+  "group_default": "Основное",
+  "field_id": "ID",
+  "field_name": "Название",
+  "field_description": "Описание",
+  "field_login": "Логин",
+  "field_created_at": "Дата создания",
+
+  "scheduled_task_label": "Фоновые задачи",
+  "scheduled_task_runs_page": "История запусков",
+  "scheduled_task_field_code": "Код задачи",
+  "scheduled_task_field_timeout": "Таймаут (мс)",
+  "scheduled_task_field_timeout_help": "0 — без ограничения. Значение специфично для контура (ресурсы/нагрузка), задаётся вручную",
+  "scheduled_task_field_alert": "Алерт на падение",
+  "scheduled_task_field_schedule": "Расписание (cron)",
+  "scheduled_task_field_schedule_help": "Пусто — задача неактивна",
+  "scheduled_task_field_active": "Активна",
+  "scheduled_task_field_stale": "Устарела (нет в коде)",
+  "scheduled_task_list_field_schedule": "Расписание",
+  "scheduled_task_list_field_stale": "Устарела",
+
+  "user_group_label": "Группа пользователей",
+  "group_members": "Участники",
+
+  "user_label": "Пользователь",
+  "page_user_access": "Доступ",
+  "page_user_log": "Логирование",
+  "group_security": "Безопасность",
+  "group_access_rights": "Права доступа",
+  "group_auth_log": "Авторизация"
+}

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.turbo
+.env
+.env.host
+.mcp.json
+opencode.json
+*.log
+.DS_Store
+Thumbs.db
+pgdata/
+.claude
+CLAUDE.md
+/other
+/todos.md
+/ref/references/
+/ref/entries/

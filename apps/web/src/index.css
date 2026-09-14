@@ -1,0 +1,9 @@
+@import "@amplicada/platform-core/frontend/styles/base.css";
+@import "@amplicada/platform-core/frontend/tailwind.css";
+@import "@amplicada/module-hr/frontend/tailwind.css";
+@import "@amplicada/module-auth-password/frontend/tailwind.css";
+@import "@amplicada/module-admin/frontend/tailwind.css";
+@import "@amplicada/module-workflow/frontend/tailwind.css";
+@import "@amplicada/module-hr-request/frontend/tailwind.css";
+@import "@amplicada/module-hr-poll/frontend/tailwind.css";
+@import "@amplicada/module-hr-learning/frontend/tailwind.css";

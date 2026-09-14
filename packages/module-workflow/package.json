@@ -1,0 +1,50 @@
+{
+  "name": "@amplicada/module-workflow",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./backend": {
+      "types": "./dist/backend/index.d.ts",
+      "import": "./dist/backend/index.js"
+    },
+    "./frontend": {
+      "types": "./dist/frontend/index.d.ts",
+      "import": "./dist/frontend/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "import": "./dist/contracts/index.js"
+    },
+    "./frontend/tailwind.css": "./src/frontend/tailwind.css"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.11.0"
+  },
+  "peerDependencies": {
+    "@amplicada/platform-core": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.0.0",
+    "lucide-react": "^1.17.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.0"
+  },
+  "devDependencies": {
+    "@amplicada/platform-core": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.0.0",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.0.0",
+    "typescript": "^7.0.0"
+  }
+}

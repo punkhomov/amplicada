@@ -1,0 +1,25 @@
+{
+  "poll_label": "Polls",
+  "group_questions": "Questions",
+  "field_code": "Code",
+  "field_code_help": "Human-readable poll identifier",
+  "field_title": "Title",
+  "field_description": "Description",
+  "field_status": "Status",
+  "field_status_help": "draft — questions are editable; published — questions are frozen (\"Publish\" button on the top panel)",
+  "field_active": "Active",
+  "field_active_help": "Show to users (only relevant when published)",
+  "field_starts_at": "Starts showing at",
+  "field_ends_at": "Stops showing at",
+  "help_empty_unlimited": "Empty — no limit",
+  "field_allow_repeat": "Allow repeated responses",
+  "field_anonymous": "Anonymous poll",
+  "field_anonymous_help": "Don't link responses to the author",
+  "field_created": "Created",
+
+  "response_label": "Poll responses",
+  "field_poll_id": "Poll (id)",
+  "field_user_id": "User (id)",
+  "field_answers": "Answers (JSON)",
+  "field_submitted_at": "Submitted"
+}

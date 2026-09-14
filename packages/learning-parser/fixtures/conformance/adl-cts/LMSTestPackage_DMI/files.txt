@@ -1,0 +1,5 @@
+imsmanifest.xml
+resources/DMImplementationTest1.htm
+resources/DMImplementationTest2.htm
+resources/DMImplementationTest3.htm
+resources/DMImplementationTest4.htm

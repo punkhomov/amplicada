@@ -1,0 +1,43 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+ignoreScripts: true
+ignoreDepScripts: true
+blockExoticSubdeps: true
+minimumReleaseAge: 43200
+minimumReleaseAgeExclude:
+  - typescript
+  - "@typescript/typescript6"
+  - "@typescript/typescript-aix-ppc64"
+  - "@typescript/typescript-darwin-arm64"
+  - "@typescript/typescript-darwin-x64"
+  - "@typescript/typescript-freebsd-arm64"
+  - "@typescript/typescript-freebsd-x64"
+  - "@typescript/typescript-linux-arm"
+  - "@typescript/typescript-linux-arm64"
+  - "@typescript/typescript-linux-loong64"
+  - "@typescript/typescript-linux-mips64el"
+  - "@typescript/typescript-linux-ppc64"
+  - "@typescript/typescript-linux-riscv64"
+  - "@typescript/typescript-linux-s390x"
+  - "@typescript/typescript-linux-x64"
+  - "@typescript/typescript-netbsd-arm64"
+  - "@typescript/typescript-netbsd-x64"
+  - "@typescript/typescript-openbsd-arm64"
+  - "@typescript/typescript-openbsd-x64"
+  - "@typescript/typescript-sunos-x64"
+  - "@typescript/typescript-win32-arm64"
+  - "@typescript/typescript-win32-x64"
+  - dependency-cruiser@18.1.0
+  - enhanced-resolve@5.24.2
+  - enhanced-resolve@5.24.1
+  - ignore@7.0.6
+  - picomatch@4.0.5
+  - react-circle-flags@0.0.30
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - undici-types@6.21.0
+  - semver@6.3.1
+  - reselect@5.1.1
+allowBuilds:
+  bcrypt: true

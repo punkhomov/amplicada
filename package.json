@@ -1,0 +1,30 @@
+{
+  "name": "amplicada",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Платформа оценки персонала с модульной архитектурой",
+  "scripts": {
+    "dev": "turbo dev --filter=@amplicada/api --filter=@amplicada/web",
+    "infra:up": "docker compose -f docker-compose.infra.yaml up -d --wait",
+    "infra:down": "docker compose -f docker-compose.infra.yaml down",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check:biome": "biome check --write .",
+    "check:depcruise": "depcruise packages apps"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "dependency-cruiser": "^18.1.0",
+    "skills": "^1.5.14",
+    "turbo": "^2.10.3",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  },
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

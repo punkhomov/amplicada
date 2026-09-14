@@ -1,0 +1,44 @@
+{
+  "name": "@amplicada/learning-parser",
+  "version": "0.0.0",
+  "description": "Разбор пакетов учебных курсов: SCORM 1.2/2004, cmi5, xAPI, AICC",
+  "license": "MIT",
+  "keywords": [
+    "scorm",
+    "scorm-2004",
+    "cmi5",
+    "xapi",
+    "tincan",
+    "aicc",
+    "e-learning",
+    "lms",
+    "parser"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"dist/**/*.test.js\""
+  },
+  "dependencies": {
+    "fast-xml-parser": "~5.9.3",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/yauzl": "^3.4.0",
+    "typescript": "^7.0.0"
+  }
+}

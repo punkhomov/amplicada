@@ -1,0 +1,8 @@
+ScormEnginePackageProperties.xsd
+adlcp_rootv1p2.xsd
+ims_xml.xsd
+imscp_rootv1p1p2.xsd
+imsmanifest.xml
+imsmd_rootv1p2p1.xsd
+index.html
+metadata.xml

@@ -1,0 +1,36 @@
+{
+  "name": "@amplicada/web",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite --clearScreen false",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@amplicada/platform-core": "workspace:*",
+    "@amplicada/module-auth-password": "workspace:*",
+    "@amplicada/module-admin": "workspace:*",
+    "@amplicada/module-hr": "workspace:*",
+    "@amplicada/module-hr-learning": "workspace:*",
+    "@amplicada/module-hr-poll": "workspace:*",
+    "@amplicada/module-hr-request": "workspace:*",
+    "@amplicada/module-workflow": "workspace:*",
+    "@tanstack/react-query": "^5.62.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@tanstack/react-query-devtools": "^5.62.0",
+    "@types/node": "^22.19.20",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^7.0.0",
+    "vite": "^6.0.0"
+  }
+}

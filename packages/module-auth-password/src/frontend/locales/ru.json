@@ -1,0 +1,16 @@
+{
+  "login_title": "Вход в систему",
+  "login_field_login": "Логин",
+  "login_field_password": "Пароль",
+  "login_submit": "Войти",
+  "login_submit_pending": "Вход...",
+  "login_error_invalid": "Неверный логин или пароль",
+  "login_error_server": "Ошибка сервера",
+  "change_password_action": "Сменить пароль",
+  "change_password_title": "Смена пароля",
+  "change_password_description": "Введите новый пароль. После подтверждения хеш будет записан в форму, нажмите «Сохранить» для применения.",
+  "change_password_field": "Новый пароль",
+  "change_password_placeholder": "Введите пароль",
+  "change_password_error": "Ошибка при хешировании пароля",
+  "change_password_pending": "Хеширование..."
+}
