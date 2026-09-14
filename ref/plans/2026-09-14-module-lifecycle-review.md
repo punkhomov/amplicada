@@ -13,6 +13,12 @@ date: 2026-09-14
 план. Основа — текущий working tree, включая существовавшие до анализа изменения.
 БД и приложения не запускались. Формат данных не менялся, пропущенных миграций нет.
 
+**Обновление 2026-09-14:** исправлен путь `app.close()`: обе фазы shutdown, обратный
+порядок `stop()` модулей, продолжение очистки после ошибок. Добавлены тесты с Fastify
+без внешних сервисов; `pnpm typecheck` и `pnpm --filter @amplicada/platform-core test`
+прошли. Это только часть итерации 1: сортировка зависимостей, очистка
+частичного bootstrap и ожидание выполняющихся фоновых работ пока не реализованы.
+
 ## Оценка направления
 
 Модульный монолит с составом пакетов на этапе сборки соответствует модели отдельных
@@ -28,8 +34,8 @@ contracts и расширения документов дают хорошую �
 | `dependencies` не проверяются и не сортируют модули | [backend bootstrap](../../packages/platform-core/src/backend/app.ts), [frontend bootstrap](../../packages/platform-core/src/frontend/app.tsx) | Порядок `setup`/`start` задаётся массивами приложений; миграции модулей идут в порядке регистрации |
 | HR и заявки требуют workflow | Их `contracts/manifest.ts` и `backend/setup.ts` | HR запрашивает registry в `setup`; заявки запрашивают engine при подключении HTTP. Перестановка backend-модулей может сорвать запуск |
 | Заявки имеют физическую зависимость от workflow | [hr-requests.ts](../../packages/module-hr-request/src/backend/schemas/hr-requests.ts), `migrations/0000_init.sql` | На чистой БД миграции workflow должны быть раньше заявок |
-| Shutdown не исполняет зарегистрированную очистку core | `app.ts`: `phase: 'after'`, но `onClose` вызывает `execute`; [lifecycle.ts](../../packages/platform-core/src/backend/lifecycle.ts): `execute` обрабатывает только `before` | Путь `app.close()` не вызывает эту очистку. Минимальная проверка реального LifecycleImpl: после `execute` флаг очистки false, после `executeAfter` true |
-| `BackendModule.stop()` не вызывается загрузчиком | `backend/app.ts` | Контракт остановки есть, исполнения нет. Также нет обратной очистки уже начатого bootstrap при ошибке |
+| Исправлено: shutdown пропускал очистку core | [shutdown.ts](../../packages/platform-core/src/backend/shutdown.ts), `backend/app.ts` | `onClose` теперь вызывает обе фазы и каждый шаг очистки; ошибки собираются и возвращаются после всех шагов |
+| Исправлено: `BackendModule.stop()` не вызывался загрузчиком | `backend/shutdown.ts` | Вызывается в обратном порядке переданного списка модулей. Обратной очистки частичного bootstrap при ошибке пока нет |
 | Общие backend extension points пока не используются модулями | [extension-point.ts](../../packages/platform-core/src/backend/extension-point.ts), поиск `extensions.contribute/getAll` | Workflow использует собственный registry, получаемый через service locator; это обязательная связь, а не опциональный вклад |
 | Некоторые регистрации молча перезаписывают предыдущие | `backend/service-registry.ts`, `backend/module-registry.ts`, регистрация типов в `backend/documents.ts` | Совпадение идентификаторов скрывает ошибку состава приложения |
 | UI модулей импортирует module-admin | `frontend/setup.tsx` у auth-password, hr-requests, hr-poll, hr-learning | Зависимость пакетов существует отдельно от manifest dependencies. Отсутствие admin в bootstrap и отсутствие его пакета — разные ситуации |

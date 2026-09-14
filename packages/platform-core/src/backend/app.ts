@@ -45,6 +45,7 @@ import { TaskRegistryImpl } from './services/task-registry.js';
 import { TaskScheduler } from './services/task-scheduler.js';
 import { WorkerHeartbeat } from './services/worker-heartbeat.js';
 import { RedisStore } from './session/redis-store.js';
+import { registerShutdown } from './shutdown.js';
 import { TaskLock } from './task-lock.js';
 import { TaskRunner } from './task-runner.js';
 
@@ -275,22 +276,24 @@ export async function bootstrap(app: FastifyInstance, modules: BackendModule[], 
     logger.info('Task scheduler, reconciler and heartbeat started');
   }
 
-  context.lifecycle.register({
-    name: 'shutdown',
-    phase: 'after',
-    handler: async () => {
-      await taskScheduler.stop();
-      taskReconciler.stop();
-      workerHeartbeat.stop();
-      await taskEventBridge.stop();
-      await redisClient.quit();
-      await pool.end();
-      s3Client.destroy();
-      logger.info('Redis + Database pool closed');
-    },
-  });
-
-  app.addHook('onClose', async () => {
-    await context.lifecycle.execute('shutdown');
+  registerShutdown(app, {
+    lifecycle: context.lifecycle,
+    modules,
+    stopBackground: [
+      { name: 'task-scheduler', run: () => taskScheduler.stop() },
+      { name: 'task-reconciler', run: () => taskReconciler.stop() },
+      { name: 'worker-heartbeat', run: () => workerHeartbeat.stop() },
+    ],
+    closeResources: [
+      { name: 'task-event-bridge', run: () => taskEventBridge.stop() },
+      {
+        name: 'redis',
+        run: async () => {
+          await redisClient.quit();
+        },
+      },
+      { name: 'database', run: () => pool.end() },
+      { name: 'storage', run: () => s3Client.destroy() },
+    ],
   });
 }

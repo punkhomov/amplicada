@@ -3,7 +3,7 @@ title: Module System & Patterns
 type: guide
 tier: 3
 status: implemented
-date: 2026-07-13
+date: 2026-09-14
 source: clean/03-modules (main2, frontend-core-plan, current code)
 ---
 
@@ -151,6 +151,20 @@ export const myModule: BackendModule = {
   },
 }
 ```
+
+## Backend shutdown
+
+После успешного bootstrap вызов `app.close()` запускает очистку после завершения
+HTTP-запросов: lifecycle `shutdown/before` → остановка scheduler/reconciler/heartbeat
+→ `stop()` модулей в обратном порядке загрузки → lifecycle `shutdown/after`
+→ закрытие event bridge, Redis, PostgreSQL и S3 client. Модульные хуки могут пользоваться
+общими соединениями до их закрытия. Каждый шаг и каждый shutdown-hook выполняется,
+даже если предыдущий бросил ошибку; ошибки логируются и возвращаются через AggregateError.
+Для остальных lifecycle-событий сохраняется остановка на первой ошибке.
+
+Остановка таймеров пока не означает ожидания завершения всех фоновых задач.
+Обработка SIGTERM/SIGINT в entrypoint и очистка ресурсов при частичном сбое bootstrap
+этим изменением не добавлены. Порядок загрузки по-прежнему задаёт массив приложения.
 
 ## Frontend Module Pattern (FrontendModule)
 
