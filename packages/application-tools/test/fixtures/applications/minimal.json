@@ -1,0 +1,8 @@
+{
+  "id": "minimal",
+  "modules": ["@test/auth", "@test/admin"],
+  "targets": {
+    "backend": "./api",
+    "frontend": "./web"
+  }
+}

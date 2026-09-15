@@ -1,11 +1,11 @@
 import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend';
 import { API_CLIENT_TOKEN, type ApiClient } from '@amplicada/platform-core/frontend';
-import { moduleManifest } from '../contracts/manifest.js';
+import { frontendManifest } from '../contracts/manifest.js';
 import { ProcessTimelinePage, processDetailQueryOptions } from './pages/process-timeline/index.js';
 import { WorkflowEditorPage, workflowVersionsQueryOptions } from './pages/workflow-editor/index.js';
 
 export const workflowFrontendModule: FrontendModule = {
-  ...moduleManifest,
+  ...frontendManifest,
 
   setup(context) {
     // layout 'admin' — мягкая рантайм-связь по имени: module-admin регистрирует его,

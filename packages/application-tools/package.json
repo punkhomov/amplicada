@@ -1,0 +1,36 @@
+{
+  "name": "@amplicada/application-tools",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Static module discovery and application composition for Amplicada",
+  "bin": {
+    "amplicada-modules": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/application.d.ts",
+      "import": "./dist/application.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "docs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"dist/**/*.test.js\""
+  },
+  "dependencies": {
+    "@amplicada/platform-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2"
+  }
+}

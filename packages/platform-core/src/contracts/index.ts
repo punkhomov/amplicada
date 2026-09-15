@@ -59,4 +59,6 @@ export {
   pruneEmptyGroups,
 } from './filters.js';
 export type { Lifecycle, LifecycleHook } from './lifecycle.js';
+export type { ModuleDependencyNode } from './module-graph.js';
+export { sortModules } from './module-graph.js';
 export type { ServiceRegistry } from './service-registry.js';

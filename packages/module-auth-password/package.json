@@ -47,5 +47,25 @@
   },
   "dependencies": {
     "bcrypt": "^6.0.0"
-  }
+  },
+  "amplicada": {
+    "id": "auth-password",
+    "name": "Password Authentication",
+    "requires": [],
+    "backend": {
+      "export": "authPasswordModule",
+      "dependencies": []
+    },
+    "frontend": {
+      "export": "authPasswordFrontendModule",
+      "dependencies": []
+    },
+    "styles": "./frontend/tailwind.css"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "src/frontend",
+    "migrations"
+  ]
 }

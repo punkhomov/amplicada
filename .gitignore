@@ -15,3 +15,6 @@ CLAUDE.md
 /todos.md
 /ref/references/
 /ref/entries/
+
+# Application composition is regenerated before build/dev/typecheck.
+/apps/*/src/generated/

@@ -2,6 +2,7 @@ export interface RegisteredModule {
   id: string;
   name: string;
   version: string;
+  dependencies?: string[];
 }
 
 export interface FrontendModuleRegistry {

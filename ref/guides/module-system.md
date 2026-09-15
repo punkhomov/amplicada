@@ -3,11 +3,14 @@ title: Module System & Patterns
 type: guide
 tier: 3
 status: implemented
-date: 2026-09-14
+date: 2026-09-15
 source: clean/03-modules (main2, frontend-core-plan, current code)
 ---
 
 # Module System & Patterns
+
+Для подключения модулей к приложению используйте [автоподключение из dependencies и необязательные профили](application-composition.md).
+Примеры ручной регистрации ниже остаются допустимым низкоуровневым API.
 
 > Source: main2, frontend-core-plan, current code
 
@@ -164,7 +167,7 @@ HTTP-запросов: lifecycle `shutdown/before` → остановка schedu
 
 Остановка таймеров пока не означает ожидания завершения всех фоновых задач.
 Обработка SIGTERM/SIGINT в entrypoint и очистка ресурсов при частичном сбое bootstrap
-этим изменением не добавлены. Порядок загрузки по-прежнему задаёт массив приложения.
+этим изменением не добавлены. Порядок загрузки вычисляется по dependencies; входной массив задаёт порядок обхода независимых модулей.
 
 ## Frontend Module Pattern (FrontendModule)
 
@@ -230,7 +233,7 @@ export const myFrontendModule: FrontendModule = {
 | `eventBus` | `EventBus` | `on(event, handler)`, `off(event, handler)`, `emit(event, data)` |
 | `lifecycle` | `Lifecycle` | `register(hook)`, `execute(name)` |
 
-`createFrontendApp()` создаёт все registry, регистрирует встроенные layouts (`public`, `app`) и API-клиент. `bootstrapFrontend(modules, context)` запускает модули: `register → setup (все) → start (все)`.
+`createFrontendApp()` создаёт все registry, регистрирует встроенные layouts (`public`, `app`) и API-клиент. `bootstrapFrontend(modules, context)` запускает модули: `validate/sort → register (все) → setup (все) → start (все)`.
 
 ## ModuleRoutes + Layout Grouping
 
@@ -304,7 +307,11 @@ import { createFrontendApp, bootstrapFrontend, FrontendProvider, ModuleRoutes } 
 }
 ```
 
-### 3. Импортировать в index.css приложения
+### 3. Подключить CSS приложения
+
+Генератор делает это по `amplicada.styles` автоматически. Ниже — эквивалент для приложения,
+которое подключает модули вручную, без генератора.
+
 
 ```css
 /* apps/web/src/index.css */
@@ -318,7 +325,7 @@ import { createFrontendApp, bootstrapFrontend, FrontendProvider, ModuleRoutes } 
 - `base.css` — единственное место, где вызывается `@import "tailwindcss"` (ядро Tailwind + shadcn + theme tokens)
 - `tailwind.css` модулей — только `@source` для сканирования файлов
 
-Если новый модуль не добавить в `index.css` приложения — его Tailwind-классы не будут сгенерированы.
+При ручном подключении без генератора новый модуль нужно добавить в `index.css`, чтобы Tailwind увидел его классы.
 
 ## Demo Application
 

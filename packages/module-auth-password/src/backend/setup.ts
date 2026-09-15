@@ -8,7 +8,7 @@ import type {
   BackendDbService,
   BackendModule,
 } from '@amplicada/platform-core/contracts/backend';
-import { moduleManifest } from '../contracts/manifest.js';
+import { backendManifest } from '../contracts/manifest.js';
 import { PASSWORD_LOGIN_PATH } from '../contracts/paths.js';
 import { extendUserDoc } from './documents/index.js';
 import { authBackendLocales } from './locales/index.js';
@@ -20,7 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export const authPasswordModule: BackendModule = {
-  ...moduleManifest,
+  ...backendManifest,
   locales: { backend: { ru: authBackendLocales.ru, en: authBackendLocales.en } },
 
   setup(context) {

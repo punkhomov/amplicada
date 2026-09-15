@@ -1,14 +1,14 @@
 import { registerComponent } from '@amplicada/module-admin/frontend';
 import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend';
 import { API_CLIENT_TOKEN, type ApiClient } from '@amplicada/platform-core/frontend';
-import { moduleManifest } from '../contracts/manifest.js';
+import { frontendManifest } from '../contracts/manifest.js';
 import { RequestCardPage, requestDetailQueryOptions } from './pages/request-card/index.js';
 import { RequestNewPage, requestTypesQueryOptions } from './pages/request-new/index.js';
 import { RequestsListPage, requestsListMyQueryOptions } from './pages/requests-list/index.js';
 import { RequestTypeFieldsEditor } from './widgets/request-type-fields-editor/index.js';
 
 export const hrRequestsFrontendModule: FrontendModule = {
-  ...moduleManifest,
+  ...frontendManifest,
 
   setup(context) {
     // Мини-редактор полей на карточке документа «Тип заявки» (component-ключ из backend/documents.ts)

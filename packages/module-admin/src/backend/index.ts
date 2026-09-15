@@ -1,7 +1,7 @@
 import { DocumentRuntimeError } from '@amplicada/platform-core/backend';
 import { DashboardTopics } from '@amplicada/platform-core/contracts';
 import type { BackendModule } from '@amplicada/platform-core/contracts/backend';
-import { moduleManifest } from '../contracts/manifest.js';
+import { backendManifest } from '../contracts/manifest.js';
 import { adminBackendLocales } from './locales/index.js';
 import { createDocumentRoutes } from './routes/documents.js';
 import { createRegistryRoutes } from './routes/registry.js';
@@ -9,7 +9,7 @@ import { createStorageRoutes } from './routes/storage.js';
 import { createTaskRoutes } from './routes/tasks.js';
 
 export const adminModule: BackendModule = {
-  ...moduleManifest,
+  ...backendManifest,
   locales: { backend: { ru: adminBackendLocales.ru, en: adminBackendLocales.en } },
   setup(context, app) {
     context.documents.dashboard.registerTopic(DashboardTopics.SYSTEM, { label: 'admin:dashboard_topic_system', order: 1 });

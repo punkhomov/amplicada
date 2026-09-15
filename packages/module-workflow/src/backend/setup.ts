@@ -7,7 +7,7 @@ import type {
   BackendModule,
   TaskScheduler,
 } from '@amplicada/platform-core/contracts/backend';
-import { moduleManifest } from '../contracts/manifest.js';
+import { backendManifest } from '../contracts/manifest.js';
 import { WORKFLOW_ENGINE_TOKEN, WORKFLOW_REGISTRY_TOKEN } from '../contracts/registry.js';
 import { processInitiatorProvider } from './delegates.js';
 import { registerWorkflowDocuments } from './documents/index.js';
@@ -30,7 +30,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export const workflowModule: BackendModule = {
-  ...moduleManifest,
+  ...backendManifest,
   locales: { backend: { ru: workflowBackendLocales.ru, en: workflowBackendLocales.en } },
 
   setup(context, app) {

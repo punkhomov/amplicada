@@ -13,7 +13,8 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check:biome": "biome check --write .",
-    "check:depcruise": "depcruise packages apps"
+    "check:depcruise": "depcruise packages apps",
+    "modules:generate": "turbo build --filter=@amplicada/application-tools && pnpm --filter @amplicada/api generate && pnpm --filter @amplicada/web generate"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.8",

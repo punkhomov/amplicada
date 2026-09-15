@@ -1,11 +1,11 @@
 import { registerComponent } from '@amplicada/module-admin/frontend';
 import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend';
-import { moduleManifest } from '../contracts/manifest.js';
+import { frontendManifest } from '../contracts/manifest.js';
 import { CoursePlayerPage } from './pages/course-player/index.js';
 import { CoursePackagePanel } from './widgets/course-package-panel/index.js';
 
 export const hrLearningFrontendModule: FrontendModule = {
-  ...moduleManifest,
+  ...frontendManifest,
 
   setup(context) {
     // Панель контента на карточке документа «Курс» (component-ключ из backend/documents/course.ts).

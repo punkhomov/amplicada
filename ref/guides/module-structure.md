@@ -3,7 +3,7 @@ title: Module Structure
 type: guide
 tier: 3
 status: implemented
-date: 2026-07-13
+date: 2026-09-15
 source: clean/07-module-structure
 ---
 
@@ -69,30 +69,29 @@ packages/module-{name}/
 
 ### Module Manifest (contracts/manifest.ts)
 
-Единый источник правды для идентичности модуля. `version` берётся из `package.json`.
+Идентичность, стороны и зависимости объявляются в `amplicada` внутри package.json;
+версия берётся из стандартного поля version. Формат метаданных и подключение приложения
+описаны в [application-composition.md](application-composition.md).
 
 ```ts
-import { version } from "../../package.json"
+import packageJson from '../../package.json' with { type: 'json' };
+const { amplicada, version } = packageJson;
 
-export const moduleManifest = {
-  id: "my-module",
-  name: "My Module",
-  version,
-  dependencies: ["other-module"], // опционально: только если есть
-}
+export const moduleManifest = { id: amplicada.id, name: amplicada.name, version };
+export const backendManifest = { ...moduleManifest, dependencies: amplicada.backend.dependencies };
+export const frontendManifest = { ...moduleManifest, dependencies: amplicada.frontend.dependencies };
 ```
 
-- `id` и `name` едины для backend и frontend — суффиксы `-frontend` / `(Frontend)` не используются
-- `version` — динамически из `package.json`, не хардкод
+Для модуля только с одной стороной экспортируйте только соответствующий manifest.
 
 ### BackendModule (setup.ts)
 
 ```ts
 import type { BackendModule, BackendDbService } from "@amplicada/platform-core/contracts/backend"
-import { moduleManifest } from "../contracts/manifest.js"
+import { backendManifest } from "../contracts/manifest.js"
 
 export const myModule: BackendModule = {
-  ...moduleManifest,
+  ...backendManifest,
 
   setup(context) {
     context.migrations.register("my-module", migrationsPath)
@@ -107,11 +106,11 @@ export const myModule: BackendModule = {
 
 ```tsx
 import type { FrontendModule } from "@amplicada/platform-core/contracts/frontend"
-import { moduleManifest } from "../contracts/manifest.js"
+import { frontendManifest } from "../contracts/manifest.js"
 import { MyPage } from "./my-page.js"
 
 export const myFrontendModule: FrontendModule = {
-  ...moduleManifest,
+  ...frontendManifest,
 
   setup(context) {
     context.routes.register("/my", <MyPage />)

@@ -1,7 +1,7 @@
 import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend';
 import { API_CLIENT_TOKEN, type ApiClient } from '@amplicada/platform-core/frontend';
 import type { LoaderFunction } from 'react-router-dom';
-import { moduleManifest } from '../contracts/manifest.js';
+import { frontendManifest } from '../contracts/manifest.js';
 import { AdminLayout } from './layouts/admin-layout.js';
 import { registerComponent } from './lib/component-registry.js';
 import { adminLocales } from './locales/index.js';
@@ -21,7 +21,7 @@ import { MembersDisplay } from './widgets/members-display/index.js';
 import { ScheduledTaskCard } from './widgets/scheduled-task-card/index.js';
 
 export const adminFrontendModule: FrontendModule = {
-  ...moduleManifest,
+  ...frontendManifest,
   locales: { frontend: { ru: adminLocales.ru, en: adminLocales.en } },
   setup(context) {
     registerComponent('user-group-members', MembersDisplay);

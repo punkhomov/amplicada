@@ -21,6 +21,7 @@
 | `adr/00-evolution.md` | `implemented` | Эволюция решений: что сохранили, изменили, отбросили |
 | `adr/01-architecture.md` | `implemented` | Архитектура: философия, модули, core decisions |
 | `adr/02-dependency-injection.md` | `Accepted` | Без DI-контейнера: service locator для обязательных зависимостей, extension points для опциональных связей между модулями |
+| `adr/05-application-composition.md` | `implemented` | Единый состав приложения, генерация статических подключений и проверяемые зависимости обеих сторон; заменяет декларативный-only порядок из ADR-02 |
 
 | `context.md` | `implemented` | Актуальный контекст проекта |
 
@@ -29,6 +30,7 @@
 | Файл | Статус | Описание |
 |------|--------|----------|
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
+| `notes/application-tools.md` | `implemented` | Discovery из dependencies; профили только для явных задач и fixtures тестов |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
 
 Перед изменением пакета: `notes/<package>.md` (решения, отвергнутое, пробелы) +
@@ -42,6 +44,7 @@
 
 | Пакет | Docs (потребителям) |
 |-------|---------------------|
+| `application-tools` | [`packages/application-tools/docs/`](../packages/application-tools/docs/index.md) — CLI, API и метаданные композиции |
 | `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
 | `module-workflow` | [`packages/module-workflow/docs/`](../packages/module-workflow/docs/) — пока 4 плоских файла |
 
@@ -50,6 +53,7 @@
 | Файл | Статус | Описание |
 |------|--------|----------|
 | `guides/module-system.md` | `implemented` | Модульная система: структура, паттерны, регистрация |
+| `guides/application-composition.md` | `implemented` | Автоподключение из dependencies, метаданные package.json, генерация и необязательный --config |
 | `guides/module-structure.md` | `implemented` | Конкретная структура модуля: файлы, package.json, конвенции |
 | `guides/formats.md` | `implemented` | Скелеты всех типов документов — справочник для агента |
 | `guides/docker-dev.md` | `superseded` | Старый Docker dev setup; актуальный запуск описан в корневом README |

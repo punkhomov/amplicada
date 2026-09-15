@@ -7,7 +7,7 @@ import type {
   BackendStorageService,
 } from '@amplicada/platform-core/contracts/backend';
 import type { FastifyInstance } from 'fastify';
-import { moduleManifest } from '../contracts/manifest.js';
+import { backendManifest } from '../contracts/manifest.js';
 import { registerAttemptDocuments, registerCourseDocuments } from './documents/index.js';
 import { hrLearningBackendLocales } from './locales/index.js';
 import { createContentRoutes } from './routes/content.js';
@@ -21,7 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export const hrLearningModule: BackendModule = {
-  ...moduleManifest,
+  ...backendManifest,
   locales: { backend: { ru: hrLearningBackendLocales.ru, en: hrLearningBackendLocales.en } },
 
   setup(context, app) {

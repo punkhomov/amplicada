@@ -22,10 +22,11 @@ date: 2026-09-15
 ## Файлы
 
 Один файл на пакет: `ref/notes/<package>.md`. Файлы создаются по мере применения скилла
-`.agents/skills/module-docs/`; пока ни один не создан.
+`.agents/skills/module-docs/`.
 
 | Пакет | Notes |
 |---|---|
+| `application-tools` | [Заметки](application-tools.md) |
 | `platform-core` | — |
 | `module-hr` | — |
 | `module-workflow` | — |

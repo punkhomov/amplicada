@@ -1,14 +1,14 @@
 import { registerToolbarAction } from '@amplicada/module-admin/frontend';
 import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend';
 import { i18n } from '@amplicada/platform-core/frontend';
-import { moduleManifest } from '../contracts/manifest.js';
+import { frontendManifest } from '../contracts/manifest.js';
 import { PASSWORD_LOGIN_PATH } from '../contracts/paths.js';
 import { ChangePasswordAction } from './features/change-password/index.js';
 import { authLocales } from './locales/index.js';
 import { LoginPage } from './pages/login/index.js';
 
 export const authPasswordFrontendModule: FrontendModule = {
-  ...moduleManifest,
+  ...frontendManifest,
   locales: { frontend: { ru: authLocales.ru, en: authLocales.en } },
 
   setup(context) {

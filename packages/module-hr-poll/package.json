@@ -45,5 +45,25 @@
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
     "typescript": "^7.0.2"
-  }
+  },
+  "amplicada": {
+    "id": "hr-poll",
+    "name": "HR Poll Module",
+    "requires": [],
+    "backend": {
+      "export": "hrPollModule",
+      "dependencies": []
+    },
+    "frontend": {
+      "export": "hrPollFrontendModule",
+      "dependencies": []
+    },
+    "styles": "./frontend/tailwind.css"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "src/frontend",
+    "migrations"
+  ]
 }

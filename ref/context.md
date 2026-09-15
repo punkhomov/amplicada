@@ -11,9 +11,12 @@ Platform for modular business applications. Compile-time modules as npm packages
 
 ## Key Concepts
 
+- **Политика установки** — перед любым `pnpm install`, включая временные внешние проекты, обязательны `ignoreScripts: true`, `blockExoticSubdeps: true`, `minimumReleaseAge: 43200`. Не отключать и не расширять исключения ради установки. Перед работой в другой директории сообщать её путь.
+
 - **Core owns identity** — `identity_user` table (id, login, created_at). Modules extend via FK (`password_credential.user_id` references `identity_user.id`).
 - **`core.document_index` первичен** — id документа рождается там (`allocateDocumentId`), там же живёт состояние (`deleted_at`, `stale`, actor-штампы). Своей «базовой таблицы» у типа документа нет: все данные пишут расширения. Любая вставка документной строки в обход рантайма обязана сначала взять id из индекса — иначе FK.
 - **One package per module** — not split frontend/backend. Subpath exports (`./backend`, `./frontend`, `./contracts`) prevent React leaking into backend.
+- **Application composition (ADR-05)** — по умолчанию модули обнаруживаются в production dependencies приложения. `@amplicada/application-tools` генерирует backend/frontend imports и CSS перед build/dev/typecheck, работает с npm-пакетами вне монорепозитория. `amplicada` в package.json модуля задаёт стороны и зависимости. Обычная сборка не использует профили; явный `--config` оставлен для отдельных задач, примеры живут только в fixtures тестов CLI. Bootstrap сортирует dependencies до setup и заранее регистрирует весь состав. См. `guides/application-composition.md`.
 - **Server-side sessions** — `@fastify/session` + Redis. HMAC-signed cookie. `AuthServiceImpl` uses `request.session.set/get/destroy`.
 - **Per-module Drizzle migrations** — each module has its own `migrations/` with independent `_journal.json`. Bootstrap: core migrations → module migrations → routes → start.
 - **Frontend extension system** — `ModuleRoutes` groups routes by layout, `Slot` replaces components, `ExtensionPoint` adds UI contributions.

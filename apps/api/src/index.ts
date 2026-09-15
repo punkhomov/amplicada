@@ -1,11 +1,5 @@
-import { adminModule } from '@amplicada/module-admin/backend';
-import { authPasswordModule } from '@amplicada/module-auth-password/backend';
-import { hrModule } from '@amplicada/module-hr/backend';
-import { hrLearningModule } from '@amplicada/module-hr-learning/backend';
-import { hrPollModule } from '@amplicada/module-hr-poll/backend';
-import { hrRequestsModule } from '@amplicada/module-hr-request/backend';
-import { workflowModule } from '@amplicada/module-workflow/backend';
 import { bootstrap, configureLogger, createApp } from '@amplicada/platform-core/backend';
+import { modules } from './generated/backend-modules.js';
 
 configureLogger({
   transport: {
@@ -21,11 +15,7 @@ configureLogger({
 
 async function main() {
   const { app, context } = await createApp();
-  await bootstrap(
-    app,
-    [authPasswordModule, workflowModule, hrModule, hrRequestsModule, hrPollModule, hrLearningModule, adminModule],
-    context,
-  );
+  await bootstrap(app, modules, context);
 
   app.get('/api/health', async () => {
     return { ok: true };
