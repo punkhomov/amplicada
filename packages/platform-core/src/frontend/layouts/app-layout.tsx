@@ -8,6 +8,7 @@ import {
 } from '@amplicada/platform-core/frontend/ui/dropdown-menu';
 import { Outlet } from 'react-router-dom';
 import { ExtensionPoint } from '../components/extension-point.js';
+import { LanguageSwitcher } from '../components/language-switcher.js';
 import { Navigation } from '../components/navigation.js';
 import { ThemeSwitcher } from '../components/theme-switcher.js';
 
@@ -34,7 +35,8 @@ export function AppLayout() {
               <ExtensionPoint id="header" />
               <Navigation />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher />
               <ThemeSwitcher />
               <DropdownMenu>
                 <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1 -mr-2 outline-none hover:bg-muted transition-colors cursor-pointer">
