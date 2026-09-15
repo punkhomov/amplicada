@@ -22,6 +22,10 @@ implemented plan
     ├── extract architectural decisions
     │     └── new ADR or update existing ADR
     │
+    ├── extract package knowledge
+    │     ├── package-local decisions/rationale → ref/notes/<package>.md
+    │     └── consumer docs → packages/<package>/docs/
+    │
     ├── extract workflow knowledge
     │     └── new guide or update existing guide
     │
@@ -34,6 +38,8 @@ implemented plan
 | Что обнаружили в плане | Куда идёт |
 |------------------------|-----------|
 | Технологический выбор (почему Redis, а не встроенные сессии) | ADR |
+| Решение уровня пакета: почему сделано так, что отвергли или отложили | `ref/notes/<package>.md` (статусы `rejected`/`deferred`/`gap`) |
+| Текущее устройство пакета: что умеет, токены, роуты, схема, фронтенд | `packages/<package>/docs/` (скилл `module-docs`) |
 | Архитектурный паттерн (серверные сессии, модульные миграции) | ADR |
 | Изменение стека (новая зависимость, удаление пакета) | README и package.json |
 | Новый функционал (теперь есть ModuleRoutes, bcrypt) | README соответствующего пакета |

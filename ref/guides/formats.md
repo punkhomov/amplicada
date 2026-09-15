@@ -109,3 +109,20 @@ Accepted (or: Implemented, Superseded by ADR-NN)
 
 ## {Пример — законченный код, который можно скопировать} (optional)
 ```
+
+---
+
+## Notes (`notes/<package>.md`, Russian)
+
+Заметки разработчиков по пакету: решения, отвергнутые альтернативы, отложенное, пробелы.
+Полный формат, статусы и шаблон записи — [`notes/README.md`](../notes/README.md).
+Диаграмма: docs пакета описывают текущее состояние для потребителя; notes объясняют разработчику,
+почему оно такое.
+
+---
+
+## Module docs (`packages/<pkg>/docs/`, Russian)
+
+Потребительская документация пакета: Diátaxis, многостранично — `index.md` + `tutorial.md` +
+`how-to/` + `reference/` + `explanation/`. Шаблоны, правила покрытия и VitePress-требования —
+скилл `.agents/skills/module-docs/`.
