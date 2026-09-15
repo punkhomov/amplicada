@@ -1,15 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { ApiError } from './api-client.js';
-
-const AUTH_REDIRECT_KEY = 'auth:redirect';
-
-export { AUTH_REDIRECT_KEY };
-
-function saveRedirectPath(): void {
-  const current = window.location.pathname + window.location.search;
-  if (current === '/login') return;
-  sessionStorage.setItem(AUTH_REDIRECT_KEY, current);
-}
+import { saveRedirectPath } from './auth-redirect.js';
 
 export function createQueryClient(): QueryClient {
   return new QueryClient({

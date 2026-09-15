@@ -2,7 +2,14 @@ export type { AuthResult, User } from '../auth.js';
 export type { EventBus, EventBusEvent, EventHandler } from '../event-bus.js';
 export type { Lifecycle, LifecycleHook } from '../lifecycle.js';
 export type { ServiceRegistry } from '../service-registry.js';
-export type { AuthLogEntry, BackendAuthLogService, BackendAuthProvider, BackendAuthService } from './auth.js';
+export type {
+  AuthLogEntry,
+  AuthMethodDescriptor,
+  BackendAuthLogService,
+  BackendAuthNodeService,
+  BackendAuthProvider,
+  BackendAuthService,
+} from './auth.js';
 export type { BackendDbService } from './db.js';
 export type {
   BackendDocumentRuntime,

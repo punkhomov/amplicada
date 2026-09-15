@@ -1,4 +1,4 @@
-import { useApiClient, useCurrentUser } from '@amplicada/platform-core/frontend';
+import { useLogout, useRequireAuth } from '@amplicada/platform-core/frontend';
 import { Avatar, AvatarImage } from '@amplicada/platform-core/frontend/ui/avatar';
 import {
   DropdownMenu,
@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@amplicada/platform-core/frontend/ui/dropdown-menu';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { ExtensionPoint } from '../components/extension-point.js';
 import { Navigation } from '../components/navigation.js';
 import { ThemeSwitcher } from '../components/theme-switcher.js';
@@ -18,14 +18,8 @@ function generateAvatarUrl(login: string): string {
 }
 
 export function AppLayout() {
-  const { user, loading } = useCurrentUser('/login');
-  const navigate = useNavigate();
-  const api = useApiClient();
-
-  const handleLogout = async () => {
-    await api.post('/auth/logout');
-    navigate('/login');
-  };
+  const { user, loading } = useRequireAuth();
+  const logout = useLogout();
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Загрузка...</div>;
@@ -50,7 +44,7 @@ export function AppLayout() {
                   </Avatar>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem variant="destructive" onClick={handleLogout}>
+                  <DropdownMenuItem variant="destructive" onClick={() => logout.mutate()}>
                     Выйти
                   </DropdownMenuItem>
                 </DropdownMenuContent>

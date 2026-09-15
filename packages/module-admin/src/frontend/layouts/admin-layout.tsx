@@ -1,4 +1,4 @@
-import { LanguageSwitcher, ThemeSwitcher, useApiClient, useCurrentUser, useTranslation } from '@amplicada/platform-core/frontend';
+import { LanguageSwitcher, ThemeSwitcher, useLogout, useRequireAuth, useTranslation } from '@amplicada/platform-core/frontend';
 import { Avatar, AvatarImage } from '@amplicada/platform-core/frontend/ui/avatar';
 import { Button } from '@amplicada/platform-core/frontend/ui/button';
 import { ButtonGroup } from '@amplicada/platform-core/frontend/ui/button-group';
@@ -30,15 +30,10 @@ function generateAvatarUrl(login: string): string {
 
 export function AdminLayout() {
   const { t } = useTranslation('admin');
-  const { user, loading } = useCurrentUser('/login');
+  const { user, loading } = useRequireAuth();
+  const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
-  const api = useApiClient();
-
-  const handleLogout = async () => {
-    await api.post('/auth/logout');
-    navigate('/login');
-  };
 
   const activeSection =
     SECTION_TABS.slice()
@@ -81,7 +76,7 @@ export function AdminLayout() {
                   </Avatar>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem variant="destructive" onClick={handleLogout}>
+                  <DropdownMenuItem variant="destructive" onClick={() => logout.mutate()}>
                     {t('admin_logout')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>

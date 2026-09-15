@@ -12,6 +12,8 @@ import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { createClient, type RedisClientType } from 'redis';
 import {
+  type BackendAuthNodeService,
+  type BackendAuthService,
   type BackendDbService,
   type BackendDocumentRuntime,
   type BackendModule,
@@ -34,8 +36,10 @@ import { PipelineImpl } from './pipeline.js';
 import { RegistryImpl } from './registry.js';
 import { isWorkerRole } from './role.js';
 import { RouteRegistryImpl } from './route-registry.js';
+import { createAuthContextHandler, createLogoutHandler, createMeHandler } from './routes/auth.js';
 import { ServiceRegistryImpl } from './service-registry.js';
 import { AuthLogServiceImpl } from './services/auth-log-service.js';
+import { AuthNodeServiceImpl } from './services/auth-node-service.js';
 import { AuthServiceImpl } from './services/auth-service.js';
 import { DocumentRuntime } from './services/document-runtime.js';
 import { ensureBucket, StorageServiceImpl } from './services/storage-service.js';
@@ -117,6 +121,7 @@ export async function createApp(): Promise<App> {
   services.register('auth-log', authLog);
   const authService = new AuthServiceImpl(authLog);
   services.register('auth-service', authService);
+  services.register('auth-node', new AuthNodeServiceImpl());
 
   const documentRuntime = new DocumentRuntime(db, documents);
   services.register('document-runtime', documentRuntime);
@@ -178,6 +183,14 @@ export async function bootstrap(app: FastifyInstance, modules: BackendModule[], 
   const s3Client = context.services.resolve<S3Client>('s3-client');
 
   registerCoreDocuments(context.documents);
+
+  // Метод-агностичные auth-роуты принадлежат ядру: узел, где модуль паролей не собран,
+  // всё равно имеет /me и /logout, а /context публикует его метод аутентификации.
+  const authNode = context.services.resolve<BackendAuthNodeService>('auth-node');
+  const authService = context.services.resolve<BackendAuthService>('auth-service');
+  context.routes.register('get', '/api/auth/context', createAuthContextHandler(authNode));
+  context.routes.register('get', '/api/auth/me', createMeHandler(authService));
+  context.routes.register('post', '/api/auth/logout', createLogoutHandler(authService));
 
   const localeResources: LocaleResources = {};
   for (const mod of modules) {

@@ -37,6 +37,11 @@ export {
 } from './schemas/index.js';
 export { ServiceRegistryImpl } from './service-registry.js';
 export { AuthLogServiceImpl, requestAuthMeta } from './services/auth-log-service.js';
+export {
+  type AuthMethodResolver,
+  AuthNodeServiceImpl,
+  resolveAuthMethodFromEnv,
+} from './services/auth-node-service.js';
 export { AuthServiceImpl } from './services/auth-service.js';
 export type { DbOperation, PgDriverError } from './services/db-errors.js';
 export {

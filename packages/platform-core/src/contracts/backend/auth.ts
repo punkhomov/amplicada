@@ -13,6 +13,24 @@ export interface BackendAuthService {
   getCurrentUser(request: unknown): User | null;
 }
 
+/**
+ * Метод аутентификации, который модуль предоставляет узлу. Узел выбирает один из
+ * зарегистрированных методов (обычно через `AUTH_METHOD`), платформа редиректит
+ * неавторизованного пользователя на `loginUrl` выбранного метода.
+ */
+export interface AuthMethodDescriptor {
+  id: string;
+  loginUrl: string;
+  logoutUrl?: string;
+}
+
+export interface BackendAuthNodeService {
+  registerMethod(method: AuthMethodDescriptor): void;
+  getMethods(): AuthMethodDescriptor[];
+  /** Резолвит активный метод для конкретного запроса (сейчас — env, позже — Host и т.п.). */
+  getActiveMethod(request: unknown): AuthMethodDescriptor | null;
+}
+
 export interface AuthLogEntry {
   userId?: string | null;
   login?: string | null;

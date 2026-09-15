@@ -1,4 +1,5 @@
-export type { AuthResult, User } from './auth.js';
+export type { AuthNodeContext, AuthResult, User } from './auth.js';
+export { DEFAULT_LOGOUT_URL } from './auth.js';
 export type {
   AccessLevel,
   DashboardLink,

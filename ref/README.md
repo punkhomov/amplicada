@@ -41,6 +41,7 @@
 | Файл | Статус | Описание |
 |------|--------|----------|
 | `plans/2026-09-14-module-lifecycle-review.md` | `draft` | Первый архитектурный разбор: зависимости и порядок загрузки, дефект shutdown, владение ресурсами и удаление модулей; предложения и следующие итерации, без изменения runtime |
+| `plans/2026-09-15-auth-node-method.md` | `implemented` | Метод аутентификации — свойство узла: `auth-node` + `GET /api/auth/context`, платформа редиректит на `loginUrl` метода и не содержит страницы логина; парольный логин — `/auth/password/login`, `/me` и `/logout` переехали в core |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |
 | `plans/2026-07-13-frontend-core-reorg.md` | `implemented` | Реорганизация core/sdk (выполнен) |
 | `plans/2026-07-13-server-sessions.md` | `implemented` | Безопасные серверные сессии (Redis + @fastify/session + bcrypt) |

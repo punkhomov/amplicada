@@ -39,7 +39,7 @@ async function init() {
   const router = createBrowserRouter([
     {
       element: <RootLayout />,
-      children: [...buildModuleRouteTree(context), { path: '*', element: <Navigate to="/login" replace /> }],
+      children: [...buildModuleRouteTree(context), { path: '*', element: <Navigate to="/home" replace /> }],
     },
   ]);
 

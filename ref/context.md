@@ -19,7 +19,7 @@ Platform for modular business applications. Compile-time modules as npm packages
 - **Frontend extension system** — `ModuleRoutes` groups routes by layout, `Slot` replaces components, `ExtensionPoint` adds UI contributions.
 - **Headless UI** — core provides logic+a11y without styles. Apps style via Tailwind. Modules consume from slots.
 - **Tailwind v4** — each module has `tailwind.css` with `@source "../"` to scan its files. Apps import these via `@import` in `index.css`.
-- **Auth redirect on 401** — global `QueryCache`/`MutationCache` `onError` + `useCurrentUser` сохраняют `auth:redirect` в `sessionStorage`. `LoginPage` читает и редиректит после входа.
+- **Метод аутентификации — свойство узла** — core-сервис `auth-node` хранит методы, зарегистрированные модулями (`registerMethod`), активный выбирается env `AUTH_METHOD` (внешний — `AUTH_LOGIN_URL`). Публичный `GET /api/auth/context` отдаёт `{ method, loginUrl, logoutUrl }`; `useRequireAuth`/`redirectToLogin` уводят неавторизованного full-page'ом на `loginUrl` метода. Платформа не содержит страницы логина: парольный логин — `/auth/password/login` (`module-auth-password`) на `public`-layout — без навигации и меню, только переключатели языка и темы. 401 через `QueryCache`/`MutationCache` сохраняет `auth:redirect` в `sessionStorage` (страницы `/auth/*` пропускаются). `/api/auth/me` и `/logout` — в core.
 - **FSD v2.1 for frontend** — каждый модуль следует Feature-Sliced Design (ADR-003). Слои: `app/`, `pages/`, `widgets/`, `features/`, `entities/`, `shared/`. Импорт только вниз. Public API через index.ts.
 
 ## Keywords for Searching
@@ -38,6 +38,10 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `@import "...tailwind.css"` | Must be in apps/web/src/index.css per module |
 | `bcrypt.compare` | Password hashing in module-auth-password/backend/plugin.ts |
 | `PasswordAuthProvider` | auth-password JOINs identityUser + passwordCredential |
+| `auth-node`, `registerMethod`, `AUTH_METHOD` | backend/services/auth-node-service.ts — метод аутентификации узла |
+| `AuthNodeContext`, `GET /api/auth/context` | contracts/auth.ts, backend/routes/auth.ts — discovery метода узла |
+| `useRequireAuth`, `redirectToLogin`, `useLogout` | frontend/hooks — гейт и редирект на `loginUrl` метода |
+| `PASSWORD_LOGIN_PATH` | module-auth-password/contracts/paths.ts — `/auth/password/login` |
 | `BackendStorageService`, `StorageServiceImpl` | S3-compatible object storage, service token `storage` — contracts/backend/storage.ts, backend/services/storage-service.ts |
 | `allocateDocumentId`, `indexCreated` | document-runtime.ts — резервирование id в `core.document_index` перед вставкой строки |
 | `writeVersion`, `versionWriteMode`, `CARD_CORRECTION` | module-hr: коррекция записи vs новый интервал версии |

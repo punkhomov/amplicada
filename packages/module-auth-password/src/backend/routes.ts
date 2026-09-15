@@ -33,23 +33,6 @@ export function createLoginHandler(
   };
 }
 
-export function createLogoutHandler(authService: BackendAuthService): BackendRouteHandler {
-  return async (request: FastifyRequest, reply: FastifyReply) => {
-    await authService.logout(request, reply);
-    return { ok: true };
-  };
-}
-
-export function createMeHandler(authService: BackendAuthService): BackendRouteHandler {
-  return async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = authService.getCurrentUser(request);
-    if (!user) {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
-    return { user };
-  };
-}
-
 export function createHashPasswordHandler(): BackendRouteHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const { password } = request.body as HashPasswordBody;

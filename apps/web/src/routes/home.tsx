@@ -1,5 +1,4 @@
-import { useApiClient, useMutation, useQuery, useQueryClient, useTranslation } from '@amplicada/platform-core/frontend';
-import { useNavigate } from 'react-router-dom';
+import { useApiClient, useLogout, useQuery, useTranslation } from '@amplicada/platform-core/frontend';
 
 interface User {
   id: string;
@@ -9,20 +8,11 @@ interface User {
 export function HomePage() {
   const { t } = useTranslation('core');
   const api = useApiClient();
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const logout = useLogout();
 
   const { data, isLoading } = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: () => api.get<{ user: User }>('/auth/me'),
-  });
-
-  const logoutMutation = useMutation({
-    mutationFn: () => api.post('/auth/logout'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      navigate('/login');
-    },
   });
 
   if (isLoading) {
@@ -39,11 +29,11 @@ export function HomePage() {
       </p>
       <button
         type="button"
-        onClick={() => logoutMutation.mutate()}
-        disabled={logoutMutation.isPending}
+        onClick={() => logout.mutate()}
+        disabled={logout.isPending}
         className="w-full bg-destructive text-white py-2 rounded-md hover:bg-destructive/80"
       >
-        {logoutMutation.isPending ? t('home_logout_pending') : t('home_logout')}
+        {logout.isPending ? t('home_logout_pending') : t('home_logout')}
       </button>
     </div>
   );

@@ -3,14 +3,16 @@ import { fileURLToPath } from 'node:url';
 import { logger } from '@amplicada/platform-core/backend';
 import type {
   BackendAuthLogService,
+  BackendAuthNodeService,
   BackendAuthService,
   BackendDbService,
   BackendModule,
 } from '@amplicada/platform-core/contracts/backend';
 import { moduleManifest } from '../contracts/manifest.js';
+import { PASSWORD_LOGIN_PATH } from '../contracts/paths.js';
 import { extendUserDoc } from './documents/index.js';
 import { authBackendLocales } from './locales/index.js';
-import { createHashPasswordHandler, createLoginHandler, createLogoutHandler, createMeHandler } from './routes.js';
+import { createHashPasswordHandler, createLoginHandler } from './routes.js';
 import { PasswordAuthProvider } from './services/plugin.js';
 import { someFunction } from './test.js';
 
@@ -34,9 +36,10 @@ export const authPasswordModule: BackendModule = {
 
     const authLog = context.services.resolve<BackendAuthLogService>('auth-log');
 
+    const authNode = context.services.resolve<BackendAuthNodeService>('auth-node');
+    authNode.registerMethod({ id: 'password', loginUrl: PASSWORD_LOGIN_PATH });
+
     context.routes.register('post', '/api/auth/login', createLoginHandler(provider, authService, authLog));
-    context.routes.register('post', '/api/auth/logout', createLogoutHandler(authService));
-    context.routes.register('get', '/api/auth/me', createMeHandler(authService));
     context.routes.register('post', '/api/auth/hash-password', createHashPasswordHandler());
 
     context.tasks.register(
