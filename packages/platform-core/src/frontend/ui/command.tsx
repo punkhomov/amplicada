@@ -3,18 +3,18 @@
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 
-import { cn } from "@/lib/utils"
+import { cn } from "../lib/utils.js"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/ui/dialog"
+} from "./dialog.js"
 import {
   InputGroup,
   InputGroupAddon,
-} from "@/ui/input-group"
+} from "./input-group.js"
 import { SearchIcon, CheckIcon } from "lucide-react"
 
 function Command({
