@@ -223,6 +223,9 @@ importers:
         specifier: ^13.1.3
         version: 13.1.3
     devDependencies:
+      '@amplicada/application-tools':
+        specifier: workspace:*
+        version: link:../../packages/application-tools
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
@@ -275,6 +278,9 @@ importers:
         specifier: ^7.18.2
         version: 7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
     devDependencies:
+      '@amplicada/application-tools':
+        specifier: workspace:*
+        version: link:../../packages/application-tools
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
@@ -302,6 +308,19 @@ importers:
       vite:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
+
+  packages/application-tools:
+    dependencies:
+      '@amplicada/platform-core':
+        specifier: workspace:*
+        version: link:../platform-core
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
   packages/learning-parser:
     dependencies:

@@ -1,1 +1,1 @@
-export { hrFrontendModule } from './setup.js';
+export { hrFrontendModule as module } from './setup.js';

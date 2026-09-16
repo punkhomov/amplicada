@@ -4,6 +4,7 @@ import type { LoaderFunction } from 'react-router-dom';
 import { moduleManifest } from '../contracts/manifest.js';
 import { AdminLayout } from './layouts/admin-layout.js';
 import { registerComponent } from './lib/component-registry.js';
+import { createToolbarService } from './lib/toolbar-action-registry.js';
 import { adminLocales } from './locales/index.js';
 import { AdminDashboard, adminDashboardQueryOptions } from './pages/admin-dashboard/index.js';
 import { AdminDocumentCard, adminDocumentDetailQueryOptions } from './pages/admin-document-card/index.js';
@@ -20,10 +21,11 @@ import { AuthLogDisplay } from './widgets/auth-log-display/index.js';
 import { MembersDisplay } from './widgets/members-display/index.js';
 import { ScheduledTaskCard } from './widgets/scheduled-task-card/index.js';
 
-export const adminFrontendModule: FrontendModule = {
+const adminFrontendModule: FrontendModule = {
   ...moduleManifest,
   locales: { frontend: { ru: adminLocales.ru, en: adminLocales.en } },
   setup(context) {
+    context.services.register('admin:toolbar', createToolbarService());
     registerComponent('user-group-members', MembersDisplay);
     registerComponent('user-auth-log', AuthLogDisplay);
     registerComponent('scheduled-task-fields', ScheduledTaskCard);
@@ -92,17 +94,18 @@ export const adminFrontendModule: FrontendModule = {
   },
 };
 
+export type { AdminToolbarService, ToolbarAction, ToolbarActionProps } from '../contracts/toolbar.js';
 export { AdminLayout } from './layouts/admin-layout.js';
 export type { TableAction, TableActionProps } from './lib/admin-table-action-registry.js';
 export { registerTableAction } from './lib/admin-table-action-registry.js';
 export { registerComponent } from './lib/component-registry.js';
 export type { DocumentCardContextValue } from './lib/document-card-context.js';
 export { useDocumentCardContext } from './lib/document-card-context.js';
-export type { ToolbarAction, ToolbarActionProps } from './lib/toolbar-action-registry.js';
-export { registerToolbarAction } from './lib/toolbar-action-registry.js';
 export { AdminDashboard } from './pages/admin-dashboard/index.js';
 export { AdminDocumentCard } from './pages/admin-document-card/index.js';
 export { AdminDocumentList } from './pages/admin-document-list/index.js';
 export { AdminModules } from './pages/admin-modules/index.js';
 export { AdminStorage } from './pages/admin-storage/index.js';
 export { AdminTaskDetail } from './pages/admin-task-detail/index.js';
+
+export { adminFrontendModule as module };

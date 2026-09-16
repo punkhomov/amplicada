@@ -2,6 +2,7 @@
 
 ## Codebase Navigation & Analysis
 - **First**: When exploring the project, start with `ref/README.md` (document map) and `ref/context.md` (active context).
+- **Before changing a package**: read `packages/<pkg>/docs/index.md` + `ref/notes/<pkg>.md` — accepted decisions, rejected alternatives and known gaps live there; don't re-propose without new evidence. Writing/updating them — skill `module-docs`.
 - **Primary**: Use `codebase-memory-mcp` tools for searching, exploring and analysis (project=path-to-the-project-amplicada). Fallback to grep/glob when MCP unavailable. `search_graph`/`trace_path`/`get_architecture` work well; `search_code` is weaker than plain grep (its `path_filter` is a regex over the full path, not a glob).
 - **External docs**: Use `Context7` MCP for third-party library docs (React, Fastify, Drizzle, etc.).
 
@@ -115,10 +116,12 @@ amplicada/
 |------|-------|
 | Document map + rules | `ref/README.md` |
 | Active context (loaded into prompt) | `ref/context.md` |
+| Package docs for consumers (Diátaxis, VitePress-ready) | `packages/<pkg>/docs/index.md` |
+| Why a package works this way (rationale, rejected, gaps) | `ref/notes/<pkg>.md` |
 
-Tiers: `adr/` (architecture decisions), `plans/` (target state), `guides/` (how-to).
+Tiers: `adr/` (architecture decisions), `notes/` (package rationale), `plans/` (target state), `guides/` (how-to).
 
-After meaningful work, update relevant plans or guides. Mark outdated docs `status: superseded`.
+After meaningful work, update relevant plans, guides, package docs (`packages/<pkg>/docs/`) and `ref/notes/<pkg>.md`. Mark outdated docs `status: superseded`.
 
 ## Tech Stack (quick ref)
 

@@ -1,7 +1,7 @@
-import { version } from '../../package.json';
+import packageJson from '../../package.json' with { type: 'json' };
 
 export const moduleManifest = {
   id: 'auth-password',
   name: 'Password Authentication',
-  version,
+  version: packageJson.version,
 };

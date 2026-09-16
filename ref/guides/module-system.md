@@ -3,11 +3,17 @@ title: Module System & Patterns
 type: guide
 tier: 3
 status: implemented
-date: 2026-09-14
+date: 2026-09-16
 source: clean/03-modules (main2, frontend-core-plan, current code)
 ---
 
 # Module System & Patterns
+
+Для подключения модулей к приложению используйте [автоподключение из dependencies и необязательные профили](application-composition.md).
+Примеры ручной регистрации ниже остаются низкоуровневым API: вызывающий код задаёт
+полный состав и runtime dependencies самостоятельно. При генерации amplicada: true
+и package exports задают доступные стороны, dependencies/peers — порядок.
+Выбранные optional peers тоже запускаются раньше потребителя, отсутствующие пропускаются.
 
 > Source: main2, frontend-core-plan, current code
 
@@ -100,10 +106,10 @@ Import separation prevents React from leaking into backend:
 
 ```ts
 // Backend
-import { SomeModule } from "@amplicada/some-module/backend"
+import { module as SomeModule } from "@amplicada/some-module/backend"
 
 // Frontend
-import { SomeModule } from "@amplicada/some-module/frontend"
+import { module as SomeModule } from "@amplicada/some-module/frontend"
 ```
 
 ## Core Package Structure
@@ -133,7 +139,7 @@ import type { FrontendModule } from "@amplicada/platform-core/contracts/frontend
 ## Backend Module Pattern (BackendModule)
 
 ```ts
-export const myModule: BackendModule = {
+export const module: BackendModule = {
   id: "my-module",
   name: "My Module",
   version: "1.0.0",
@@ -164,14 +170,14 @@ HTTP-запросов: lifecycle `shutdown/before` → остановка schedu
 
 Остановка таймеров пока не означает ожидания завершения всех фоновых задач.
 Обработка SIGTERM/SIGINT в entrypoint и очистка ресурсов при частичном сбое bootstrap
-этим изменением не добавлены. Порядок загрузки по-прежнему задаёт массив приложения.
+этим изменением не добавлены. Порядок загрузки вычисляется по dependencies; входной массив задаёт порядок обхода независимых модулей.
 
 ## Frontend Module Pattern (FrontendModule)
 
 ```ts
 import type { FrontendModule } from "@amplicada/platform-core/contracts/frontend"
 
-export const myFrontendModule: FrontendModule = {
+export const module: FrontendModule = {
   id: "my-module",
   name: "My Module (Frontend)",
   version: "1.0.0",
@@ -216,7 +222,7 @@ export const myFrontendModule: FrontendModule = {
 
 ## FrontendSetupContext
 
-`FrontendSetupContext` — это DI-контейнер для фронтенд-части. Доступен в `setup()` каждого `FrontendModule`.
+`FrontendSetupContext` — контекст реестров и сервисов frontend. Доступен в `setup()` каждого `FrontendModule`.
 
 | Registry | Тип | Методы |
 |----------|-----|--------|
@@ -230,7 +236,7 @@ export const myFrontendModule: FrontendModule = {
 | `eventBus` | `EventBus` | `on(event, handler)`, `off(event, handler)`, `emit(event, data)` |
 | `lifecycle` | `Lifecycle` | `register(hook)`, `execute(name)` |
 
-`createFrontendApp()` создаёт все registry, регистрирует встроенные layouts (`public`, `app`) и API-клиент. `bootstrapFrontend(modules, context)` запускает модули: `register → setup (все) → start (все)`.
+`createFrontendApp()` создаёт все registry, регистрирует встроенные layouts (`public`, `app`) и API-клиент. `bootstrapFrontend(modules, context)` запускает модули: `validate/sort → register (все) → setup (все) → start (все)`.
 
 ## ModuleRoutes + Layout Grouping
 
@@ -304,7 +310,11 @@ import { createFrontendApp, bootstrapFrontend, FrontendProvider, ModuleRoutes } 
 }
 ```
 
-### 3. Импортировать в index.css приложения
+### 3. Подключить CSS приложения
+
+Генератор делает это по экспорту `./frontend/tailwind.css` автоматически. Ниже — эквивалент для приложения,
+которое подключает модули вручную, без генератора.
+
 
 ```css
 /* apps/web/src/index.css */
@@ -318,7 +328,7 @@ import { createFrontendApp, bootstrapFrontend, FrontendProvider, ModuleRoutes } 
 - `base.css` — единственное место, где вызывается `@import "tailwindcss"` (ядро Tailwind + shadcn + theme tokens)
 - `tailwind.css` модулей — только `@source` для сканирования файлов
 
-Если новый модуль не добавить в `index.css` приложения — его Tailwind-классы не будут сгенерированы.
+При ручном подключении без генератора новый модуль нужно добавить в `index.css`, чтобы Tailwind увидел его классы.
 
 ## Demo Application
 
@@ -333,7 +343,7 @@ A reference application in the repo that uses all official modules. Its purposes
 ```ts
 // apps/demo/src/index.ts
 import { createApp, bootstrap } from "@amplicada/platform-core/backend"
-import { authPasswordModule } from "@amplicada/module-auth-password/backend"
+import { module as authPasswordModule } from "@amplicada/module-auth-password/backend"
 // import { hrModule } from "@amplicada/module-hr/backend"
 // import { testingModule } from "@amplicada/module-testing/backend"
 

@@ -2,7 +2,7 @@
 title: amplicada — Active Project Context
 type: context
 tier: 2
-date: 2026-08-08
+date: 2026-09-15
 ---
 
 # amplicada — Active Project Context
@@ -11,9 +11,12 @@ Platform for modular business applications. Compile-time modules as npm packages
 
 ## Key Concepts
 
+- **Политика установки** — перед любым `pnpm install`, включая временные внешние проекты, обязательны `ignoreScripts: true`, `blockExoticSubdeps: true`, `minimumReleaseAge: 43200`. Не отключать и не расширять исключения ради установки. Перед работой в другой директории сообщать её путь.
+
 - **Core owns identity** — `identity_user` table (id, login, created_at). Modules extend via FK (`password_credential.user_id` references `identity_user.id`).
 - **`core.document_index` первичен** — id документа рождается там (`allocateDocumentId`), там же живёт состояние (`deleted_at`, `stale`, actor-штампы). Своей «базовой таблицы» у типа документа нет: все данные пишут расширения. Любая вставка документной строки в обход рантайма обязана сначала взять id из индекса — иначе FK.
 - **One package per module** — not split frontend/backend. Subpath exports (`./backend`, `./frontend`, `./contracts`) prevent React leaking into backend.
+- **Application composition (ADR-05/06)** — состав из прямых production dependencies приложения. Флаг `amplicada: true`, стороны/CSS из exports, единый экспорт `module`. Генератор проверяет обязательные модули и сортирует единый граф; выбранные optional peers тоже задают порядок setup, отсутствующие пропускаются. Auth использует `admin:toolbar` через контекст, без runtime-импорта admin. Runtime id остаются в коде. `--config` задаёт полный состав, fixtures профилей живут при тестах CLI. См. `guides/application-composition.md`.
 - **Server-side sessions** — `@fastify/session` + Redis. HMAC-signed cookie. `AuthServiceImpl` uses `request.session.set/get/destroy`.
 - **Per-module Drizzle migrations** — each module has its own `migrations/` with independent `_journal.json`. Bootstrap: core migrations → module migrations → routes → start.
 - **Frontend extension system** — `ModuleRoutes` groups routes by layout, `Slot` replaces components, `ExtensionPoint` adds UI contributions.
@@ -21,6 +24,7 @@ Platform for modular business applications. Compile-time modules as npm packages
 - **Tailwind v4** — each module has `tailwind.css` with `@source "../"` to scan its files. Apps import these via `@import` in `index.css`.
 - **Метод аутентификации — свойство узла** — core-сервис `auth-node` хранит методы, зарегистрированные модулями (`registerMethod`), активный выбирается env `AUTH_METHOD` (внешний — `AUTH_LOGIN_URL`). Публичный `GET /api/auth/context` отдаёт `{ method, loginUrl, logoutUrl }`; `useRequireAuth`/`redirectToLogin` уводят неавторизованного full-page'ом на `loginUrl` метода. Платформа не содержит страницы логина: парольный логин — `/auth/password/login` (`module-auth-password`) на `public`-layout — без навигации и меню, только переключатели языка и темы. 401 через `QueryCache`/`MutationCache` сохраняет `auth:redirect` в `sessionStorage` (страницы `/auth/*` пропускаются). `/api/auth/me` и `/logout` — в core.
 - **FSD v2.1 for frontend** — каждый модуль следует Feature-Sliced Design (ADR-003). Слои: `app/`, `pages/`, `widgets/`, `features/`, `entities/`, `shared/`. Импорт только вниз. Public API через index.ts.
+- **Docs пакета — потребителям, notes — разработчикам** — потребительская документация живёт в `packages/<pkg>/docs/` (Diátaxis, многостранично, готово к VitePress), рационал и отвергнутые альтернативы — в `ref/notes/<pkg>.md` (статусы `accepted`/`rejected`/`deferred`/`gap`, append-only). Перед изменением пакета читать оба; формат — скилл `.agents/skills/module-docs/`.
 
 ## Keywords for Searching
 
@@ -46,6 +50,7 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `allocateDocumentId`, `indexCreated` | document-runtime.ts — резервирование id в `core.document_index` перед вставкой строки |
 | `writeVersion`, `versionWriteMode`, `CARD_CORRECTION` | module-hr: коррекция записи vs новый интервал версии |
 | `getObjectStream`, `StorageGetStreamOptions` | потоковое чтение из S3 с `Range` → `206` |
+| `ref/notes/<pkg>.md`, `packages/*/docs/` | рационал пакета (отвергнутое, отложенное, пробелы) и потребительская документация; читать перед изменением пакета |
 
 ## Current Priorities
 

@@ -8,7 +8,7 @@ import { createRegistryRoutes } from './routes/registry.js';
 import { createStorageRoutes } from './routes/storage.js';
 import { createTaskRoutes } from './routes/tasks.js';
 
-export const adminModule: BackendModule = {
+const adminModule: BackendModule = {
   ...moduleManifest,
   locales: { backend: { ru: adminBackendLocales.ru, en: adminBackendLocales.en } },
   setup(context, app) {
@@ -60,3 +60,5 @@ export const adminModule: BackendModule = {
     );
   },
 };
+
+export { adminModule as module };

@@ -1,0 +1,8 @@
+{
+  "id": "full",
+  "modules": ["@test/auth", "@test/admin", "@test/consumer", "@test/provider"],
+  "targets": {
+    "backend": "./api",
+    "frontend": "./web"
+  }
+}

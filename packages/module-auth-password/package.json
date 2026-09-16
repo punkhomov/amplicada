@@ -47,5 +47,17 @@
   },
   "dependencies": {
     "bcrypt": "^6.0.0"
+  },
+  "amplicada": true,
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "src/frontend",
+    "migrations"
+  ],
+  "peerDependenciesMeta": {
+    "@amplicada/module-admin": {
+      "optional": true
+    }
   }
 }

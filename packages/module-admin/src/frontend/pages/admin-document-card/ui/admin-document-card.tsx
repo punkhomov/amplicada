@@ -3,6 +3,7 @@ import {
   type ApiClient,
   QueryError,
   useApiClient,
+  useFrontendContext,
   useMutation,
   useQuery,
   useQueryClient,
@@ -25,9 +26,9 @@ import { Separator } from '@amplicada/platform-core/frontend/ui/separator';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, type Params, useBlocker, useNavigate, useParams } from 'react-router-dom';
+import type { AdminToolbarService } from '../../../../contracts/toolbar.js';
 import { getComponent } from '../../../lib/component-registry.js';
 import { DocumentCardContext } from '../../../lib/document-card-context.js';
-import { getToolbarActions } from '../../../lib/toolbar-action-registry.js';
 import { AdminBreadcrumbs } from '../../../widgets/admin-breadcrumbs/index.js';
 import { FieldWidget } from '../../../widgets/field-widget/index.js';
 
@@ -150,6 +151,7 @@ export function adminDocumentDetailQueryOptions(api: ApiClient, params: Params) 
 }
 
 export function AdminDocumentCard() {
+  const context = useFrontendContext();
   const { t } = useTranslation('admin');
   const params = useParams<{ type: string; id: string }>();
   const { type, id } = params;
@@ -252,7 +254,7 @@ export function AdminDocumentCard() {
   const activePageId = activePage || defaultPage?.id;
   const currentPage = doc.pages.find(p => p.id === activePageId && !p.linkTemplate) || defaultPage;
   const title = isNew ? t('admin_doc_title_create') : String(id);
-  const toolbarActions = getToolbarActions(type);
+  const toolbarActions = context.services.resolve<AdminToolbarService>('admin:toolbar').getAll(type);
 
   return (
     <DocumentCardContext.Provider value={{ documentType: type, documentId: id ?? null, editData, updateField, isNew }}>

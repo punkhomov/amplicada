@@ -4,9 +4,11 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite --clearScreen false",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "dev": "pnpm generate && vite --clearScreen false",
+    "build": "pnpm generate && tsc && vite build",
+    "preview": "vite preview",
+    "generate": "amplicada-modules --target frontend",
+    "typecheck": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
     "@amplicada/module-admin": "workspace:*",
@@ -32,6 +34,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.2.1"
+    "vite": "^8.2.1",
+    "@amplicada/application-tools": "workspace:*"
   }
 }

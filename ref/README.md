@@ -8,8 +8,9 @@
 | Tier | Категория | Правило |
 |------|-----------|---------|
 | 1 | `adr/` | Architecture Decision Records — фундаментальные решения. Менять только новым ADR. |
-| 2 | `plans/` | Целевое состояние. План — это направление. Не должен подстраиваться под текущее состояние. |
-| 3 | `guides/` | Паттерны и конвенции. Рекомендации, не обязательные к исполнению. |
+| 2 | `notes/` | Заметки разработчиков по пакетам: почему сделано так, что отвергли и отложили. Отражают принятое состояние. |
+| 3 | `plans/` | Целевое состояние. План — это направление. Не должен подстраиваться под текущее состояние. |
+| 4 | `guides/` | Паттерны и конвенции. Рекомендации, не обязательные к исполнению. |
 
 ## Карта файлов
 
@@ -20,23 +21,49 @@
 | `adr/00-evolution.md` | `implemented` | Эволюция решений: что сохранили, изменили, отбросили |
 | `adr/01-architecture.md` | `implemented` | Архитектура: философия, модули, core decisions |
 | `adr/02-dependency-injection.md` | `Accepted` | Без DI-контейнера: service locator для обязательных зависимостей, extension points для опциональных связей между модулями |
+| `adr/05-application-composition.md` | `implemented` | Единый состав приложения, генерация статических подключений и проверяемые зависимости обеих сторон; заменяет декларативный-only порядок из ADR-02 |
+| `adr/06-module-conventions.md` | `implemented` | amplicada: true, экспорт module, стороны/CSS из exports, порядок обязательных и выбранных optional peers; дополняет ADR-02/05 |
 
 | `context.md` | `implemented` | Актуальный контекст проекта |
 
-Документация `module-hr` живёт не здесь, а рядом с кодом — [`packages/module-hr/docs/`](../packages/module-hr/docs/)
-(Diátaxis: tutorial / how-to / reference / explanation).
+### Notes (tier 2)
 
-### Guides (tier 3)
+| Файл | Статус | Описание |
+|------|--------|----------|
+| `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
+| `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
+| `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar |
+| `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
+
+Перед изменением пакета: `notes/<package>.md` (решения, отвергнутое, пробелы) +
+`packages/<package>/docs/index.md` (границы и ограничения для потребителя).
+
+### Модульная документация (рядом с кодом)
+
+Потребительская документация — не здесь, а рядом с кодом: `packages/<pkg>/docs/`
+(Diátaxis, многостранично; индекс — `docs/index.md`, структура и VitePress-требования — скилл
+`.agents/skills/module-docs/`). Рационал для разработчиков — в `notes/`.
+
+| Пакет | Docs (потребителям) |
+|-------|---------------------|
+| `application-tools` | [`packages/application-tools/docs/`](../packages/application-tools/docs/index.md) — справочник, модель композиции и инструкция optional-интеграции |
+| `module-admin` | [`packages/module-admin/docs/`](../packages/module-admin/docs/index.md) — сервис действий |
+| `module-auth-password` | [`packages/module-auth-password/docs/`](../packages/module-auth-password/docs/index.md) — optional-интеграция admin |
+| `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
+| `module-workflow` | [`packages/module-workflow/docs/`](../packages/module-workflow/docs/) — пока 4 плоских файла |
+
+### Guides (tier 4)
 
 | Файл | Статус | Описание |
 |------|--------|----------|
 | `guides/module-system.md` | `implemented` | Модульная система: структура, паттерны, регистрация |
+| `guides/application-composition.md` | `implemented` | Автоподключение из dependencies, метаданные package.json, генерация и необязательный --config |
 | `guides/module-structure.md` | `implemented` | Конкретная структура модуля: файлы, package.json, конвенции |
 | `guides/formats.md` | `implemented` | Скелеты всех типов документов — справочник для агента |
 | `guides/docker-dev.md` | `superseded` | Старый Docker dev setup; актуальный запуск описан в корневом README |
 | `guides/plan-lifecycle.md` | `draft` | Пайплайн: план → ADR и guides |
 
-### Plans (tier 2)
+### Plans (tier 3)
 
 | Файл | Статус | Описание |
 |------|--------|----------|
@@ -86,7 +113,7 @@
 
 ## Правила работы с ref/
 
-1. **ADR > всё** — если plan противоречит ADR, план нужно пересмотреть или создать новый ADR
+1. **ADR > всё** — если notes или plan противоречат ADR, их нужно пересмотреть или создать новый ADR
 3. **Код > документы** — если реализация отошла от документа, документ нужно обновить (а не код)
 4. **Не удаляй устаревшее** — помечай `status: superseded` и указывай `superseded_by`
 5. **Пиши дату** — каждый документ должен иметь `date` в front matter

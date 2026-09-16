@@ -1,6 +1,7 @@
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type { FrontendModule, FrontendSetupContext } from '../contracts/frontend/index.js';
+import { registerModules } from '../contracts/module-registration.js';
 import { FrontendContext, useFrontendContext } from './frontend-context.js';
 import { AppLayout } from './layouts/app-layout.js';
 import { PublicLayout } from './layouts/public-layout.js';
@@ -49,6 +50,7 @@ export function createFrontendApp(): FrontendApp {
 }
 
 export async function bootstrapFrontend(modules: FrontendModule[], context: FrontendSetupContext): Promise<void> {
+  modules = registerModules(modules, context.modules);
   const resources: LocaleResources = {};
   for (const mod of modules) {
     if (mod.locales?.frontend) {
@@ -68,7 +70,6 @@ export async function bootstrapFrontend(modules: FrontendModule[], context: Fron
   });
 
   for (const mod of modules) {
-    context.modules.register({ id: mod.id, name: mod.name, version: mod.version });
     await mod.setup(context);
   }
   for (const mod of modules) {

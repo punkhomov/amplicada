@@ -22,6 +22,7 @@ import {
   type TaskAlertEvent,
 } from '../contracts/backend/index.js';
 import { Documents } from '../contracts/documents.js';
+import { registerModules } from '../contracts/module-registration.js';
 import { registerCoreDocuments } from './documents/index.js';
 import { DocumentRegistryImpl } from './documents.js';
 import { EventBusImpl } from './event-bus.js';
@@ -177,6 +178,8 @@ export async function createApp(): Promise<App> {
 }
 
 export async function bootstrap(app: FastifyInstance, modules: BackendModule[], context: BackendSetupContext): Promise<void> {
+  // Validate before any registrations, migrations or module setup side effects.
+  modules = registerModules(modules, context.modules);
   const db = context.services.resolve<BackendDbService>('db');
   const pool = context.services.resolve<Pool>('pg-pool');
   const redisClient = context.services.resolve<RedisClientType>('redis');
@@ -211,7 +214,6 @@ export async function bootstrap(app: FastifyInstance, modules: BackendModule[], 
   });
 
   for (const mod of modules) {
-    context.modules.register({ id: mod.id, name: mod.name, version: mod.version, dependencies: mod.dependencies });
     await mod.setup(context, app);
   }
 

@@ -3,7 +3,7 @@ title: Module Structure
 type: guide
 tier: 3
 status: implemented
-date: 2026-07-13
+date: 2026-09-16
 source: clean/07-module-structure
 ---
 
@@ -69,21 +69,19 @@ packages/module-{name}/
 
 ### Module Manifest (contracts/manifest.ts)
 
-Единый источник правды для идентичности модуля. `version` берётся из `package.json`.
+В package.json: `amplicada: true`; стороны и CSS обнаруживаются по exports,
+порядок — по пакетным dependencies/peers. Идентичность хранится в коде:
 
 ```ts
-import { version } from "../../package.json"
+import packageJson from '../../package.json' with { type: 'json' };
 
-export const moduleManifest = {
-  id: "my-module",
-  name: "My Module",
-  version,
-  dependencies: ["other-module"], // опционально: только если есть
-}
+export const moduleManifest = { id: 'example', name: 'Example', version: packageJson.version };
 ```
 
-- `id` и `name` едины для backend и frontend — суффиксы `-frontend` / `(Frontend)` не используются
-- `version` — динамически из `package.json`, не хардкод
+Обе стороны используют moduleManifest. Их публичные index.ts экспортируют объект
+регистрации под именем `module`: `export { myModule as module } from './setup.js'`.
+Generated-код добавляет dependencies; вручную их повторять не нужно.
+См. [application-composition.md](application-composition.md).
 
 ### BackendModule (setup.ts)
 
@@ -435,6 +433,7 @@ registerWorkflowDocuments(context.documents);
 ```json
 {
   "name": "@amplicada/module-{name}",
+  "amplicada": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -478,11 +477,11 @@ registerWorkflowDocuments(context.documents);
 
 | Файл | Обязательно | Опционально |
 |------|------------|-------------|
-| `backend/index.ts` | module definition (`myModule`) | Drizzle schema, document registration функции, публичные сервисы |
+| `backend/index.ts` | module definition (`module`) | Drizzle schema, document registration функции, публичные сервисы |
 | `backend/services/index.ts` | — | Barrel service-реализаций (engine, registry, plugin) |
 | `backend/documents/index.ts` | — | Barrel entity-функций регистрации документов |
 | `backend/schemas/index.ts` | — | Barrel Drizzle таблиц и типов |
-| `frontend/index.ts` | module definition (`myFrontendModule`) | Публичные компоненты, хуки, registry API |
+| `frontend/index.ts` | module definition (`module`) | Публичные компоненты, хуки, registry API |
 | `contracts/index.ts` | Всё, что нужно и backend и frontend | DTO, event types, константы, Zod схемы |
 
 ## Конвенции именования
@@ -519,23 +518,19 @@ registerWorkflowDocuments(context.documents);
 ### В приложении (apps/web)
 
 ```tsx
-import { createFrontendApp, bootstrapFrontend } from "@amplicada/platform-core/frontend"
-import { authPasswordFrontendModule } from "@amplicada/module-auth-password/frontend"
+import { createFrontendApp, bootstrapFrontend } from '@amplicada/platform-core/frontend';
+import { modules } from './generated/frontend-modules.js';
 
-const app = createFrontendApp({
-  modules: [authPasswordFrontendModule],
-})
-bootstrapFrontend(app)
+const { context } = createFrontendApp();
+await bootstrapFrontend(modules, context);
 ```
 
 ### В API (apps/api)
 
 ```ts
-import { createApp, bootstrap } from "@amplicada/platform-core/backend"
-import { authPasswordModule } from "@amplicada/module-auth-password/backend"
+import { createApp, bootstrap } from '@amplicada/platform-core/backend';
+import { modules } from './generated/backend-modules.js';
 
-const app = createApp({
-  modules: [authPasswordModule],
-})
-await bootstrap(app)
+const { app, context } = await createApp();
+await bootstrap(app, modules, context);
 ```
