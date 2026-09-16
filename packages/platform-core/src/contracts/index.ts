@@ -61,4 +61,15 @@ export {
 export type { Lifecycle, LifecycleHook } from './lifecycle.js';
 export type { ModuleDependencyNode } from './module-graph.js';
 export { sortModules } from './module-graph.js';
+export type {
+  NotificationChannel,
+  NotificationDelivery,
+  NotificationDeliveryListParams,
+  NotificationFailedEvent,
+  NotificationMessage,
+  NotificationSentEvent,
+  NotificationStatus,
+  ResolvedNotification,
+} from './notification.js';
+export { NOTIFICATION_EVENTS } from './notification.js';
 export type { ServiceRegistry } from './service-registry.js';
