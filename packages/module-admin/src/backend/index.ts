@@ -4,6 +4,7 @@ import type { BackendModule } from '@amplicada/platform-core/contracts/backend';
 import { moduleManifest } from '../contracts/manifest.js';
 import { adminBackendLocales } from './locales/index.js';
 import { createDocumentRoutes } from './routes/documents.js';
+import { createNotificationRoutes } from './routes/notifications.js';
 import { createRegistryRoutes } from './routes/registry.js';
 import { createStorageRoutes } from './routes/storage.js';
 import { createTaskRoutes } from './routes/tasks.js';
@@ -24,6 +25,13 @@ const adminModule: BackendModule = {
       topic: DashboardTopics.SYSTEM,
       label: 'admin:dashboard_link_storage',
       path: '/admin/storage',
+    });
+    context.documents.dashboard.registerLink('notifications', {
+      module: 'admin',
+      topic: DashboardTopics.SYSTEM,
+      label: 'admin:dashboard_link_notifications',
+      path: '/admin/notifications',
+      order: 30,
     });
 
     if (!app) return;
@@ -55,6 +63,7 @@ const adminModule: BackendModule = {
         createDocumentRoutes(fastify, context);
         createTaskRoutes(fastify, context);
         createStorageRoutes(fastify, context);
+        createNotificationRoutes(fastify, context);
       },
       { prefix: '/api/admin' },
     );

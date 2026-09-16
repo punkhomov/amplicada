@@ -15,6 +15,7 @@ import {
   readAdminTableSettings,
 } from './pages/admin-document-list/index.js';
 import { AdminModules, adminApiModulesQueryOptions } from './pages/admin-modules/index.js';
+import { AdminNotifications, adminNotificationsQueryOptions } from './pages/admin-notifications/index.js';
 import { AdminStorage, adminStorageObjectsQueryOptions } from './pages/admin-storage/index.js';
 import { AdminTaskDetail, adminTaskRunsQueryOptions } from './pages/admin-task-detail/index.js';
 import { AuthLogDisplay } from './widgets/auth-log-display/index.js';
@@ -44,6 +45,15 @@ const adminFrontendModule: FrontendModule = {
       layout: 'admin',
       loader: async () => {
         await context.queryClient.ensureQueryData(adminApiModulesQueryOptions(api));
+        return null;
+      },
+    });
+    // Статический сегмент ранжируется React Router'ом выше generic '/admin/:type' — конфликта с
+    // списком документов нет.
+    context.routes.register('/admin/notifications', <AdminNotifications />, {
+      layout: 'admin',
+      loader: async () => {
+        await context.queryClient.ensureQueryData(adminNotificationsQueryOptions(api, { status: 'all', kind: '', userId: '' }, 0));
         return null;
       },
     });
@@ -105,6 +115,7 @@ export { AdminDashboard } from './pages/admin-dashboard/index.js';
 export { AdminDocumentCard } from './pages/admin-document-card/index.js';
 export { AdminDocumentList } from './pages/admin-document-list/index.js';
 export { AdminModules } from './pages/admin-modules/index.js';
+export { AdminNotifications } from './pages/admin-notifications/index.js';
 export { AdminStorage } from './pages/admin-storage/index.js';
 export { AdminTaskDetail } from './pages/admin-task-detail/index.js';
 

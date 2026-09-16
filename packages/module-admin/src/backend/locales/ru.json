@@ -2,5 +2,6 @@
   "dashboard_topic_system": "Система",
   "dashboard_topic_documents": "Документы",
   "dashboard_link_modules": "Модули",
-  "dashboard_link_storage": "Хранилище"
+  "dashboard_link_storage": "Хранилище",
+  "dashboard_link_notifications": "Уведомления"
 }
