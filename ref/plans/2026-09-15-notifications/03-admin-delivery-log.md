@@ -2,7 +2,7 @@
 title: Админ-лог доставок уведомлений
 type: plan
 tier: 2
-status: draft
+status: implemented
 date: 2026-09-15
 ---
 
@@ -75,10 +75,10 @@ context.documents.dashboard.registerLink('notifications', {
 
 ## Порядок реализации
 
-- [ ] Backend-роуты + dashboard link
-- [ ] Страница + роут + loader
-- [ ] Locales ru/en
-- [ ] `pnpm build && pnpm typecheck && pnpm lint`
+- [x] Backend-роуты + dashboard link
+- [x] Страница + роут + loader
+- [x] Locales ru/en
+- [x] `pnpm build && pnpm typecheck && pnpm lint`
 
 ## Проверка
 

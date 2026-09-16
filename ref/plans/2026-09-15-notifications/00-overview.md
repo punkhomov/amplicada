@@ -2,7 +2,7 @@
 title: Уведомления — ядро маршрутизирует, каналы доставляют
 type: plan
 tier: 2
-status: draft
+status: implemented
 date: 2026-09-15
 ---
 
@@ -46,10 +46,10 @@ date: 2026-09-15
 
 | # | Файл | Статус | Объём | Зависит от | Суть |
 |---|------|--------|-------|------------|------|
-| 01 | [core-service-and-outbox](./01-core-service-and-outbox.md) | 📋 | L | — | Контракт `notification`, `core.notification_outbox`, сервис, диспетчер, ретраи/бэкофф, ретенция |
-| 02 | [email-channel-module](./02-email-channel-module.md) | 📋 | M | 01 | `module-notification-email`: SMTP-транспорт + адресная книга + doc extension на карточке пользователя |
-| 03 | [admin-delivery-log](./03-admin-delivery-log.md) | 📋 | M | 01 | `/admin/notifications`: список доставок, фильтры, ручной retry |
-| 04 | [dev-infra-and-adr](./04-dev-infra-and-adr.md) | 📋 | S | 02, 03 | Mailpit в dev-инфраструктуре, SMTP-переменные, ADR-04, карта `ref/` |
+| 01 | [core-service-and-outbox](./01-core-service-and-outbox.md) | ✅ | L | — | Контракт `notification`, `core.notification_outbox`, сервис, диспетчер, ретраи/бэкофф, ретенция |
+| 02 | [email-channel-module](./02-email-channel-module.md) | ✅ | M | 01 | `module-notification-email`: SMTP-транспорт + адресная книга + doc extension на карточке пользователя |
+| 03 | [admin-delivery-log](./03-admin-delivery-log.md) | ✅ | M | 01 | `/admin/notifications`: список доставок, фильтры, ручной retry |
+| 04 | [dev-infra-and-adr](./04-dev-infra-and-adr.md) | ✅ | S | 02, 03 | Mailpit в dev-инфраструктуре, SMTP-переменные, ADR-04, карта `ref/` |
 
 ✅ реализовано · 🔄 частично · 📋 запланировано
 `S` — правка в пределах файла-двух. `M` — несколько файлов/пакет. `L` — новый слой в ядре.

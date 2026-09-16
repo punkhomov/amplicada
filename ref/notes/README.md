@@ -31,6 +31,7 @@ date: 2026-09-15
 | `module-admin` | [Заметки](module-admin.md) — D-004: файловый менеджер `/admin/storage`, ключи в query, превью |
 | `module-auth-password` | [Заметки](module-auth-password.md) |
 | `module-hr-poll` | [Заметки](module-hr-poll.md) |
+| `module-notification-email` | [Заметки](module-notification-email.md) — D-001…D-004: nodemailer ^8, backend-only, подтверждение адреса, режим без SMTP |
 | `module-support-chat` | [Заметки](module-support-chat.md) — первое приложение админки: таблицы вместо документов, SSE + Redis, вложения через storage, карточка-виджет, портал «Мои обращения» |
 | `platform-core` | [Заметки](platform-core.md) — UI-кит: вендоринг, синк, `cn`, политика возраста; D-006: `delimiter` в `listObjects` |
 | `module-hr` | — |
