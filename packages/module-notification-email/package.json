@@ -1,0 +1,42 @@
+{
+  "name": "@amplicada/module-notification-email",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./backend": {
+      "types": "./dist/backend/index.d.ts",
+      "import": "./dist/backend/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "import": "./dist/contracts/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.11"
+  },
+  "peerDependencies": {
+    "@amplicada/platform-core": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.0.0"
+  },
+  "devDependencies": {
+    "@amplicada/platform-core": "workspace:*",
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.1",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.12.0",
+    "typescript": "^7.0.2"
+  },
+  "amplicada": true,
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "migrations"
+  ]
+}
