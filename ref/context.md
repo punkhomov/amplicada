@@ -50,6 +50,11 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `allocateDocumentId`, `indexCreated` | document-runtime.ts — резервирование id в `core.document_index` перед вставкой строки |
 | `writeVersion`, `versionWriteMode`, `CARD_CORRECTION` | module-hr: коррекция записи vs новый интервал версии |
 | `getObjectStream`, `StorageGetStreamOptions` | потоковое чтение из S3 с `Range` → `206` |
+| `notification`, `BackendNotificationService`, `NotificationChannel` | core-сервис уведомлений: маршрутизация через зарегистрированные каналы, outbox — contracts/notification.ts, backend/services/notification-service.ts |
+| `notification_outbox`, `NOTIFICATION_EVENTS` | `core.notification_outbox` (pending/sending/sent/failed, бэкофф, ретенция) — миграция core `0006`; события `notification.delivery.sent/failed` |
+| `module-notification-email`, `EmailChannel`, `SMTP_HOST` | почтовый канал: SMTP-транспорт + адресная книга `notification_email.user_email` (адрес отдаётся при непустом `verified_at`); без `SMTP_HOST` канал не регистрируется |
+| `NotificationDispatcher`, `isWorkerRole`, `ROLE=worker` | диспетчер ретраев: due `pending`, зависшие `sending`, ретенция; поднимается только на worker-роли, eager-попытка работает на любой |
+| `/admin/notifications` | админ-лог доставок: фильтры status/kind/userId, ручной «Повторить» для `failed` — module-admin |
 | `ref/notes/<pkg>.md`, `packages/*/docs/` | рационал пакета (отвергнутое, отложенное, пробелы) и потребительская документация; читать перед изменением пакета |
 
 ## Current Priorities

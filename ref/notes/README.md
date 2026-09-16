@@ -30,6 +30,7 @@ date: 2026-09-15
 | `module-admin` | [Заметки](module-admin.md) |
 | `module-auth-password` | [Заметки](module-auth-password.md) |
 | `module-hr-poll` | [Заметки](module-hr-poll.md) |
+| `module-notification-email` | [Заметки](module-notification-email.md) — D-001…D-004: nodemailer ^8, backend-only, подтверждение адреса, режим без SMTP |
 | `platform-core` | — |
 | `module-hr` | — |
 | `module-workflow` | — |

@@ -2,7 +2,7 @@
 title: module-notification-email — SMTP-транспорт и адресная книга
 type: plan
 tier: 2
-status: draft
+status: implemented
 date: 2026-09-15
 ---
 
@@ -186,11 +186,11 @@ setup(context) {
 
 ## Порядок реализации
 
-- [ ] Каркас пакета (package.json/tsconfig/бочки экспортов), `pnpm install`
-- [ ] Схема + миграция `0000_init`, `_journal.json`
-- [ ] Document extension с ручными `load`/`save` + locales (backend и frontend)
-- [ ] `EmailChannel` + чтение SMTP-конфига + регистрация в `notification`
-- [ ] Провод в apps, `pnpm build && pnpm typecheck && pnpm lint`
+- [x] Каркас пакета (package.json/tsconfig/бочки экспортов), `pnpm install`
+- [x] Схема + миграция `0000_init`, `_journal.json`
+- [x] Document extension с ручными `load`/`save` + locales (backend и frontend)
+- [x] `EmailChannel` + чтение SMTP-конфига + регистрация в `notification`
+- [x] Провод в apps, `pnpm build && pnpm typecheck && pnpm lint`
 
 ## Проверка
 
