@@ -26,6 +26,7 @@ export function serializeFilters(tree: FilterTree): string | undefined {
 
 export interface ListQueryArgs {
   filters: FilterTree;
+  search?: string;
   sorting?: SortingState;
   /** 1-based, как ждёт бэкенд. Не передаётся для export-view — он стримит всё. */
   page?: number;
@@ -38,7 +39,7 @@ export interface ListQueryArgs {
  * Единственное место, где параметры списка превращаются в query-строку: infinite-запрос,
  * pages-запрос и export-view. Раньше эта логика была продублирована в трёх местах и расходилась.
  */
-export function buildListQuery({ filters, sorting, page, pageSize, columns, format }: ListQueryArgs): Record<string, string> {
+export function buildListQuery({ filters, search, sorting, page, pageSize, columns, format }: ListQueryArgs): Record<string, string> {
   const query: Record<string, string> = {};
   if (page !== undefined) query.page = String(page);
   if (pageSize !== undefined) query.pageSize = String(pageSize);
@@ -48,6 +49,7 @@ export function buildListQuery({ filters, sorting, page, pageSize, columns, form
   }
   const serialized = serializeFilters(filters);
   if (serialized) query.filters = serialized;
+  if (search?.trim()) query.search = search.trim();
   if (columns?.length) query.columns = columns.join(',');
   if (format) query.format = format;
   return query;

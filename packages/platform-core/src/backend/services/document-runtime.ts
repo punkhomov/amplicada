@@ -32,6 +32,7 @@ import { DEFAULT_EXTENSION_KEY } from '../../contracts/documents.js';
 import { documentCustomFields, documentIndex } from '../schemas/index.js';
 import { withDbErrors } from './db-errors.js';
 import { DocumentRuntimeError } from './document-runtime-error.js';
+import { postgresListSearchWhere } from './document-search.js';
 import { buildFilterWhere, parseFilterParam } from './filter-sql.js';
 
 export { DocumentRuntimeError };
@@ -174,10 +175,12 @@ export class DocumentRuntime implements BackendDocumentRuntime {
     columns: Record<string, ListFieldMeta>,
     selectObj: Record<string, ListColumn>,
     rawFilters: string | undefined,
+    rawSearch?: string,
   ): SQL {
     const userWhere = buildFilterWhere(parseFilterParam(rawFilters), columns, selectObj);
+    const searchWhere = postgresListSearchWhere(rawSearch, columns, selectObj);
     // soft-deleted строки исключаются из выборки всегда, поверх пользовательских фильтров.
-    return and(eq(documentIndex.type, type), ACTIVE_IN_INDEX, userWhere) as SQL;
+    return and(eq(documentIndex.type, type), ACTIVE_IN_INDEX, userWhere, searchWhere) as SQL;
   }
 
   private applyJoins(query: PgSelect, joinExts: ListExtension[], idColRef: PgColumn): PgSelect {
@@ -448,7 +451,7 @@ export class DocumentRuntime implements BackendDocumentRuntime {
       }
     }
 
-    const whereClause = this.resolveWhere(type, columns, selectObj, query.filters);
+    const whereClause = this.resolveWhere(type, columns, selectObj, query.filters, query.search);
 
     const baseQuery: PgSelect = this.applyJoins(this.db.select(finalSelectObj).from(documentIndex).$dynamic(), joinExts, idColRef).where(
       whereClause,
@@ -698,7 +701,7 @@ export class DocumentRuntime implements BackendDocumentRuntime {
       }
     }
 
-    const whereClause = this.resolveWhere(type, columns, selectObj, query.filters);
+    const whereClause = this.resolveWhere(type, columns, selectObj, query.filters, query.search);
 
     const sortColumn = query.sortBy && selectObj[query.sortBy] ? selectObj[query.sortBy] : null;
     const sortDir = query.sortDir === 'desc' ? 'desc' : 'asc';

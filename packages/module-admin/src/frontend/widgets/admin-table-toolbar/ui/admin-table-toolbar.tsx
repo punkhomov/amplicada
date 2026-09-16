@@ -137,7 +137,10 @@ export function AdminTableToolbar({
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
           <Input
+            type="search"
+            aria-label={t('admin_toolbar_search_placeholder')}
             placeholder={t('admin_toolbar_search_placeholder')}
+            maxLength={200}
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
             className="pl-8 h-8 w-56"

@@ -51,6 +51,7 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `writeVersion`, `versionWriteMode`, `CARD_CORRECTION` | module-hr: коррекция записи vs новый интервал версии |
 | `getObjectStream`, `StorageGetStreamOptions` | потоковое чтение из S3 с `Range` → `206` |
 | `ref/notes/<pkg>.md`, `packages/*/docs/` | рационал пакета (отвергнутое, отложенное, пробелы) и потребительская документация; читать перед изменением пакета |
+| `postgresListSearchWhere`, `ListFieldMeta.searchable` | PostgreSQL FTS по колонкам списка; план других провайдеров в `plans/2026-09-16-document-search-providers.md` |
 
 ## Current Priorities
 

@@ -91,14 +91,14 @@ interface ExportResponse {
 export function adminDocumentListInfiniteQueryOptions(
   api: ApiClient,
   params: Params,
-  { sorting, pageSize, filters }: { sorting: SortingState; pageSize: number; filters: FilterTree },
+  { sorting, pageSize, filters, search = '' }: { sorting: SortingState; pageSize: number; filters: FilterTree; search?: string },
 ) {
   const type = params.type ?? '';
   return {
-    queryKey: ['admin', 'documents', type, 'infinite', sorting, pageSize, filters] as const,
+    queryKey: ['admin', 'documents', type, 'infinite', sorting, pageSize, filters, search] as const,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       api.get<ListResponse>(`/admin/documents/${type}`, {
-        query: buildListQuery({ filters, sorting, page: pageParam, pageSize }),
+        query: buildListQuery({ filters, search, sorting, page: pageParam, pageSize }),
       }),
     initialPageParam: 1,
     getNextPageParam: (lastPage: ListResponse) =>
@@ -113,14 +113,19 @@ export function adminDocumentListInfiniteQueryOptions(
 export function adminDocumentListPagesQueryOptions(
   api: ApiClient,
   params: Params,
-  { sorting, pagination, filters }: { sorting: SortingState; pagination: PaginationState; filters: FilterTree },
+  {
+    sorting,
+    pagination,
+    filters,
+    search = '',
+  }: { sorting: SortingState; pagination: PaginationState; filters: FilterTree; search?: string },
 ) {
   const type = params.type ?? '';
   return {
-    queryKey: ['admin', 'documents', type, 'pages', sorting, pagination, filters] as const,
+    queryKey: ['admin', 'documents', type, 'pages', sorting, pagination, filters, search] as const,
     queryFn: () =>
       api.get<ListResponse>(`/admin/documents/${type}`, {
-        query: buildListQuery({ filters, sorting, page: pagination.pageIndex + 1, pageSize: pagination.pageSize }),
+        query: buildListQuery({ filters, search, sorting, page: pagination.pageIndex + 1, pageSize: pagination.pageSize }),
       }),
   };
 }
@@ -151,6 +156,8 @@ export function AdminDocumentList() {
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [filters, setFilters] = useState<FilterTree>(EMPTY_FILTER);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [search, setSearch] = useState('');
   const [settings, setSettings] = useLocalStorage<TableSettings>(ADMIN_TABLE_SETTINGS_KEY, DEFAULT_SETTINGS);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => columnSizingForType(settings, type ?? ''));
   const columnSizingRef = useRef(columnSizing);
@@ -176,19 +183,26 @@ export function AdminDocumentList() {
     setColumnVisibility(columnVisibilityForType(settings, type ?? ''));
     setColumnSizing(columnSizingForType(settings, type ?? ''));
     setFilters(filtersForType(settings, type ?? ''));
+    setSearchQuery('');
+    setSearch('');
     setColumnOrder(columnOrderForType(settings, type ?? ''));
   }
 
   // --- Queries ---
 
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const infiniteQuery = useInfiniteQuery({
-    ...adminDocumentListInfiniteQueryOptions(api, params, { sorting, pageSize, filters }),
+    ...adminDocumentListInfiniteQueryOptions(api, params, { sorting, pageSize, filters, search }),
     enabled: !!type && paginationMode === 'infinite',
     placeholderData: keepPreviousData,
   });
 
   const pagesQuery = useQuery({
-    ...adminDocumentListPagesQueryOptions(api, params, { sorting, pagination, filters }),
+    ...adminDocumentListPagesQueryOptions(api, params, { sorting, pagination, filters, search }),
     enabled: !!type && paginationMode === 'pages',
     placeholderData: keepPreviousData,
   });
@@ -251,7 +265,7 @@ export function AdminDocumentList() {
   const handleExportView = async (format: 'csv' | 'json') => {
     if (!type) return;
     // page/pageSize намеренно не передаются — export-view стримит всю выборку целиком.
-    const qs = new URLSearchParams(buildListQuery({ filters, sorting, columns: visibleColumnKeys, format })).toString();
+    const qs = new URLSearchParams(buildListQuery({ filters, search, sorting, columns: visibleColumnKeys, format })).toString();
     // Стриминг обязывает идти мимо ApiClient (он читает тело целиком), поэтому Accept-Language
     // проставляем руками — иначе заголовки колонок в выгрузке будут на языке браузера, а не на выбранном.
     const res = await fetch(`${api.baseUrl}/admin/documents/${type}/export-view?${qs}`, {
@@ -721,7 +735,7 @@ export function AdminDocumentList() {
             selectedIds={Object.keys(rowSelection)}
             refreshData={() => queryClient.invalidateQueries({ queryKey: ['admin', 'documents', type] })}
             paginationMode={paginationMode}
-            searchQuery=""
+            searchQuery={searchQuery}
             activeFilterCount={countFilterConditions(filters)}
             onCreate={() => navigate(`/admin/${type}/create`)}
             onDeleteSelected={handleDeleteSelected}
@@ -733,7 +747,11 @@ export function AdminDocumentList() {
             onTogglePaginationMode={() =>
               setSettings(s => ({ ...s, paginationMode: s.paginationMode === 'infinite' ? 'pages' : 'infinite' }))
             }
-            onSearchChange={() => {}}
+            onSearchChange={value => {
+              setSearchQuery(value);
+              setPagination(p => ({ ...p, pageIndex: 0 }));
+              setRowSelection({});
+            }}
           />
         </div>
 
