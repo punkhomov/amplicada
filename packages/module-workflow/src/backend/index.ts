@@ -23,5 +23,5 @@ export {
 } from './schemas/index.js';
 export { WorkflowEngine } from './services/engine.js';
 export { WorkflowRegistryImpl } from './services/registry.js';
-export { workflowModule } from './setup.js';
+export { workflowModule as module } from './setup.js';
 export { type ValidationResult, validateWorkflowConfig } from './validation.js';

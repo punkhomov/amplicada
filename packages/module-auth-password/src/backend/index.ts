@@ -1,2 +1,2 @@
 export { PasswordAuthProvider } from './services/plugin.js';
-export { authPasswordModule } from './setup.js';
+export { authPasswordModule as module } from './setup.js';

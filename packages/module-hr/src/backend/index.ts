@@ -41,4 +41,4 @@ export type {
   UpdateVirtualTeamAttributes,
 } from './services/hr-structure-service.js';
 export { HrStructureService } from './services/hr-structure-service.js';
-export { hrModule } from './setup.js';
+export { hrModule as module } from './setup.js';

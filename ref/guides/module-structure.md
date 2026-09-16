@@ -3,7 +3,7 @@ title: Module Structure
 type: guide
 tier: 3
 status: implemented
-date: 2026-09-15
+date: 2026-09-16
 source: clean/07-module-structure
 ---
 
@@ -69,29 +69,28 @@ packages/module-{name}/
 
 ### Module Manifest (contracts/manifest.ts)
 
-Идентичность, стороны и зависимости объявляются в `amplicada` внутри package.json;
-версия берётся из стандартного поля version. Формат метаданных и подключение приложения
-описаны в [application-composition.md](application-composition.md).
+В package.json: `amplicada: true`; стороны и CSS обнаруживаются по exports,
+порядок — по пакетным dependencies/peers. Идентичность хранится в коде:
 
 ```ts
 import packageJson from '../../package.json' with { type: 'json' };
-const { amplicada, version } = packageJson;
 
-export const moduleManifest = { id: amplicada.id, name: amplicada.name, version };
-export const backendManifest = { ...moduleManifest, dependencies: amplicada.backend.dependencies };
-export const frontendManifest = { ...moduleManifest, dependencies: amplicada.frontend.dependencies };
+export const moduleManifest = { id: 'example', name: 'Example', version: packageJson.version };
 ```
 
-Для модуля только с одной стороной экспортируйте только соответствующий manifest.
+Обе стороны используют moduleManifest. Их публичные index.ts экспортируют объект
+регистрации под именем `module`: `export { myModule as module } from './setup.js'`.
+Generated-код добавляет dependencies; вручную их повторять не нужно.
+См. [application-composition.md](application-composition.md).
 
 ### BackendModule (setup.ts)
 
 ```ts
 import type { BackendModule, BackendDbService } from "@amplicada/platform-core/contracts/backend"
-import { backendManifest } from "../contracts/manifest.js"
+import { moduleManifest } from "../contracts/manifest.js"
 
 export const myModule: BackendModule = {
-  ...backendManifest,
+  ...moduleManifest,
 
   setup(context) {
     context.migrations.register("my-module", migrationsPath)
@@ -106,11 +105,11 @@ export const myModule: BackendModule = {
 
 ```tsx
 import type { FrontendModule } from "@amplicada/platform-core/contracts/frontend"
-import { frontendManifest } from "../contracts/manifest.js"
+import { moduleManifest } from "../contracts/manifest.js"
 import { MyPage } from "./my-page.js"
 
 export const myFrontendModule: FrontendModule = {
-  ...frontendManifest,
+  ...moduleManifest,
 
   setup(context) {
     context.routes.register("/my", <MyPage />)
@@ -434,6 +433,7 @@ registerWorkflowDocuments(context.documents);
 ```json
 {
   "name": "@amplicada/module-{name}",
+  "amplicada": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -477,11 +477,11 @@ registerWorkflowDocuments(context.documents);
 
 | Файл | Обязательно | Опционально |
 |------|------------|-------------|
-| `backend/index.ts` | module definition (`myModule`) | Drizzle schema, document registration функции, публичные сервисы |
+| `backend/index.ts` | module definition (`module`) | Drizzle schema, document registration функции, публичные сервисы |
 | `backend/services/index.ts` | — | Barrel service-реализаций (engine, registry, plugin) |
 | `backend/documents/index.ts` | — | Barrel entity-функций регистрации документов |
 | `backend/schemas/index.ts` | — | Barrel Drizzle таблиц и типов |
-| `frontend/index.ts` | module definition (`myFrontendModule`) | Публичные компоненты, хуки, registry API |
+| `frontend/index.ts` | module definition (`module`) | Публичные компоненты, хуки, registry API |
 | `contracts/index.ts` | Всё, что нужно и backend и frontend | DTO, event types, константы, Zod схемы |
 
 ## Конвенции именования
@@ -518,23 +518,19 @@ registerWorkflowDocuments(context.documents);
 ### В приложении (apps/web)
 
 ```tsx
-import { createFrontendApp, bootstrapFrontend } from "@amplicada/platform-core/frontend"
-import { authPasswordFrontendModule } from "@amplicada/module-auth-password/frontend"
+import { createFrontendApp, bootstrapFrontend } from '@amplicada/platform-core/frontend';
+import { modules } from './generated/frontend-modules.js';
 
-const app = createFrontendApp({
-  modules: [authPasswordFrontendModule],
-})
-bootstrapFrontend(app)
+const { context } = createFrontendApp();
+await bootstrapFrontend(modules, context);
 ```
 
 ### В API (apps/api)
 
 ```ts
-import { createApp, bootstrap } from "@amplicada/platform-core/backend"
-import { authPasswordModule } from "@amplicada/module-auth-password/backend"
+import { createApp, bootstrap } from '@amplicada/platform-core/backend';
+import { modules } from './generated/backend-modules.js';
 
-const app = createApp({
-  modules: [authPasswordModule],
-})
-await bootstrap(app)
+const { app, context } = await createApp();
+await bootstrap(app, modules, context);
 ```

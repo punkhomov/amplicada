@@ -3,14 +3,17 @@ title: Module System & Patterns
 type: guide
 tier: 3
 status: implemented
-date: 2026-09-15
+date: 2026-09-16
 source: clean/03-modules (main2, frontend-core-plan, current code)
 ---
 
 # Module System & Patterns
 
 Для подключения модулей к приложению используйте [автоподключение из dependencies и необязательные профили](application-composition.md).
-Примеры ручной регистрации ниже остаются допустимым низкоуровневым API.
+Примеры ручной регистрации ниже остаются низкоуровневым API: вызывающий код задаёт
+полный состав и runtime dependencies самостоятельно. При генерации amplicada: true
+и package exports задают доступные стороны, dependencies/peers — порядок.
+Выбранные optional peers тоже запускаются раньше потребителя, отсутствующие пропускаются.
 
 > Source: main2, frontend-core-plan, current code
 
@@ -103,10 +106,10 @@ Import separation prevents React from leaking into backend:
 
 ```ts
 // Backend
-import { SomeModule } from "@amplicada/some-module/backend"
+import { module as SomeModule } from "@amplicada/some-module/backend"
 
 // Frontend
-import { SomeModule } from "@amplicada/some-module/frontend"
+import { module as SomeModule } from "@amplicada/some-module/frontend"
 ```
 
 ## Core Package Structure
@@ -136,7 +139,7 @@ import type { FrontendModule } from "@amplicada/platform-core/contracts/frontend
 ## Backend Module Pattern (BackendModule)
 
 ```ts
-export const myModule: BackendModule = {
+export const module: BackendModule = {
   id: "my-module",
   name: "My Module",
   version: "1.0.0",
@@ -174,7 +177,7 @@ HTTP-запросов: lifecycle `shutdown/before` → остановка schedu
 ```ts
 import type { FrontendModule } from "@amplicada/platform-core/contracts/frontend"
 
-export const myFrontendModule: FrontendModule = {
+export const module: FrontendModule = {
   id: "my-module",
   name: "My Module (Frontend)",
   version: "1.0.0",
@@ -219,7 +222,7 @@ export const myFrontendModule: FrontendModule = {
 
 ## FrontendSetupContext
 
-`FrontendSetupContext` — это DI-контейнер для фронтенд-части. Доступен в `setup()` каждого `FrontendModule`.
+`FrontendSetupContext` — контекст реестров и сервисов frontend. Доступен в `setup()` каждого `FrontendModule`.
 
 | Registry | Тип | Методы |
 |----------|-----|--------|
@@ -309,7 +312,7 @@ import { createFrontendApp, bootstrapFrontend, FrontendProvider, ModuleRoutes } 
 
 ### 3. Подключить CSS приложения
 
-Генератор делает это по `amplicada.styles` автоматически. Ниже — эквивалент для приложения,
+Генератор делает это по экспорту `./frontend/tailwind.css` автоматически. Ниже — эквивалент для приложения,
 которое подключает модули вручную, без генератора.
 
 
@@ -340,7 +343,7 @@ A reference application in the repo that uses all official modules. Its purposes
 ```ts
 // apps/demo/src/index.ts
 import { createApp, bootstrap } from "@amplicada/platform-core/backend"
-import { authPasswordModule } from "@amplicada/module-auth-password/backend"
+import { module as authPasswordModule } from "@amplicada/module-auth-password/backend"
 // import { hrModule } from "@amplicada/module-hr/backend"
 // import { testingModule } from "@amplicada/module-testing/backend"
 

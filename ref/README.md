@@ -22,6 +22,7 @@
 | `adr/01-architecture.md` | `implemented` | Архитектура: философия, модули, core decisions |
 | `adr/02-dependency-injection.md` | `Accepted` | Без DI-контейнера: service locator для обязательных зависимостей, extension points для опциональных связей между модулями |
 | `adr/05-application-composition.md` | `implemented` | Единый состав приложения, генерация статических подключений и проверяемые зависимости обеих сторон; заменяет декларативный-only порядок из ADR-02 |
+| `adr/06-module-conventions.md` | `implemented` | amplicada: true, экспорт module, стороны/CSS из exports, порядок обязательных и выбранных optional peers; дополняет ADR-02/05 |
 
 | `context.md` | `implemented` | Актуальный контекст проекта |
 
@@ -30,7 +31,8 @@
 | Файл | Статус | Описание |
 |------|--------|----------|
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
-| `notes/application-tools.md` | `implemented` | Discovery из dependencies; профили только для явных задач и fixtures тестов |
+| `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
+| `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
 
 Перед изменением пакета: `notes/<package>.md` (решения, отвергнутое, пробелы) +
@@ -44,7 +46,9 @@
 
 | Пакет | Docs (потребителям) |
 |-------|---------------------|
-| `application-tools` | [`packages/application-tools/docs/`](../packages/application-tools/docs/index.md) — CLI, API и метаданные композиции |
+| `application-tools` | [`packages/application-tools/docs/`](../packages/application-tools/docs/index.md) — справочник, модель композиции и инструкция optional-интеграции |
+| `module-admin` | [`packages/module-admin/docs/`](../packages/module-admin/docs/index.md) — сервис действий |
+| `module-auth-password` | [`packages/module-auth-password/docs/`](../packages/module-auth-password/docs/index.md) — optional-интеграция admin |
 | `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
 | `module-workflow` | [`packages/module-workflow/docs/`](../packages/module-workflow/docs/) — пока 4 плоских файла |
 

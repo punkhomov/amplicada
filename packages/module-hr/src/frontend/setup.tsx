@@ -1,9 +1,9 @@
 import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend';
-import { frontendManifest } from '../contracts/manifest.js';
+import { moduleManifest } from '../contracts/manifest.js';
 import { hrLocales } from './locales/index.js';
 
 export const hrFrontendModule: FrontendModule = {
-  ...frontendManifest,
+  ...moduleManifest,
   locales: { frontend: { ru: hrLocales.ru } },
 
   setup(_context) {

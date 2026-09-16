@@ -1,8 +1,8 @@
 ---
 title: Справочник application-tools
 type: index
-updated: 2026-09-15
-verified_commit: 25eafbb
+updated: 2026-09-16
+verified_commit: a5c2ac9
 ---
 
 # Справочник application-tools

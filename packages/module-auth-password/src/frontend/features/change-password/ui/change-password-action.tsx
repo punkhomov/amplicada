@@ -1,4 +1,4 @@
-import type { ToolbarActionProps } from '@amplicada/module-admin/frontend';
+import type { ToolbarActionProps } from '@amplicada/module-admin/contracts';
 import { DEFAULT_EXTENSION_KEY } from '@amplicada/platform-core/contracts';
 import { useApiClient, useMutation, useTranslation } from '@amplicada/platform-core/frontend';
 import { Button } from '@amplicada/platform-core/frontend/ui/button';

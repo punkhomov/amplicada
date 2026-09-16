@@ -10,7 +10,7 @@ import {
 } from '@amplicada/module-workflow/backend';
 import { WORKFLOW_ENGINE_TOKEN } from '@amplicada/module-workflow/contracts';
 import type { BackendModule } from '@amplicada/platform-core/contracts/backend';
-import { backendManifest } from '../contracts/manifest.js';
+import { moduleManifest } from '../contracts/manifest.js';
 import { registerRequestTypeDocuments } from './documents/index.js';
 import { hrRequestBackendLocales } from './locales/index.js';
 import { createHrRequestRoutes } from './routes.js';
@@ -20,7 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export const hrRequestsModule: BackendModule = {
-  ...backendManifest,
+  ...moduleManifest,
   locales: { backend: { ru: hrRequestBackendLocales.ru, en: hrRequestBackendLocales.en } },
 
   setup(context, app) {

@@ -18,4 +18,4 @@ export {
   hrLearningPackageFiles,
   hrLearningPackages,
 } from './schemas/index.js';
-export { hrLearningModule } from './setup.js';
+export { hrLearningModule as module } from './setup.js';

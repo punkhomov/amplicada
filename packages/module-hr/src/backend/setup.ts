@@ -2,7 +2,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WORKFLOW_REGISTRY_TOKEN, type WorkflowRegistry } from '@amplicada/module-workflow/contracts';
 import type { BackendDbService, BackendDocumentRuntime, BackendModule } from '@amplicada/platform-core/contracts/backend';
-import { backendManifest } from '../contracts/manifest.js';
+import { moduleManifest } from '../contracts/manifest.js';
 import { HR_STRUCTURE_SERVICE_TOKEN } from '../contracts/service.js';
 import { registerHrDocuments } from './documents/index.js';
 import { hrBackendLocales } from './locales/index.js';
@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export const hrModule: BackendModule = {
-  ...backendManifest,
+  ...moduleManifest,
   locales: { backend: { ru: hrBackendLocales.ru, en: hrBackendLocales.en } },
 
   setup(context) {

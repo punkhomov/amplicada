@@ -26,7 +26,10 @@ date: 2026-09-15
 
 | Пакет | Notes |
 |---|---|
-| `application-tools` | [Заметки](application-tools.md) |
+| `application-tools` | [Заметки](application-tools.md) — D-004: история перехода и альтернативы |
+| `module-admin` | [Заметки](module-admin.md) |
+| `module-auth-password` | [Заметки](module-auth-password.md) |
+| `module-hr-poll` | [Заметки](module-hr-poll.md) |
 | `platform-core` | — |
 | `module-hr` | — |
 | `module-workflow` | — |

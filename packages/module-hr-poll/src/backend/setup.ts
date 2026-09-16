@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BackendModule } from '@amplicada/platform-core/contracts/backend';
-import { backendManifest } from '../contracts/manifest.js';
+import { moduleManifest } from '../contracts/manifest.js';
 import { registerPollDocuments, registerPollResponseDocuments } from './documents/index.js';
 import { hrPollBackendLocales } from './locales/index.js';
 import { createHrPollRoutes } from './routes.js';
@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export const hrPollModule: BackendModule = {
-  ...backendManifest,
+  ...moduleManifest,
   locales: { backend: { ru: hrPollBackendLocales.ru, en: hrPollBackendLocales.en } },
 
   setup(context, app) {

@@ -54,20 +54,7 @@
     "react-router-dom": "^7.18.2",
     "typescript": "^7.0.2"
   },
-  "amplicada": {
-    "id": "admin",
-    "name": "Admin Panel",
-    "requires": [],
-    "backend": {
-      "export": "adminModule",
-      "dependencies": []
-    },
-    "frontend": {
-      "export": "adminFrontendModule",
-      "dependencies": []
-    },
-    "styles": "./frontend/tailwind.css"
-  },
+  "amplicada": true,
   "files": [
     "dist",
     "!dist/**/*.test.*",

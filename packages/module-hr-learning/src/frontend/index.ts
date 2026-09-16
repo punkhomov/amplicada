@@ -1,1 +1,1 @@
-export { hrLearningFrontendModule } from './setup.js';
+export { hrLearningFrontendModule as module } from './setup.js';

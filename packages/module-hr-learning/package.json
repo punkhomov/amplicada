@@ -51,20 +51,7 @@
     "react-router-dom": "^7.18.2",
     "typescript": "^7.0.2"
   },
-  "amplicada": {
-    "id": "hr-learning",
-    "name": "HR Learning Module",
-    "requires": [],
-    "backend": {
-      "export": "hrLearningModule",
-      "dependencies": []
-    },
-    "frontend": {
-      "export": "hrLearningFrontendModule",
-      "dependencies": []
-    },
-    "styles": "./frontend/tailwind.css"
-  },
+  "amplicada": true,
   "files": [
     "dist",
     "!dist/**/*.test.*",

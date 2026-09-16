@@ -1,27 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { sortModules } from '@amplicada/platform-core/contracts';
 
 export type Side = 'backend' | 'frontend';
 const sides: Side[] = ['backend', 'frontend'];
-interface ModulePart {
-  export: string;
-  dependencies: string[];
-}
-interface ModuleMetadata {
-  id: string;
-  name: string;
-  requires: string[];
-  backend?: ModulePart;
-  frontend?: ModulePart;
-  styles?: string;
-}
 interface SelectedModule {
   packageName: string;
   version: string;
-  metadata: ModuleMetadata;
+  dependencies: string[];
+  backend: boolean;
+  frontend: boolean;
+  styles: boolean;
+}
+interface PackageLocation {
+  pkg: Record<string, unknown>;
+  directory: string;
 }
 export interface GeneratedFile {
   path: string;
@@ -55,149 +49,192 @@ function keys(value: Record<string, unknown>, allowed: string[], label: string):
 async function readJson(path: string): Promise<Record<string, unknown>> {
   return record(JSON.parse(await readFile(path, 'utf8')), path);
 }
-function metadataOf(pkg: Record<string, unknown>, name: string): ModuleMetadata {
-  const raw = record(pkg.amplicada, `${name}.amplicada`);
-  keys(raw, ['id', 'name', 'requires', 'backend', 'frontend', 'styles'], `${name}.amplicada`);
-  const metadata: ModuleMetadata = {
-    id: string(raw.id, `${name}.amplicada.id`),
-    name: string(raw.name, `${name}.amplicada.name`),
-    requires: strings(raw.requires ?? [], `${name}.amplicada.requires`),
-  };
-  const exports = record(pkg.exports, `${name}.exports`);
-  for (const side of sides) {
-    if (raw[side] === undefined) continue;
-    const part = record(raw[side], `${name}.${side}`);
-    keys(part, ['export', 'dependencies'], `${name}.${side}`);
-    const symbol = string(part.export, `${name}.${side}.export`);
-    if (!/^[A-Za-z_$][\w$]*$/.test(symbol)) throw new Error(`Invalid export name ${name}.${side}: ${symbol}`);
-    if (!exports[`./${side}`]) throw new Error(`${name} does not export ./${side}`);
-    metadata[side] = { export: symbol, dependencies: strings(part.dependencies ?? [], `${name}.${side}.dependencies`) };
-  }
-  if (!metadata.backend && !metadata.frontend) throw new Error(`${name} must provide backend or frontend`);
-  if (raw.styles !== undefined) {
-    metadata.styles = string(raw.styles, `${name}.styles`);
-    if (!metadata.frontend || metadata.styles !== './frontend/tailwind.css' || !exports[metadata.styles]) {
-      throw new Error(`${name}.styles must reference its exported ./frontend/tailwind.css and requires frontend`);
-    }
-  }
-  return metadata;
-}
 
-/** Reads package metadata without resolving compiled entry points or importing module code. */
-async function installedPackage(name: string, appDirectory: string): Promise<Record<string, unknown> | undefined> {
-  return (await packageLocation(name, appDirectory))?.pkg;
-}
-
-async function packageLocation(
-  name: string,
-  appDirectory: string,
-): Promise<{ pkg: Record<string, unknown>; directory: string } | undefined> {
-  if (!/^(?:@[a-z0-9_-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(name)) throw new Error(`Invalid module package name: ${name}`);
-  const require = createRequire(join(appDirectory, 'package.json'));
-  for (const directory of require.resolve.paths(name) ?? []) {
-    const path = join(directory, name, 'package.json');
+/** Read metadata through the declaring package, without importing executable code. */
+async function packageLocation(name: string, directory: string): Promise<PackageLocation | undefined> {
+  if (!/^(?:@[a-z0-9_-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(name)) throw new Error(`Invalid package name: ${name}`);
+  // Use local Node resolution only. pnpm's CLI launcher can inject NODE_PATH
+  // entries that are not available to the generated application imports.
+  for (let current = resolve(directory); ; current = dirname(current)) {
     try {
-      const pkg = await readJson(path);
-      if (pkg.name !== name) throw new Error(`${path}: expected package ${name}`);
-      return { pkg, directory: await realpath(dirname(path)) };
+      if (basename(current) !== 'node_modules') {
+        const path = join(current, 'node_modules', name, 'package.json');
+        return { pkg: await readJson(path), directory: await realpath(dirname(path)) };
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
+    if (dirname(current) === current) break;
   }
   return undefined;
 }
 
+function metadataOf(pkg: Record<string, unknown>, name: string): SelectedModule | undefined {
+  if (pkg.amplicada === undefined || pkg.amplicada === false) return undefined;
+  if (pkg.amplicada !== true) throw new Error(`${name}: amplicada must be true; object manifests are no longer supported`);
+  const exports = record(pkg.exports, `${name}.exports`);
+  const mod = {
+    packageName: name,
+    version: string(pkg.version, `${name}.version`),
+    dependencies: [] as string[],
+    backend: Boolean(exports['./backend']),
+    frontend: Boolean(exports['./frontend']),
+    styles: Boolean(exports['./frontend/tailwind.css']),
+  };
+  if (!mod.backend && !mod.frontend) throw new Error(`${name} must export ./backend or ./frontend`);
+  if (mod.styles && !mod.frontend) throw new Error(`${name}: ./frontend/tailwind.css requires ./frontend`);
+  return mod;
+}
+
+function requiredPackages(pkg: Record<string, unknown>): string[] {
+  const dependencies = record(pkg.dependencies ?? {}, 'dependencies');
+  const optional = record(pkg.optionalDependencies ?? {}, 'optionalDependencies');
+  const peers = record(pkg.peerDependencies ?? {}, 'peerDependencies');
+  const peerMeta = record(pkg.peerDependenciesMeta ?? {}, 'peerDependenciesMeta');
+  return [
+    ...new Set([
+      ...Object.keys(dependencies).filter(name => !(name in optional)),
+      ...Object.keys(peers).filter(
+        name => !(name in optional) && record(peerMeta[name] ?? {}, `peerDependenciesMeta.${name}`).optional !== true,
+      ),
+    ]),
+  ];
+}
+
+async function collectModules(directory: string, roots?: string[]): Promise<SelectedModule[]> {
+  const app = await readJson(join(directory, 'package.json'));
+  const dependencies = record(app.dependencies ?? {}, 'application.dependencies');
+  const selected = new Map<string, SelectedModule>();
+  const locations = new Map<string, PackageLocation>();
+
+  for (const name of roots ?? Object.keys(dependencies)) {
+    if (!(name in dependencies)) throw new Error(`${name} must be declared in ${join(directory, 'package.json')} dependencies`);
+    const location = await packageLocation(name, directory);
+    if (!location) throw new Error(`Dependency ${name} is not installed for ${directory}. Run pnpm install.`);
+    const mod = metadataOf(location.pkg, name);
+    if (!mod) {
+      if (roots) throw new Error(`${name} is not an Amplicada module (amplicada: true)`);
+      continue;
+    }
+    selected.set(name, mod);
+    locations.set(name, location);
+  }
+
+  for (const [name, location] of locations) {
+    const required = requiredPackages(location.pkg);
+    const peers = record(location.pkg.peerDependencies ?? {}, 'peerDependencies');
+    // Optional peers add order only when explicitly selected by the application.
+    const candidates = new Set([...required, ...Object.keys(peers).filter(peer => selected.has(peer))]);
+    for (const dependency of candidates) {
+      const provider = await packageLocation(dependency, location.directory);
+      if (!provider) throw new Error(`Dependency ${dependency} is not installed for ${name}. Run pnpm install.`);
+      if (!metadataOf(provider.pkg, dependency)) continue;
+      const active = locations.get(dependency);
+      if (!active) {
+        throw new Error(
+          `Module ${name} requires ${dependency}; declare it in application dependencies and include it in the selected composition`,
+        );
+      }
+      if (active.directory !== provider.directory)
+        throw new Error(`Conflicting installations of module ${dependency}; use one shared version and peer context`);
+      selected.get(name)?.dependencies.push(dependency);
+    }
+  }
+  return sortModules([...selected.values()].map(mod => ({ id: mod.packageName, dependencies: mod.dependencies, module: mod }))).map(
+    node => node.module,
+  );
+}
+
+function renderTarget(modules: SelectedModule[], side: Side, directory: string): GeneratedFile[] {
+  const selected = modules.filter(mod => mod[side]);
+  const indices = new Map(selected.map((mod, index) => [mod.packageName, index]));
+  const byName = new Map(modules.map(mod => [mod.packageName, mod]));
+  // Preserve ordering through a dependency that provides only the other runtime side.
+  function predecessors(mod: SelectedModule): number[] {
+    const result = new Set<number>();
+    function visit(name: string): void {
+      const index = indices.get(name);
+      if (index !== undefined) result.add(index);
+      else for (const dependency of byName.get(name)?.dependencies ?? []) visit(dependency);
+    }
+    for (const name of mod.dependencies) visit(name);
+    return [...result];
+  }
+  const type = side === 'backend' ? 'BackendModule' : 'FrontendModule';
+  const files: GeneratedFile[] = [
+    {
+      side,
+      path: join(directory, `src/generated/${side}-modules.ts`),
+      content: [
+        '// Generated by amplicada-modules. Do not edit.',
+        `import type { ${type} } from '@amplicada/platform-core/contracts/${side}';`,
+        ...selected.map((mod, index) => `import { module as module${index} } from '${mod.packageName}/${side}';`),
+        '',
+        `export const modules: ${type}[] = [`,
+        ...selected.map(
+          (mod, index) =>
+            `  { ...module${index}, dependencies: [${predecessors(mod)
+              .map(provider => `module${provider}.id`)
+              .join(', ')}] },`,
+        ),
+        '];',
+        '',
+      ].join('\n'),
+    },
+  ];
+  if (side === 'frontend')
+    files.push({
+      side,
+      path: join(directory, 'src/generated/modules.css'),
+      content: [
+        '/* Generated by amplicada-modules. Do not edit. */',
+        ...selected.filter(mod => mod.styles).map(mod => `@import "${mod.packageName}/frontend/tailwind.css";`),
+        '',
+      ].join('\n'),
+    });
+  return files;
+}
+
+export async function discoverApplication(appDirectory: string, side?: Side): Promise<ApplicationPlan> {
+  const directory = resolve(appDirectory);
+  const app = await readJson(join(directory, 'package.json'));
+  const modules = await collectModules(directory);
+  const targets = side ? [side] : sides;
+  return {
+    id: typeof app.name === 'string' ? app.name : 'application',
+    modules,
+    order: {
+      backend: targets.includes('backend') ? modules.filter(mod => mod.backend).map(mod => mod.packageName) : [],
+      frontend: targets.includes('frontend') ? modules.filter(mod => mod.frontend).map(mod => mod.packageName) : [],
+    },
+    files: targets.flatMap(target => renderTarget(modules, target, directory)),
+  };
+}
+
+/** An explicit profile selects the complete composition; required modules must be listed. */
 export async function planApplication(configPath: string): Promise<ApplicationPlan> {
   const config = await readJson(configPath);
   keys(config, ['id', 'modules', 'targets'], 'application');
   const id = string(config.id, 'application.id');
-  const packages = strings(config.modules, 'application.modules');
-  for (const name of packages) {
-    if (!/^(?:@[a-z0-9_-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(name)) throw new Error(`Invalid module package name: ${name}`);
-  }
-  const targetConfig = record(config.targets, 'application.targets');
-  keys(targetConfig, sides, 'application.targets');
-  const targets: { side: Side; directory: string; pkg: Record<string, unknown> }[] = [];
+  const roots = strings(config.modules, 'application.modules');
+  const targets = record(config.targets, 'application.targets');
+  keys(targets, sides, 'application.targets');
+  const plan: ApplicationPlan = { id, modules: [], order: { backend: [], frontend: [] }, files: [] };
   for (const side of sides) {
-    if (targetConfig[side] === undefined) continue;
-    const directory = resolve(dirname(configPath), string(targetConfig[side], `targets.${side}`));
-    targets.push({ side, directory, pkg: await readJson(join(directory, 'package.json')) });
-  }
-  if (!targets.length) throw new Error('Application must have at least one target');
-
-  const modules: SelectedModule[] = [];
-  for (const name of packages) {
-    const installed = await Promise.all(targets.map(target => installedPackage(name, target.directory)));
-    const pkg = installed.find(candidate => candidate !== undefined);
-    if (!pkg) throw new Error(`Module package ${name} is not installed. Declare it in the target package.json and run pnpm install.`);
-    const metadata = metadataOf(pkg, name);
-    const version = string(pkg.version, `${name}.version`);
-    if (!targets.some(target => metadata[target.side])) throw new Error(`${name} has no part for this application's targets`);
-    for (const [index, target] of targets.entries()) {
-      if (!metadata[target.side]) continue;
-      const dependencies = record(target.pkg.dependencies ?? {}, `${target.directory}.dependencies`);
-      if (!dependencies[name]) throw new Error(`${name} must be declared in ${join(target.directory, 'package.json')} dependencies`);
-      const targetPkg = installed[index];
-      if (!targetPkg) throw new Error(`${name} is not installed for ${target.side}. Run pnpm install.`);
-      if (targetPkg.version !== version || JSON.stringify(metadataOf(targetPkg, name)) !== JSON.stringify(metadata)) {
-        throw new Error(`Module ${name} has different versions or metadata in application targets`);
-      }
+    if (targets[side] === undefined) continue;
+    const directory = resolve(dirname(configPath), string(targets[side], `targets.${side}`));
+    const modules = await collectModules(directory, roots);
+    for (const mod of modules) {
+      const existing = plan.modules.find(other => other.packageName === mod.packageName);
+      if (existing && JSON.stringify(existing) !== JSON.stringify(mod))
+        throw new Error(`Module ${mod.packageName} has different versions or metadata in application targets`);
+      if (!existing) plan.modules.push(mod);
     }
-    modules.push({ packageName: name, version, metadata });
+    plan.order[side] = modules.filter(mod => mod[side]).map(mod => mod.packageName);
+    plan.files.push(...renderTarget(modules, side, directory));
   }
-
-  return renderPlan(id, modules, targets);
-}
-
-function renderPlan(id: string, modules: SelectedModule[], targets: { side: Side; directory: string }[]): ApplicationPlan {
-  // Application requirements can refer to a module that has only the other side.
-  sortModules(
-    modules.map(mod => ({
-      id: mod.metadata.id,
-      dependencies: mod.metadata.requires,
-    })),
-  );
-  const files: GeneratedFile[] = [];
-  const order: Record<Side, string[]> = { backend: [], frontend: [] };
-  for (const target of targets) {
-    const selected = sortModules(
-      modules
-        .filter(mod => mod.metadata[target.side])
-        .map(mod => ({
-          ...mod,
-          id: mod.metadata.id,
-          dependencies: mod.metadata[target.side]?.dependencies ?? [],
-        })),
-    );
-    order[target.side] = selected.map(mod => mod.id);
-    const type = target.side === 'backend' ? 'BackendModule' : 'FrontendModule';
-    const imports = selected.map(
-      (mod, index) => `import { ${mod.metadata[target.side]?.export} as module${index} } from '${mod.packageName}/${target.side}';`,
-    );
-    files.push({
-      side: target.side,
-      path: join(target.directory, `src/generated/${target.side}-modules.ts`),
-      content: [
-        '// Generated by amplicada-modules. Do not edit.',
-        `import type { ${type} } from '@amplicada/platform-core/contracts/${target.side}';`,
-        ...imports,
-        '',
-        `export const modules: ${type}[] = [${selected.map((_, index) => `module${index}`).join(', ')}];`,
-        '',
-      ].join('\n'),
-    });
-    if (target.side === 'frontend')
-      files.push({
-        side: target.side,
-        path: join(target.directory, 'src/generated/modules.css'),
-        content: [
-          '/* Generated by amplicada-modules. Do not edit. */',
-          ...selected.filter(mod => mod.metadata.styles).map(mod => `@import "${mod.packageName}/${mod.metadata.styles?.slice(2)}";`),
-          '',
-        ].join('\n'),
-      });
-  }
-  return { id, modules, order, files };
+  if (!plan.files.length) throw new Error('Application must have at least one target');
+  return plan;
 }
 
 export async function writeApplicationPlan(plan: ApplicationPlan, side?: Side): Promise<void> {
@@ -216,72 +253,4 @@ export async function writeApplicationPlan(plan: ApplicationPlan, side?: Side): 
     await writeFile(temporary, file.content);
     await rename(temporary, file.path);
   }
-}
-
-/** Zero-config: activate direct production dependencies and their declared module requirements. */
-export async function discoverApplication(appDirectory: string, side?: Side): Promise<ApplicationPlan> {
-  appDirectory = resolve(appDirectory);
-  const app = await readJson(join(appDirectory, 'package.json'));
-  const activeSides = side ? [side] : sides;
-  const selected: SelectedModule[] = [];
-  const locations = new Map<string, { pkg: Record<string, unknown>; directory: string }>();
-  const byId = new Map<string, SelectedModule>();
-
-  async function add(name: string): Promise<SelectedModule | undefined> {
-    const location = await packageLocation(name, appDirectory);
-    if (!location) throw new Error(`Dependency ${name} is not installed for ${appDirectory}. Run pnpm install.`);
-    if (location.pkg.amplicada === undefined) return undefined;
-    const metadata = metadataOf(location.pkg, name);
-    const existing = byId.get(metadata.id);
-    if (existing) {
-      if (existing.packageName !== name) throw new Error(`Duplicate module "${metadata.id}": ${existing.packageName}, ${name}`);
-      return existing;
-    }
-    const mod = { packageName: name, version: string(location.pkg.version, `${name}.version`), metadata };
-    locations.set(name, location);
-    selected.push(mod);
-    byId.set(metadata.id, mod);
-    return mod;
-  }
-
-  // Never scan all of node_modules or activate modules merely because a dev tool uses them.
-  for (const name of Object.keys(record(app.dependencies ?? {}, 'application.dependencies'))) await add(name);
-  for (let index = 0; index < selected.length; index++) {
-    const mod = selected[index];
-    const location = locations.get(mod.packageName);
-    if (!location) throw new Error(`Missing package metadata for ${mod.packageName}`);
-    const required = [...new Set([...mod.metadata.requires, ...activeSides.flatMap(target => mod.metadata[target]?.dependencies ?? [])])];
-    for (const id of required) {
-      if (byId.has(id)) continue;
-      const candidateNames = Object.keys({
-        ...record(location.pkg.dependencies ?? {}, `${mod.packageName}.dependencies`),
-        ...record(location.pkg.peerDependencies ?? {}, `${mod.packageName}.peerDependencies`),
-      });
-      let providerName: string | undefined;
-      for (const name of candidateNames) {
-        const candidate = await packageLocation(name, location.directory);
-        if (!candidate || candidate.pkg.amplicada === undefined) continue;
-        if (metadataOf(candidate.pkg, name).id !== id) continue;
-        if (providerName && providerName !== name) throw new Error(`Ambiguous providers for module "${id}" required by ${mod.metadata.id}`);
-        providerName = name;
-      }
-      if (!providerName)
-        throw new Error(
-          `Missing module dependency: ${mod.metadata.id} -> ${id}. Install its package and declare it in application dependencies.`,
-        );
-      // Static generated imports must also resolve from the app. A private nested dependency
-      // isn't a public application dependency under pnpm's isolated node_modules layout.
-      if (!(await packageLocation(providerName, appDirectory))) {
-        throw new Error(
-          `Module ${mod.metadata.id} requires ${providerName}; declare it in application dependencies so its entry point is importable.`,
-        );
-      }
-      await add(providerName);
-    }
-  }
-  return renderPlan(
-    typeof app.name === 'string' ? app.name : 'application',
-    selected,
-    activeSides.map(target => ({ side: target, directory: appDirectory })),
-  );
 }

@@ -12,6 +12,10 @@ date: 2026-07-16
 > декларативном-only dependencies на проверку и сортировку в bootstrap. Решения о
 > service locator и extension points остаются в силе. Ниже сохранён исходный текст решения.
 
+> Дополнение: [ADR-06](06-module-conventions.md) разрешает прямые вызовы сервисов
+> optional peers с проверкой присутствия и гарантированным порядком setup.
+> Extension points остаются доступными. Исходный текст ниже сохранён.
+
 ## Status
 
 Accepted

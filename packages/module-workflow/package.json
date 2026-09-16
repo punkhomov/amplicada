@@ -47,20 +47,7 @@
     "react-router-dom": "^7.18.2",
     "typescript": "^7.0.2"
   },
-  "amplicada": {
-    "id": "workflow",
-    "name": "Workflow Module",
-    "requires": [],
-    "backend": {
-      "export": "workflowModule",
-      "dependencies": []
-    },
-    "frontend": {
-      "export": "workflowFrontendModule",
-      "dependencies": []
-    },
-    "styles": "./frontend/tailwind.css"
-  },
+  "amplicada": true,
   "files": [
     "dist",
     "!dist/**/*.test.*",

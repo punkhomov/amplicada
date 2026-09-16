@@ -48,22 +48,7 @@
     "react-router-dom": "^7.18.2",
     "typescript": "^7.0.2"
   },
-  "amplicada": {
-    "id": "hr-requests",
-    "name": "HR Requests Module",
-    "requires": [],
-    "backend": {
-      "export": "hrRequestsModule",
-      "dependencies": [
-        "workflow"
-      ]
-    },
-    "frontend": {
-      "export": "hrRequestsFrontendModule",
-      "dependencies": []
-    },
-    "styles": "./frontend/tailwind.css"
-  },
+  "amplicada": true,
   "files": [
     "dist",
     "!dist/**/*.test.*",

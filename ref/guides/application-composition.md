@@ -3,7 +3,7 @@ title: Подключение модулей к приложению
 type: guide
 tier: 3
 status: implemented
-date: 2026-09-15
+date: 2026-09-16
 ---
 
 # Подключение модулей к приложению
@@ -14,6 +14,11 @@ date: 2026-09-15
 в обычном проекте с установленными npm-пакетами, без Turbo и исходников платформы.
 Требуется Node 24+. Пакеты в этой ветке подготовлены для упаковки; публикация в npm
 этим изменением не выполняется. До публикации можно устанавливать архивы `pnpm pack`.
+
+Подробно о переходе «было → стало» и рассмотренных вариантах —
+[заметки application-tools, D-004](../notes/application-tools.md).
+Модель состава и lifecycle — [объяснение](../../packages/application-tools/docs/explanation/composition-model.md).
+Пошаговая задача автора модуля — [optional-интеграция](../../packages/application-tools/docs/how-to/optional-module-integration.md).
 
 ## Обязательные настройки установки
 
@@ -57,7 +62,7 @@ Zero-config композиции не отменяет защиту устано
 
 Это фрагмент: TypeScript, React, Vite/Tailwind и их обычные настройки добавляются
 в зависимости от устройства вашего приложения. Для Vite задайте отдельный outDir
-(например `public`), чтобы его сборка не очищала `dist` backend. Генератор композиции
+(например `dist-web`), чтобы его сборка не очищала `dist` backend. Генератор композиции
 не создаёт каркас приложения и пока не заменяет конфигурацию его инструментов.
 
 Генерация создаёт три файла в одном проекте:
@@ -147,49 +152,72 @@ pnpm exec amplicada-modules --config subset.json --check
 
 ## Описание модуля и зависимостей
 
-Автор модуля добавляет метаданные в его package.json:
+Автор модуля задаёт `"amplicada": true` в package.json. Стороны определяются по
+exports `./backend` и `./frontend`, CSS — по `./frontend/tailwind.css`.
+Каждая сторона экспортирует объект регистрации под именем `module`:
+
+```ts
+export { exampleModule as module } from './setup.js';
+```
+
+Стабильные id/name остаются в contracts/manifest.ts; version берётся из package.json.
+Отдельных requires, списков зависимостей сторон и свойства styles больше нет.
+
+| Поле package.json модуля | Поведение генератора |
+|---|---|
+| dependencies / обязательные peerDependencies | Если пакет — модуль, он должен входить в состав и запускается раньше |
+| peerDependencies + peerDependenciesMeta.optional | Если модуль выбран, запускается раньше; если нет — пропускается |
+| devDependencies / optionalDependencies | Не определяют состав и порядок |
+
+Все обязательные модули устанавливаются явно в dependencies приложения. Например,
+HR требует workflow: одного вложенного пакета в node_modules недостаточно.
+В --config перечисляется полный состав, включая обязательные модули.
+Обычные библиотеки без amplicada: true не активируются; их зависимости не обходятся.
+
+### Опциональные сервисы
+
+В auth админка объявлена optional peer:
 
 ```json
 {
-  "amplicada": {
-    "id": "example",
-    "name": "Example",
-    "requires": [],
-    "backend": { "export": "exampleModule", "dependencies": ["workflow"] },
-    "frontend": { "export": "exampleFrontendModule", "dependencies": [] },
-    "styles": "./frontend/tailwind.css"
-  }
+  "peerDependencies": { "@amplicada/module-admin": "workspace:*" },
+  "peerDependenciesMeta": { "@amplicada/module-admin": { "optional": true } }
 }
 ```
 
-Backend/frontend публикуются через `exports` с ключами `./backend`/`./frontend`.
-Отсутствующую сторону можно не объявлять. `styles` необязателен и ссылается на
-экспорт `./frontend/tailwind.css`. `requires` и списки dependencies по умолчанию пусты.
-Runtime-манифесты получают id/name/version и зависимости из этого же package.json.
+Интерфейс доступен при разработке через devDependency, реализация не импортируется:
 
-`requires` содержит id модулей, необходимых составу в целом. `backend.dependencies`
-и `frontend.dependencies` задают id поставщиков той же стороны, чей setup нужен раньше.
-Графы проверяются независимо. Все метаданные регистрируются до первого setup;
-setup/start идут по зависимостям, shutdown — в обратном порядке. Core-миграции
-выполняются первыми, затем миграции модулей в порядке регистрации во время setup.
+```ts
+import type { AdminToolbarService } from '@amplicada/module-admin/contracts';
 
-В режиме discovery обязательный поставщик подключается автоматически, если его пакет
-объявлен в dependencies/peerDependencies потребителя и установлен так, что импортируется
-из приложения. При изолированной вложенной зависимости pnpm выдаётся просьба добавить
-поставщика в dependencies приложения. Генератор не устанавливает пакеты и не делает
-абсолютных импортов внутрь .pnpm. Простая библиотечная peerDependency не активирует
-модуль без требования в метаданных. Совместимость версий проверяет пакетный менеджер.
+// Внутри setup(context):
+if (context.modules.getById('admin')) {
+  const toolbar = context.services.resolve<AdminToolbarService>('admin:toolbar');
+  toolbar.register({ id: 'my-action', label: 'Действие', component: MyAction });
+}
+```
 
-Дубликаты id, циклы и отсутствующие зависимости прерывают генерацию до изменения файлов.
-Bootstrap повторяет проверку графа для ручного подключения и защиты от расхождения
-runtime-манифестов. Код модулей при чтении метаданных не исполняется.
+При выбранном admin его setup завершится до auth setup. Поставщик должен предоставлять
+нужную runtime-сторону и регистрировать сервис в setup, не start. Проверка getById сама
+по себе сообщает только присутствие; гарантия порядка следует из peerDependencies.
+Циклические optional-зависимости выбранных модулей отклоняются. Для взаимных вкладов
+без вызова готового сервиса доступны extension points.
+
+Import type стирается из JS. Ссылки на optional peer не должны попадать в публичный
+граф .d.ts потребителя: иначе приложение снова потребует его типы. В auth компонент
+ChangePasswordAction остаётся внутренним и не экспортируется из ./frontend.
+
+Все метаданные регистрируются до первого setup; setup/start идут по зависимостям,
+shutdown — в обратном порядке. Core-миграции выполняются первыми, затем миграции
+модулей в порядке регистрации. Генератор ловит пропущенные модули и циклы до записи;
+bootstrap повторно проверяет runtime id и граф. Код модулей при discovery не исполняется.
 
 ## Границы текущего решения
 
-Zero-config сейчас относится к составу модулей. Адреса PostgreSQL, Redis, S3 и секреты
+Zero-config относится к составу модулей. Адреса PostgreSQL, Redis, S3 и секреты
 остаются настройками окружения. Изменение состава требует сборки и перезапуска.
 Удаление зависимости не удаляет данные, файлы или задачи модуля из БД.
-Прямой импорт может включать библиотечный код неактивного модуля: например auth UI
-использует registry из module-admin, но это не запускает admin setup и его маршруты.
+Без генератора ручной состав должен самостоятельно задавать runtime dependencies.
 
-Архитектурное решение: [ADR-05](../adr/05-application-composition.md).
+Архитектурные решения: [ADR-05](../adr/05-application-composition.md),
+[ADR-06](../adr/06-module-conventions.md).

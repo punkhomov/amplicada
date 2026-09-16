@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type TestContext, test } from 'node:test';
@@ -8,279 +8,285 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { discoverApplication, planApplication, type Side, writeApplicationPlan } from './application.js';
 
-async function generateApplication(configPath: string, side?: Side) {
+const exec = promisify(execFile);
+interface FixtureModule {
+  name: string;
+  backend?: boolean;
+  frontend?: boolean;
+  styles?: boolean;
+  dependencies?: string[];
+  peers?: string[];
+  optionalPeers?: string[];
+}
+async function fixture(t: TestContext, modules: FixtureModule[], roots = modules.map(mod => mod.name)) {
+  const directory = await mkdtemp(join(tmpdir(), 'amplicada-composition-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const configPath = join(directory, 'application.json');
+  const appDirectory = join(directory, 'api');
+  const deps = (names: string[]) => Object.fromEntries(names.map(name => [`@test/${name}`, '1.0.0']));
+  for (const side of ['api', 'web']) {
+    await mkdir(join(directory, side), { recursive: true });
+    await writeFile(join(directory, side, 'package.json'), JSON.stringify({ dependencies: deps(roots) }));
+  }
+  for (const mod of modules) {
+    const pkgDirectory = join(directory, 'node_modules/@test', mod.name);
+    await mkdir(pkgDirectory, { recursive: true });
+    await writeFile(
+      join(pkgDirectory, 'package.json'),
+      JSON.stringify({
+        name: `@test/${mod.name}`,
+        version: '1.0.0',
+        amplicada: true,
+        // No compiled code: discovery must work without importing entry points.
+        exports: {
+          ...(mod.backend ? { './backend': './dist/backend.js' } : {}),
+          ...(mod.frontend ? { './frontend': './dist/frontend.js' } : {}),
+          ...(mod.styles ? { './frontend/tailwind.css': './styles.css' } : {}),
+        },
+        dependencies: deps(mod.dependencies ?? []),
+        peerDependencies: deps([...(mod.peers ?? []), ...(mod.optionalPeers ?? [])]),
+        peerDependenciesMeta: Object.fromEntries((mod.optionalPeers ?? []).map(name => [`@test/${name}`, { optional: true }])),
+      }),
+    );
+  }
+  const select = async (names: string[]) =>
+    writeFile(
+      configPath,
+      JSON.stringify({
+        id: 'test-app',
+        modules: names.map(name => `@test/${name}`),
+        targets: { backend: './api', frontend: './web' },
+      }),
+    );
+  await select(roots);
+  const editPackage = async (name: string, change: (pkg: Record<string, unknown>) => void) => {
+    const path = join(directory, 'node_modules/@test', name, 'package.json');
+    const pkg = JSON.parse(await readFile(path, 'utf8'));
+    change(pkg);
+    await writeFile(path, JSON.stringify(pkg));
+  };
+  return { directory, appDirectory, configPath, select, editPackage };
+}
+async function generate(configPath: string, side?: Side) {
   const plan = await planApplication(configPath);
   await writeApplicationPlan(plan, side);
   return plan;
 }
 
-const exec = promisify(execFile);
-
-interface FixtureModule {
-  id: string;
-  requires?: string[];
-  backend?: { export: string; dependencies?: string[] };
-  frontend?: { export: string; dependencies?: string[] };
-  styles?: string;
-}
-async function fixture(t: TestContext, modules: FixtureModule[]) {
-  const directory = await mkdtemp(join(tmpdir(), 'amplicada-composition-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const configPath = join(directory, 'application.json');
-  const dependencies = Object.fromEntries(modules.map(mod => [`@test/${mod.id}`, '1.0.0']));
-  for (const target of ['api', 'web']) {
-    await mkdir(join(directory, target), { recursive: true });
-    await writeFile(join(directory, target, 'package.json'), JSON.stringify({ dependencies }));
-  }
-  for (const mod of modules) {
-    const packageDirectory = join(directory, 'node_modules/@test', mod.id);
-    await mkdir(packageDirectory, { recursive: true });
-    await writeFile(
-      join(packageDirectory, 'package.json'),
-      JSON.stringify({
-        name: `@test/${mod.id}`,
-        version: '1.0.0',
-        // No compiled files exist: planning must not import module code.
-        exports: { './backend': './dist/backend.js', './frontend': './dist/frontend.js', './frontend/tailwind.css': './src/styles.css' },
-        amplicada: { name: mod.id, ...mod },
-      }),
-    );
-  }
-  const select = async (ids: string[]) =>
-    writeFile(
-      configPath,
-      JSON.stringify({
-        id: 'test-app',
-        modules: ids.map(id => `@test/${id}`),
-        targets: { backend: './api', frontend: './web' },
-      }),
-    );
-  await select(modules.map(mod => mod.id));
-  return { directory, configPath, select };
-}
-
-test('generates isolated static imports, dependencies and styles without built packages', async t => {
+test('orders explicitly installed modules by dependencies and required peers on both sides', async t => {
   const fx = await fixture(t, [
-    {
-      id: 'consumer',
-      backend: { export: 'consumer', dependencies: ['provider'] },
-      frontend: { export: 'consumerUI' },
-      styles: './frontend/tailwind.css',
-    },
-    { id: 'provider', backend: { export: 'provider' } },
-    { id: 'ui-only', frontend: { export: 'uiOnly' } },
+    { name: 'consumer', backend: true, frontend: true, styles: true, peers: ['provider'] },
+    { name: 'provider', backend: true, frontend: true, dependencies: ['base'] },
+    { name: 'base', backend: true },
   ]);
-  const plan = await generateApplication(fx.configPath);
-  assert.deepEqual(plan.order, { backend: ['provider', 'consumer'], frontend: ['consumer', 'ui-only'] });
-  const backend = await readFile(join(fx.directory, 'api/src/generated/backend-modules.ts'), 'utf8');
-  const frontend = await readFile(join(fx.directory, 'web/src/generated/frontend-modules.ts'), 'utf8');
-  const css = await readFile(join(fx.directory, 'web/src/generated/modules.css'), 'utf8');
-  assert.match(backend, /provider as module0/);
-  assert.doesNotMatch(backend, /frontend|ui-only/);
-  assert.doesNotMatch(frontend, /backend|provider/);
+  const plan = await discoverApplication(fx.appDirectory);
+  assert.deepEqual(plan.order, {
+    backend: ['@test/base', '@test/provider', '@test/consumer'],
+    frontend: ['@test/provider', '@test/consumer'],
+  });
+  await writeApplicationPlan(plan);
+  const backend = await readFile(join(fx.appDirectory, 'src/generated/backend-modules.ts'), 'utf8');
+  const frontend = await readFile(join(fx.appDirectory, 'src/generated/frontend-modules.ts'), 'utf8');
+  const css = await readFile(join(fx.appDirectory, 'src/generated/modules.css'), 'utf8');
+  assert.match(backend, /import \{ module as module0 \} from '@test\/base\/backend'/);
+  assert.match(backend, /\.\.\.module2, dependencies: \[module1.id\]/);
+  assert.doesNotMatch(backend, /\/frontend/);
+  assert.doesNotMatch(frontend, /\/backend|@test\/base/);
+  assert.match(frontend, /\.\.\.module1, dependencies: \[module0.id\]/);
   assert.match(css, /@test\/consumer\/frontend\/tailwind.css/);
-  assert.doesNotMatch(css, /provider|ui-only/);
+  assert.doesNotMatch(css, /provider|base/);
 });
 
-test('regeneration is idempotent and removal clears all stale generated imports and styles', async t => {
-  const fx = await fixture(t, [{ id: 'a', backend: { export: 'a' }, frontend: { export: 'aUI' }, styles: './frontend/tailwind.css' }]);
-  const first = await generateApplication(fx.configPath);
+test('preserves dependency order through a module with only the other runtime side', async t => {
+  const fx = await fixture(t, [
+    { name: 'consumer', frontend: true, dependencies: ['bridge'] },
+    { name: 'bridge', backend: true, dependencies: ['provider'] },
+    { name: 'provider', frontend: true },
+  ]);
+  const plan = await discoverApplication(fx.appDirectory, 'frontend');
+  assert.deepEqual(plan.order.frontend, ['@test/provider', '@test/consumer']);
+  assert.match(plan.files[0].content, /\.\.\.module1, dependencies: \[module0.id\]/);
+});
+
+test('skips ordinary libraries, optional peers, optional dependencies and dev-only modules', async t => {
+  const fx = await fixture(
+    t,
+    [
+      { name: 'auth', backend: true, optionalPeers: ['optional', 'absent'], dependencies: ['library'] },
+      { name: 'optional', backend: true },
+      { name: 'dev', backend: true },
+      { name: 'library', backend: true, dependencies: ['dev'] },
+    ],
+    ['auth'],
+  );
+  await fx.editPackage('library', pkg => {
+    delete pkg.amplicada;
+  });
+  await fx.editPackage('auth', pkg => {
+    pkg.devDependencies = { '@test/dev': '1' };
+    pkg.optionalDependencies = { '@test/optional': '1' };
+  });
+  const app = { dependencies: { '@test/auth': '1' }, devDependencies: { '@test/dev': '1' } };
+  await writeFile(join(fx.appDirectory, 'package.json'), JSON.stringify(app));
+  assert.deepEqual((await discoverApplication(fx.appDirectory)).order.backend, ['@test/auth']);
+});
+
+test('an explicitly selected optional peer runs before its consumer', async t => {
+  const fx = await fixture(t, [
+    { name: 'auth', backend: true, optionalPeers: ['optional'] },
+    { name: 'optional', backend: true },
+  ]);
+  const plan = await discoverApplication(fx.appDirectory);
+  assert.deepEqual(plan.order.backend, ['@test/optional', '@test/auth']);
+  assert.match(plan.files[0].content, /\.\.\.module1, dependencies: \[module0.id\]/);
+});
+
+test('optional peers omitted from a profile do not activate and optional cycles fail explicitly', async t => {
+  const fx = await fixture(t, [
+    { name: 'auth', backend: true, optionalPeers: ['admin'] },
+    { name: 'admin', backend: true, optionalPeers: ['auth'] },
+  ]);
+  await fx.select(['auth']);
+  assert.deepEqual((await planApplication(fx.configPath)).order.backend, ['@test/auth']);
+  await assert.rejects(discoverApplication(fx.appDirectory), /cycle:/);
+});
+
+test('a required module must be a direct application dependency even when installed transitively', async t => {
+  const fx = await fixture(
+    t,
+    [
+      { name: 'auth', backend: true, peers: ['admin'] },
+      { name: 'admin', backend: true },
+    ],
+    ['auth'],
+  );
+  await assert.rejects(discoverApplication(fx.appDirectory), /requires @test\/admin.*declare it in application dependencies/);
+});
+
+test('regeneration is idempotent and removing an optional module clears its imports, order edge and CSS', async t => {
+  const fx = await fixture(t, [
+    { name: 'auth', backend: true, frontend: true, optionalPeers: ['admin'] },
+    { name: 'admin', backend: true, frontend: true, styles: true },
+  ]);
+  const first = await discoverApplication(fx.appDirectory);
+  await writeApplicationPlan(first);
   const before = await Promise.all(first.files.map(file => stat(file.path)));
-  await generateApplication(fx.configPath);
+  await writeApplicationPlan(await discoverApplication(fx.appDirectory));
   const after = await Promise.all(first.files.map(file => stat(file.path)));
   assert.deepEqual(
-    after.map(file => file.mtimeMs),
-    before.map(file => file.mtimeMs),
+    after.map(s => s.mtimeMs),
+    before.map(s => s.mtimeMs),
   );
-  await fx.select([]);
-  const empty = await generateApplication(fx.configPath);
-  assert.deepEqual(empty.order, { backend: [], frontend: [] });
-  for (const file of empty.files) assert.doesNotMatch(await readFile(file.path, 'utf8'), /@test\/a/);
+  await writeFile(join(fx.appDirectory, 'package.json'), JSON.stringify({ dependencies: { '@test/auth': '1' } }));
+  await writeApplicationPlan(await discoverApplication(fx.appDirectory));
+  for (const file of first.files) assert.doesNotMatch(await readFile(file.path, 'utf8'), /@test\/admin|dependencies: \[module/);
 });
 
-test('invalid composition fails before overwriting generated files', async t => {
+test('cycles and missing dependencies fail before any output is changed', async t => {
   const fx = await fixture(t, [
-    { id: 'a', backend: { export: 'a', dependencies: ['b'] } },
-    { id: 'b', backend: { export: 'b' } },
+    { name: 'a', backend: true, dependencies: ['b'] },
+    { name: 'b', backend: true },
   ]);
-  const original = await generateApplication(fx.configPath);
-  await fx.select(['a']);
-  await assert.rejects(generateApplication(fx.configPath), /a -> b/);
+  const original = await generate(fx.configPath);
+  await fx.editPackage('b', pkg => {
+    pkg.dependencies = { '@test/a': '1' };
+  });
+  await assert.rejects(generate(fx.configPath), /cycle: @test\/b -> @test\/a -> @test\/b|cycle: @test\/a -> @test\/b -> @test\/a/);
+  await fx.editPackage('b', pkg => {
+    pkg.dependencies = { '@test/missing': '1' };
+  });
+  await assert.rejects(generate(fx.configPath), /@test\/missing.*not installed/);
   for (const file of original.files) assert.equal(await readFile(file.path, 'utf8'), file.content);
 });
 
-test('rejects duplicate packages and module dependency cycles', async t => {
+test('rejects old object metadata and modules without a runtime export', async t => {
+  const fx = await fixture(t, [{ name: 'a', backend: true }]);
+  await fx.editPackage('a', pkg => {
+    pkg.amplicada = { id: 'a' };
+  });
+  await assert.rejects(discoverApplication(fx.appDirectory), /amplicada must be true/);
+  await fx.editPackage('a', pkg => {
+    pkg.amplicada = true;
+    pkg.exports = { './contracts': './contracts.js' };
+  });
+  await assert.rejects(discoverApplication(fx.appDirectory), /must export/);
+});
+
+test('rejects conflicting versions and private nested modules with actionable errors', async t => {
   const fx = await fixture(t, [
-    { id: 'a', backend: { export: 'a', dependencies: ['b'] } },
-    { id: 'b', backend: { export: 'b', dependencies: ['a'] } },
+    { name: 'a', backend: true, dependencies: ['b'] },
+    { name: 'b', backend: true },
   ]);
-  await assert.rejects(planApplication(fx.configPath), /cycle: a -> b -> a/);
-  await fx.select(['a', 'a']);
-  await assert.rejects(planApplication(fx.configPath), /duplicates/);
+  const nested = join(fx.directory, 'node_modules/@test/a/node_modules/@test/b');
+  await mkdir(nested, { recursive: true });
+  await writeFile(
+    join(nested, 'package.json'),
+    JSON.stringify({ name: '@test/b', version: '2.0.0', amplicada: true, exports: { './backend': './backend.js' } }),
+  );
+  await assert.rejects(discoverApplication(fx.appDirectory), /Conflicting installations/);
+  await fx.select(['a']);
+  await assert.rejects(planApplication(fx.configPath), /@test\/b.*declare it in application dependencies/);
 });
 
-test('distinguishes application requirements from a dependency on the same runtime side', async t => {
+test('explicit profiles select a complete composition and reject missing required modules', async t => {
   const fx = await fixture(t, [
-    { id: 'ui', requires: ['api'], frontend: { export: 'ui' } },
-    { id: 'api', backend: { export: 'api' } },
-  ]);
-  assert.deepEqual((await planApplication(fx.configPath)).order, { backend: ['api'], frontend: ['ui'] });
-  const path = join(fx.directory, 'node_modules/@test/ui/package.json');
-  const pkg = JSON.parse(await readFile(path, 'utf8'));
-  pkg.amplicada.frontend.dependencies = ['api'];
-  await writeFile(path, JSON.stringify(pkg));
-  await assert.rejects(planApplication(fx.configPath), /ui -> api/);
-});
-
-test('rejects undeclared or uninstalled packages with actionable errors', async t => {
-  const fx = await fixture(t, [{ id: 'a', backend: { export: 'a' } }]);
-  await writeFile(join(fx.directory, 'api/package.json'), JSON.stringify({ dependencies: {} }));
-  await assert.rejects(planApplication(fx.configPath), /must be declared.*api\/package.json/);
-  await fx.select(['missing']);
-  await assert.rejects(planApplication(fx.configPath), /not installed/);
-});
-
-test('validates metadata and does not accept misspelled configuration fields', async t => {
-  const fx = await fixture(t, [{ id: 'a', frontend: { export: 'a' } }]);
-  const config = JSON.parse(await readFile(fx.configPath, 'utf8'));
-  config.module = [];
-  await writeFile(fx.configPath, JSON.stringify(config));
-  await assert.rejects(planApplication(fx.configPath), /Unknown application field "module"/);
-  delete config.module;
-  await writeFile(fx.configPath, JSON.stringify(config));
-  const path = join(fx.directory, 'node_modules/@test/a/package.json');
-  const pkg = JSON.parse(await readFile(path, 'utf8'));
-  pkg.amplicada.frontend.export = 'broken;import';
-  await writeFile(path, JSON.stringify(pkg));
-  await assert.rejects(planApplication(fx.configPath), /Invalid export name/);
-});
-
-test('supports a single backend target and writes only the requested side', async t => {
-  const fx = await fixture(t, [{ id: 'a', backend: { export: 'a' } }]);
-  await generateApplication(fx.configPath, 'backend');
-  await assert.rejects(readFile(join(fx.directory, 'web/src/generated/frontend-modules.ts')), { code: 'ENOENT' });
-  const config = JSON.parse(await readFile(fx.configPath, 'utf8'));
-  delete config.targets.frontend;
-  await writeFile(fx.configPath, JSON.stringify(config));
-  assert.equal((await planApplication(fx.configPath)).files.length, 1);
-  await assert.rejects(generateApplication(fx.configPath, 'frontend'), /no frontend target/);
-});
-
-test('explicit profiles select installed modules independently of the demo apps', async t => {
-  const fx = await fixture(t, [
-    { id: 'auth', backend: { export: 'auth' }, frontend: { export: 'authUI' }, styles: './frontend/tailwind.css' },
-    { id: 'admin', backend: { export: 'admin' }, frontend: { export: 'adminUI' } },
-    {
-      id: 'consumer',
-      backend: { export: 'consumer', dependencies: ['provider'] },
-      frontend: { export: 'consumerUI' },
-      styles: './frontend/tailwind.css',
-    },
-    { id: 'provider', backend: { export: 'provider' } },
+    { name: 'auth', backend: true, frontend: true, styles: true },
+    { name: 'admin', backend: true, frontend: true },
+    { name: 'consumer', backend: true, frontend: true, dependencies: ['provider'] },
+    { name: 'provider', backend: true },
   ]);
   for (const name of ['full', 'minimal', 'full']) {
-    const profile = await readFile(new URL(`../test/fixtures/applications/${name}.json`, import.meta.url), 'utf8');
-    await writeFile(fx.configPath, profile);
-    const plan = await generateApplication(fx.configPath);
+    await writeFile(fx.configPath, await readFile(new URL(`../test/fixtures/applications/${name}.json`, import.meta.url)));
+    const plan = await generate(fx.configPath);
     assert.deepEqual(
-      plan.order,
-      name === 'minimal'
-        ? { backend: ['auth', 'admin'], frontend: ['auth', 'admin'] }
-        : { backend: ['auth', 'admin', 'provider', 'consumer'], frontend: ['auth', 'admin', 'consumer'] },
+      plan.order.backend,
+      name === 'minimal' ? ['@test/auth', '@test/admin'] : ['@test/auth', '@test/admin', '@test/provider', '@test/consumer'],
     );
-    for (const file of plan.files) {
-      assert.equal(await readFile(file.path, 'utf8'), file.content);
-      if (name === 'minimal') assert.doesNotMatch(file.content, /@test\/(consumer|provider)/);
-    }
   }
+  await fx.select(['consumer']);
+  await assert.rejects(planApplication(fx.configPath), /requires @test\/provider.*include it in the selected composition/);
 });
 
-test('backend and frontend dependency graphs are independent', async t => {
-  const fx = await fixture(t, [
-    { id: 'a', backend: { export: 'a', dependencies: ['b'] }, frontend: { export: 'aUI' } },
-    { id: 'b', backend: { export: 'b' }, frontend: { export: 'bUI', dependencies: ['a'] } },
-  ]);
-  assert.deepEqual((await planApplication(fx.configPath)).order, { backend: ['b', 'a'], frontend: ['a', 'b'] });
+test('validates profile fields and declared roots and generates one requested side', async t => {
+  const fx = await fixture(t, [{ name: 'a', backend: true }]);
+  await generate(fx.configPath, 'backend');
+  await assert.rejects(readFile(join(fx.directory, 'web/src/generated/frontend-modules.ts')), { code: 'ENOENT' });
+  await fx.select(['a', 'a']);
+  await assert.rejects(planApplication(fx.configPath), /duplicates/);
+  await fx.select(['a']);
+  await writeFile(join(fx.appDirectory, 'package.json'), '{}');
+  await assert.rejects(planApplication(fx.configPath), /must be declared/);
+  await writeFile(fx.configPath, JSON.stringify({ id: 'app', module: [] }));
+  await assert.rejects(planApplication(fx.configPath), /Unknown application field/);
 });
 
-test('different packages cannot register the same module id', async t => {
+test('CLI discovers dependencies and changes composition only with explicit --config', async t => {
   const fx = await fixture(t, [
-    { id: 'a', backend: { export: 'a' } },
-    { id: 'b', backend: { export: 'b' } },
-  ]);
-  const path = join(fx.directory, 'node_modules/@test/b/package.json');
-  const pkg = JSON.parse(await readFile(path, 'utf8'));
-  pkg.amplicada.id = 'a';
-  await writeFile(path, JSON.stringify(pkg));
-  await assert.rejects(planApplication(fx.configPath), /Duplicate module "a"/);
-});
-
-test('zero-config discovers production dependencies, skips ordinary packages and dev-only modules', async t => {
-  const fx = await fixture(t, [
-    { id: 'auth', backend: { export: 'auth' }, frontend: { export: 'authUI' }, styles: './frontend/tailwind.css' },
-    { id: 'dev-only', backend: { export: 'dev' } },
-  ]);
-  await rm(fx.configPath);
-  const appDirectory = join(fx.directory, 'api');
-  await mkdir(join(fx.directory, 'node_modules/ordinary'), { recursive: true });
-  await writeFile(join(fx.directory, 'node_modules/ordinary/package.json'), JSON.stringify({ name: 'ordinary', version: '1' }));
-  await writeFile(
-    join(appDirectory, 'package.json'),
-    JSON.stringify({
-      name: 'external-app',
-      dependencies: { '@test/auth': '1', ordinary: '1' },
-      devDependencies: { '@test/dev-only': '1' },
-    }),
-  );
-  const plan = await discoverApplication(appDirectory);
-  assert.deepEqual(plan.order, { backend: ['auth'], frontend: ['auth'] });
-  await writeApplicationPlan(plan);
-  assert.equal(plan.files.length, 3);
-  assert.match(await readFile(join(appDirectory, 'src/generated/backend-modules.ts'), 'utf8'), /@test\/auth\/backend/);
-  assert.match(await readFile(join(appDirectory, 'src/generated/frontend-modules.ts'), 'utf8'), /@test\/auth\/frontend/);
-  assert.match(await readFile(join(appDirectory, 'src/generated/modules.css'), 'utf8'), /@test\/auth\/frontend\/tailwind.css/);
-  await writeFile(join(appDirectory, 'package.json'), JSON.stringify({ dependencies: { ordinary: '1' } }));
-  await writeApplicationPlan(await discoverApplication(appDirectory));
-  for (const file of plan.files) assert.doesNotMatch(await readFile(file.path, 'utf8'), /@test\/auth/);
-});
-
-test('zero-config enables an importable required peer module but not an optional module', async t => {
-  const fx = await fixture(t, [
-    { id: 'consumer', backend: { export: 'consumer', dependencies: ['provider'] } },
-    { id: 'provider', backend: { export: 'provider' } },
-    { id: 'optional', backend: { export: 'optional' } },
-  ]);
-  await writeFile(join(fx.directory, 'api/package.json'), JSON.stringify({ dependencies: { '@test/consumer': '1' } }));
-  const path = join(fx.directory, 'node_modules/@test/consumer/package.json');
-  const pkg = JSON.parse(await readFile(path, 'utf8'));
-  pkg.peerDependencies = { '@test/provider': '1', '@test/optional': '1' };
-  await writeFile(path, JSON.stringify(pkg));
-  assert.deepEqual((await discoverApplication(join(fx.directory, 'api'), 'backend')).order.backend, ['provider', 'consumer']);
-});
-
-test('CLI discovers dependencies by default and accepts a profile only through --config', async t => {
-  const fx = await fixture(t, [
-    { id: 'auth', backend: { export: 'auth' } },
-    { id: 'admin', backend: { export: 'admin' } },
+    { name: 'auth', backend: true },
+    { name: 'admin', backend: true },
   ]);
   await fx.select(['auth']);
   const cli = fileURLToPath(new URL('./cli.js', import.meta.url));
-  const appDirectory = join(fx.directory, 'api');
   const env: NodeJS.ProcessEnv = { ...process.env, AMPLICADA_APP_CONFIG: fx.configPath };
-  // The CLI is a normal child process, not another Node test-runner worker.
   delete env.NODE_TEST_CONTEXT;
-  const options = {
-    cwd: appDirectory,
-    env,
-  };
+  const options = { cwd: fx.appDirectory, env };
+  const generated = join(fx.appDirectory, 'src/generated/backend-modules.ts');
   await exec(process.execPath, [cli, '--target', 'backend', '--check'], options);
-  await assert.rejects(readFile(join(appDirectory, 'src/generated/backend-modules.ts')), { code: 'ENOENT' });
+  await assert.rejects(readFile(generated), { code: 'ENOENT' });
   await exec(process.execPath, [cli, '--target', 'backend'], options);
-  const discovered = await readFile(join(appDirectory, 'src/generated/backend-modules.ts'), 'utf8');
-  assert.match(discovered, /@test\/auth\/backend/);
-  assert.match(discovered, /@test\/admin\/backend/);
+  assert.match(await readFile(generated, 'utf8'), /@test\/admin/);
   await exec(process.execPath, [cli, '--target', 'backend', '--config', '../application.json'], options);
-  const generated = await readFile(join(appDirectory, 'src/generated/backend-modules.ts'), 'utf8');
-  assert.match(generated, /@test\/auth\/backend/);
-  assert.doesNotMatch(generated, /@test\/admin/);
+  assert.doesNotMatch(await readFile(generated, 'utf8'), /@test\/admin/);
+});
+
+test('CLI ignores packages visible only through NODE_PATH', async t => {
+  const fx = await fixture(t, [{ name: 'auth', backend: true }]);
+  const globalModules = join(fx.directory, 'global_modules');
+  await mkdir(join(globalModules, '@test'), { recursive: true });
+  await rename(join(fx.directory, 'node_modules/@test/auth'), join(globalModules, '@test/auth'));
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_PATH: globalModules };
+  delete env.NODE_TEST_CONTEXT;
+  const cli = fileURLToPath(new URL('./cli.js', import.meta.url));
+  await assert.rejects(exec(process.execPath, [cli, '--check'], { cwd: fx.appDirectory, env }), { code: 1 });
+  await assert.rejects(readFile(join(fx.appDirectory, 'src/generated/backend-modules.ts')), { code: 'ENOENT' });
 });

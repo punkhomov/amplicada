@@ -43,22 +43,7 @@
     "react-dom": "^19.2.8",
     "typescript": "^7.0.2"
   },
-  "amplicada": {
-    "id": "hr",
-    "name": "HR Module",
-    "requires": [],
-    "backend": {
-      "export": "hrModule",
-      "dependencies": [
-        "workflow"
-      ]
-    },
-    "frontend": {
-      "export": "hrFrontendModule",
-      "dependencies": []
-    },
-    "styles": "./frontend/tailwind.css"
-  },
+  "amplicada": true,
   "files": [
     "dist",
     "!dist/**/*.test.*",
