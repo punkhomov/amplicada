@@ -124,6 +124,7 @@ export interface DocumentListParams {
   sortDir?: 'asc' | 'desc';
   columns?: string;
   filters?: string;
+  search?: string;
 }
 
 export interface FieldMetadata {
@@ -145,6 +146,8 @@ export interface ListFieldMeta {
   type?: string;
   sortable?: boolean;
   filterable?: boolean;
+  /** Участвует в полнотекстовом поиске списка. По умолчанию текстовые и select-поля. */
+  searchable?: boolean;
   size?: number;
   minSize?: number;
   /**

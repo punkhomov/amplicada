@@ -32,6 +32,7 @@
 |------|--------|----------|
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
+| `notes/platform-core.md` | `implemented` | Поиск в списках документов и граница будущих провайдеров |
 | `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
 
@@ -48,6 +49,7 @@
 |-------|---------------------|
 | `application-tools` | [`packages/application-tools/docs/`](../packages/application-tools/docs/index.md) — справочник, модель композиции и инструкция optional-интеграции |
 | `module-admin` | [`packages/module-admin/docs/`](../packages/module-admin/docs/index.md) — сервис действий |
+| `platform-core` | [`packages/platform-core/docs/`](../packages/platform-core/docs/index.md) — поиск в списках документов |
 | `module-auth-password` | [`packages/module-auth-password/docs/`](../packages/module-auth-password/docs/index.md) — optional-интеграция admin |
 | `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
 | `module-workflow` | [`packages/module-workflow/docs/`](../packages/module-workflow/docs/) — пока 4 плоских файла |
@@ -68,6 +70,7 @@
 | Файл | Статус | Описание |
 |------|--------|----------|
 | `plans/2026-09-14-module-lifecycle-review.md` | `draft` | Первый архитектурный разбор: зависимости и порядок загрузки, дефект shutdown, владение ресурсами и удаление модулей; предложения и следующие итерации, без изменения runtime |
+| `plans/2026-09-16-document-search-providers.md` | `draft` | Варианты поисковых провайдеров, критерии выбора и будущая граница контракта |
 | `plans/2026-09-15-auth-node-method.md` | `implemented` | Метод аутентификации — свойство узла: `auth-node` + `GET /api/auth/context`, платформа редиректит на `loginUrl` метода и не содержит страницы логина; парольный логин — `/auth/password/login`, `/me` и `/logout` переехали в core |
 | `plans/2026-09-15-notifications/` | `draft` | Уведомления: core-сервис `notification` + outbox с ретраями, канальные модули (`module-notification-email` — SMTP + адресная книга), админ-лог доставок, Mailpit в dev, ADR-04. Подпланы `01`–`04`; разблокирует регистрацию/сброс пароля/2FA в auth |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |

@@ -30,6 +30,7 @@ const listQuerystring = {
     sortDir: { type: 'string', enum: ['asc', 'desc'] },
     columns: { type: 'string', maxLength: 4000 },
     filters: { type: 'string', maxLength: FILTER_MAX_PARAM_LENGTH },
+    search: { type: 'string', maxLength: 200 },
     format: { type: 'string', enum: ['csv', 'json'] },
   },
   additionalProperties: true,

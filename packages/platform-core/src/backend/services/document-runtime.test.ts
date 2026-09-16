@@ -214,6 +214,53 @@ test('список читает из индекса, отбирает по ти�
   }
 });
 
+test('поиск списка применён к count и данным вместе с фильтром типа и soft-delete', async () => {
+  const registry = new DocumentRegistryImpl();
+  registry.register('probe', { module: 'test', label: 'Probe' });
+  registry.lists.extend('probe', {
+    module: 'm',
+    schema: owned,
+    foreignKey: 'id',
+    fields: {
+      code: { label: 'Code' },
+      name: { label: 'Name', searchable: false },
+      isActive: { label: 'Active', type: 'checkbox' },
+    },
+  });
+  const { db, queries } = recordingDb([[[0]]]);
+
+  await new DocumentRuntime(db, registry).list('probe', { search: '  новый код  ' });
+
+  assert.equal(queries.length, 2);
+  for (const q of queries) {
+    assert.match(q.text, /to_tsvector\('russian', concat_ws\(' ', coalesce\(\("probe_doc"\."code"\)::text, ''\)\)\)/);
+    assert.match(q.text, /websearch_to_tsquery\('russian', \$\d+\)/);
+    assert.match(q.text, /"core"\."document_index"\."deleted_at" is null/);
+    assert.ok(!q.text.split(' where ')[1]?.includes('"probe_doc"."name"'));
+    assert.ok(q.values.includes('новый код'));
+  }
+});
+
+test('поиск по customFields использует JSON-выражение, а не alias колонки из SELECT', async () => {
+  const registry = new DocumentRegistryImpl();
+  registry.register('probe', { module: 'test', label: 'Probe' });
+  registry.lists.extend('probe', {
+    module: 'm',
+    customFields: true,
+    fields: { title: { label: 'Title' } },
+  });
+  const { db, queries } = recordingDb([[[0]]]);
+
+  await new DocumentRuntime(db, registry).list('probe', { search: 'текст' });
+
+  assert.equal(queries.length, 2);
+  for (const q of queries) {
+    const where = q.text.split(' where ')[1] ?? '';
+    assert.match(where, /"cf_m_base"\."values" ->> \$\d+/);
+    assert.ok(!where.includes('"m:base:title"'));
+  }
+});
+
 test('create заводит индекс, пишет расширения и отдаёт только id', async () => {
   const registry = new DocumentRegistryImpl();
   registry.register('probe', { module: 'test', label: 'Probe' });

@@ -8,3 +8,5 @@ verified_commit: a5c2ac9
 # Admin — интеграция действий — справочник
 
 [Композиция и интеграция](./composition.md).
+
+[Поиск в списке документов](./list-search.md).
