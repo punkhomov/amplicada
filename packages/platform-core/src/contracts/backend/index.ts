@@ -1,6 +1,7 @@
 export type { AuthResult, User } from '../auth.js';
 export type { EventBus, EventBusEvent, EventHandler } from '../event-bus.js';
 export type { Lifecycle, LifecycleHook } from '../lifecycle.js';
+export type { BackendNotificationService } from '../notification.js';
 export type { ServiceRegistry } from '../service-registry.js';
 export type {
   AuthLogEntry,
