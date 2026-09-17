@@ -3,7 +3,7 @@ packages:
   - "apps/*"
 ignoreScripts: true
 blockExoticSubdeps: true
-minimumReleaseAge: 43200
+minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - typescript
   - "@typescript/typescript6"
