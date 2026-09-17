@@ -2,6 +2,8 @@ import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend
 import { API_CLIENT_TOKEN, type ApiClient } from '@amplicada/platform-core/frontend';
 import type { LoaderFunction } from 'react-router-dom';
 import { moduleManifest } from '../contracts/manifest.js';
+import { AdminDocuments } from '../contracts/notification-template.js';
+import type { AdminToolbarService } from '../contracts/toolbar.js';
 import { AdminLayout } from './layouts/admin-layout.js';
 import { registerComponent } from './lib/component-registry.js';
 import { createToolbarService } from './lib/toolbar-action-registry.js';
@@ -20,7 +22,9 @@ import { AdminStorage, adminStorageObjectsQueryOptions } from './pages/admin-sto
 import { AdminTaskDetail, adminTaskRunsQueryOptions } from './pages/admin-task-detail/index.js';
 import { AuthLogDisplay } from './widgets/auth-log-display/index.js';
 import { MembersDisplay } from './widgets/members-display/index.js';
+import { NotificationTemplateEditor } from './widgets/notification-template-editor/index.js';
 import { ScheduledTaskCard } from './widgets/scheduled-task-card/index.js';
+import { SendNotificationTemplateAction } from './widgets/send-notification-template/index.js';
 
 const adminFrontendModule: FrontendModule = {
   ...moduleManifest,
@@ -30,6 +34,14 @@ const adminFrontendModule: FrontendModule = {
     registerComponent('user-group-members', MembersDisplay);
     registerComponent('user-auth-log', AuthLogDisplay);
     registerComponent('scheduled-task-fields', ScheduledTaskCard);
+    registerComponent('notification-template-editor', NotificationTemplateEditor);
+    context.services.resolve<AdminToolbarService>('admin:toolbar').register({
+      id: 'notification-template-send',
+      documentType: AdminDocuments.NOTIFICATION_TEMPLATE,
+      label: 'admin:template_send_action',
+      component: SendNotificationTemplateAction,
+      order: 10,
+    });
     context.layouts.register('admin', AdminLayout);
 
     const api = context.services.resolve<ApiClient>(API_CLIENT_TOKEN);

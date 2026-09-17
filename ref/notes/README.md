@@ -27,7 +27,7 @@ date: 2026-09-15
 | Пакет | Notes |
 |---|---|
 | `application-tools` | [Заметки](application-tools.md) — D-004: история перехода и альтернативы |
-| `module-admin` | [Заметки](module-admin.md) |
+| `module-admin` | [Заметки](module-admin.md) — D-001…D-002: сервис toolbar, шаблоны уведомлений как документ админки |
 | `module-auth-password` | [Заметки](module-auth-password.md) |
 | `module-hr-poll` | [Заметки](module-hr-poll.md) |
 | `module-notification-email` | [Заметки](module-notification-email.md) — D-001…D-004: nodemailer ^8, backend-only, подтверждение адреса, режим без SMTP |

@@ -221,5 +221,26 @@
   "admin_notifications_status_sent": "Отправлено",
   "admin_notifications_status_failed": "Ошибка",
   "admin_notifications_empty_title": "Доставок нет",
-  "admin_notifications_empty_description": "Здесь появятся уведомления, отправленные ядром"
+  "admin_notifications_empty_description": "Здесь появятся уведомления, отправленные ядром",
+
+  "template_editor_tab_body": "Текст",
+  "template_editor_tab_html": "HTML",
+  "template_editor_tab_preview": "Просмотр",
+  "template_editor_no_subject": "(без темы)",
+  "template_editor_preview_title": "Предпросмотр письма",
+  "template_picker_remove": "Убрать",
+  "template_send_action": "Отправить",
+  "template_send_title": "Отправить шаблон",
+  "template_send_description": "Выберите получателей",
+  "template_send_unsaved": "Сначала сохраните шаблон",
+  "template_send_search_placeholder": "Поиск по логину (от 2 символов)",
+  "template_send_search_hint": "Введите минимум 2 символа логина",
+  "template_send_search_error": "Не удалось загрузить пользователей",
+  "template_send_no_results": "Никого не найдено",
+  "template_send_over_limit": "Слишком много получателей: максимум {{max}}",
+  "template_send_submit": "Отправить ({{count}})",
+  "template_send_pending": "Отправка…",
+  "template_send_error": "Не удалось отправить",
+  "template_send_result": "Создано доставок: {{queued}} из {{total}}. Пропущено: {{skipped}}, ошибок: {{failed}}.",
+  "template_send_skipped_hint": "Пропущены пользователи без канала или подтверждённого адреса."
 }

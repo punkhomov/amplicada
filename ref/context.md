@@ -55,6 +55,7 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `module-notification-email`, `EmailChannel`, `SMTP_HOST` | почтовый канал: SMTP-транспорт + адресная книга `notification_email.user_email` (адрес отдаётся при непустом `verified_at`); без `SMTP_HOST` канал не регистрируется |
 | `NotificationDispatcher`, `isWorkerRole`, `ROLE=worker` | диспетчер ретраев: due `pending`, зависшие `sending`, ретенция; поднимается только на worker-роли, eager-попытка работает на любой |
 | `/admin/notifications` | админ-лог доставок: фильтры status/kind/userId, ручной «Повторить» для `failed` — module-admin |
+| `notification-template`, `send-template` | шаблоны уведомлений админки: документ `notification-template` (`admin.notification_template`), редактор body/html + preview, `POST /api/admin/notifications/send-template` — цикл `send()` по выбранным userId, kind `admin.broadcast` |
 | `ref/notes/<pkg>.md`, `packages/*/docs/` | рационал пакета (отвергнутое, отложенное, пробелы) и потребительская документация; читать перед изменением пакета |
 
 ## Current Priorities
