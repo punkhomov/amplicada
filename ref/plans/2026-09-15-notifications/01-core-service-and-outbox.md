@@ -2,7 +2,7 @@
 title: Core notification service и outbox
 type: plan
 tier: 2
-status: draft
+status: implemented
 date: 2026-09-15
 ---
 
@@ -243,11 +243,11 @@ export class NotificationDispatcher {
 
 ## Порядок реализации
 
-- [ ] Контракты + схема + миграция 0006 + экспорты
-- [ ] `NotificationServiceImpl`: `send`/`deliver`/claim/бэкофф/`retry`/`listDeliveries`
-- [ ] `NotificationDispatcher` + провод в `app.ts` (worker role, shutdown)
-- [ ] Юнит-тесты на чистые функции (бэкофф, выбор канала)
-- [ ] `pnpm build && pnpm typecheck && pnpm lint`
+- [x] Контракты + схема + миграция 0006 + экспорты
+- [x] `NotificationServiceImpl`: `send`/`deliver`/claim/бэкофф/`retry`/`listDeliveries`
+- [x] `NotificationDispatcher` + провод в `app.ts` (worker role, shutdown)
+- [x] Юнит-тесты на чистые функции (бэкофф, выбор канала)
+- [x] `pnpm build && pnpm typecheck && pnpm lint`
 
 ## Проверка
 

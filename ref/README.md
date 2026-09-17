@@ -21,6 +21,8 @@
 | `adr/00-evolution.md` | `implemented` | Эволюция решений: что сохранили, изменили, отбросили |
 | `adr/01-architecture.md` | `implemented` | Архитектура: философия, модули, core decisions |
 | `adr/02-dependency-injection.md` | `Accepted` | Без DI-контейнера: service locator для обязательных зависимостей, extension points для опциональных связей между модулями |
+| `adr/03-frontend-fsd.md` | `accepted` | Feature-Sliced Design v2.1 для frontend модулей |
+| `adr/04-notifications.md` | `implemented` | Уведомления: маршрутизация и надёжность (outbox, ретраи) — core-сервис `notification`; транспорт и адресные книги — канальные модули |
 | `adr/05-application-composition.md` | `implemented` | Единый состав приложения, генерация статических подключений и проверяемые зависимости обеих сторон; заменяет декларативный-only порядок из ADR-02 |
 | `adr/06-module-conventions.md` | `implemented` | amplicada: true, экспорт module, стороны/CSS из exports, порядок обязательных и выбранных optional peers; дополняет ADR-02/05 |
 
@@ -33,6 +35,7 @@
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
 | `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar |
+| `notes/module-notification-email.md` | `implemented` | D-001…D-004: nodemailer `^8` под политикой возраста, backend-only модуль, подтверждение адреса, режим без SMTP |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
 
 Перед изменением пакета: `notes/<package>.md` (решения, отвергнутое, пробелы) +
@@ -50,6 +53,7 @@
 | `module-admin` | [`packages/module-admin/docs/`](../packages/module-admin/docs/index.md) — сервис действий |
 | `module-auth-password` | [`packages/module-auth-password/docs/`](../packages/module-auth-password/docs/index.md) — optional-интеграция admin |
 | `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
+| `module-notification-email` | [`packages/module-notification-email/docs/`](../packages/module-notification-email/docs/index.md) — справочник канала и 2 how-to |
 | `module-workflow` | [`packages/module-workflow/docs/`](../packages/module-workflow/docs/) — пока 4 плоских файла |
 
 ### Guides (tier 4)
@@ -69,7 +73,8 @@
 |------|--------|----------|
 | `plans/2026-09-14-module-lifecycle-review.md` | `draft` | Первый архитектурный разбор: зависимости и порядок загрузки, дефект shutdown, владение ресурсами и удаление модулей; предложения и следующие итерации, без изменения runtime |
 | `plans/2026-09-15-auth-node-method.md` | `implemented` | Метод аутентификации — свойство узла: `auth-node` + `GET /api/auth/context`, платформа редиректит на `loginUrl` метода и не содержит страницы логина; парольный логин — `/auth/password/login`, `/me` и `/logout` переехали в core |
-| `plans/2026-09-15-notifications/` | `draft` | Уведомления: core-сервис `notification` + outbox с ретраями, канальные модули (`module-notification-email` — SMTP + адресная книга), админ-лог доставок, Mailpit в dev, ADR-04. Подпланы `01`–`04`; разблокирует регистрацию/сброс пароля/2FA в auth |
+| `plans/2026-09-15-notifications/` | `implemented` | Уведомления: core-сервис `notification` + outbox с ретраями, канальный модуль `module-notification-email` (SMTP + адресная книга), админ-лог доставок `/admin/notifications`, Mailpit в dev, ADR-04. Подпланы `01`–`04` сделаны; разблокирует регистрацию/сброс пароля/2FA в auth |
+| `plans/2026-09-17-notification-contract-v2.md` | `draft` | Notification API v2: ломающий контракт под auth/workflow/learning/рассылки — `sendMany` с batch, шаблоны-документы ядра с code-fixtures (read-only), именованные отправители, `dedupeKey`, `scheduledAt`, вложения, `cc/bcc/replyTo/headers`; миграция `core/0007`, переезд типа из `module-admin`. Ждёт решения по открытым вопросам |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |
 | `plans/2026-07-13-frontend-core-reorg.md` | `implemented` | Реорганизация core/sdk (выполнен) |
 | `plans/2026-07-13-server-sessions.md` | `implemented` | Безопасные серверные сессии (Redis + @fastify/session + bcrypt) |

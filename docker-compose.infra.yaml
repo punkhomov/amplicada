@@ -1,5 +1,8 @@
 name: amplicada-infra
 
+# Порты публикуются на всех интерфейсах (0.0.0.0): dev-среда обычно крутится в контейнере/песочнице,
+# и доступ с хоста идёт через проброс портов, которому loopback недоступен. На общей машине
+# ограничьте биндинг вручную (127.0.0.1:...).
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,7 +11,7 @@ services:
       POSTGRES_USER: amplicada
       POSTGRES_PASSWORD: amplicada
     ports:
-      - "127.0.0.1:5432:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +23,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -33,12 +36,23 @@ services:
     image: chrislusf/seaweedfs
     command: server -dir=/data -s3 -s3.config=/etc/seaweedfs/s3.json
     ports:
-      - "127.0.0.1:8333:8333"
+      - "8333:8333"
     volumes:
       - seaweed_data:/data
       - ./docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:9333/cluster/status || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8025/api/v1/info || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 5

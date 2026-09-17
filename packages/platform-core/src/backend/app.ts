@@ -43,6 +43,13 @@ import { AuthLogServiceImpl } from './services/auth-log-service.js';
 import { AuthNodeServiceImpl } from './services/auth-node-service.js';
 import { AuthServiceImpl } from './services/auth-service.js';
 import { DocumentRuntime } from './services/document-runtime.js';
+import { NotificationDispatcher } from './services/notification-dispatcher.js';
+import {
+  DEFAULT_MAX_ATTEMPTS,
+  DEFAULT_RETENTION_DAYS,
+  DEFAULT_RETRY_BASE_MS,
+  NotificationServiceImpl,
+} from './services/notification-service.js';
 import { ensureBucket, StorageServiceImpl } from './services/storage-service.js';
 import { TaskEventBridge } from './services/task-event-bridge.js';
 import { TaskReconciler } from './services/task-reconciler.js';
@@ -60,6 +67,14 @@ const __dirname = dirname(__filename);
 export interface App {
   app: FastifyInstance;
   context: BackendSetupContext;
+}
+
+/** Числовая настройка из env: мусор и не-положительные значения молча уходят в дефолт. */
+function readPositiveInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 export async function createApp(): Promise<App> {
@@ -159,6 +174,19 @@ export async function createApp(): Promise<App> {
 
   const taskEventBridge = new TaskEventBridge({ redis: redisClient, eventBus });
   services.register('task-event-bridge', taskEventBridge);
+
+  services.register(
+    'notification',
+    new NotificationServiceImpl({
+      db,
+      eventBus,
+      config: {
+        maxAttempts: readPositiveInt('NOTIFICATION_MAX_ATTEMPTS', DEFAULT_MAX_ATTEMPTS),
+        retryBaseMs: readPositiveInt('NOTIFICATION_RETRY_BASE_MS', DEFAULT_RETRY_BASE_MS),
+        retentionDays: readPositiveInt('NOTIFICATION_RETENTION_DAYS', DEFAULT_RETENTION_DAYS),
+      },
+    }),
+  );
 
   const context: BackendSetupContext = {
     services,
@@ -284,11 +312,14 @@ export async function bootstrap(app: FastifyInstance, modules: BackendModule[], 
   const taskScheduler = context.services.resolve<TaskScheduler>('task-scheduler');
   const taskReconciler = context.services.resolve<TaskReconciler>('task-reconciler');
   const workerHeartbeat = context.services.resolve<WorkerHeartbeat>('worker-heartbeat');
+  const notificationDispatcher = new NotificationDispatcher(context.services.resolve<NotificationServiceImpl>('notification'));
+  context.services.register('notification-dispatcher', notificationDispatcher);
   if (isWorkerRole()) {
     await taskScheduler.start();
     taskReconciler.start();
     workerHeartbeat.start();
-    logger.info('Task scheduler, reconciler and heartbeat started');
+    notificationDispatcher.start();
+    logger.info('Task scheduler, reconciler, heartbeat and notification dispatcher started');
   }
 
   registerShutdown(app, {
@@ -298,6 +329,7 @@ export async function bootstrap(app: FastifyInstance, modules: BackendModule[], 
       { name: 'task-scheduler', run: () => taskScheduler.stop() },
       { name: 'task-reconciler', run: () => taskReconciler.stop() },
       { name: 'worker-heartbeat', run: () => workerHeartbeat.stop() },
+      { name: 'notification-dispatcher', run: () => notificationDispatcher.stop() },
     ],
     closeResources: [
       { name: 'task-event-bridge', run: () => taskEventBridge.stop() },

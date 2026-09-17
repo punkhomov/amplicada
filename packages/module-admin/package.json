@@ -20,7 +20,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch --preserveWatchOutput",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"dist/**/*.test.js\""
   },
   "peerDependencies": {
     "@amplicada/platform-core": "workspace:*",

@@ -2,5 +2,18 @@
   "dashboard_topic_system": "Система",
   "dashboard_topic_documents": "Документы",
   "dashboard_link_modules": "Модули",
-  "dashboard_link_storage": "Хранилище"
+  "dashboard_link_storage": "Хранилище",
+  "dashboard_link_notifications": "Уведомления",
+  "dashboard_link_notification_templates": "Шаблоны уведомлений",
+  "template_label": "Шаблон уведомления",
+  "template_field_name": "Название",
+  "template_field_subject": "Тема письма",
+  "template_field_locale": "Язык",
+  "template_field_locale_help": "Необязательно: язык сообщения для получателя",
+  "template_locale_ru": "Русский",
+  "template_locale_en": "English",
+  "template_field_body": "Текст (plain text)",
+  "template_field_html": "HTML",
+  "template_field_html_help": "Если пусто — уйдёт только plain text",
+  "template_field_updated": "Изменён"
 }

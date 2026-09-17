@@ -3,48 +3,24 @@ packages:
   - "apps/*"
 ignoreScripts: true
 blockExoticSubdeps: true
+strictDepBuilds: true
+dangerouslyAllowAllBuilds: false
 minimumReleaseAge: 43200
-minimumReleaseAgeExclude:
-  - typescript
-  - "@typescript/typescript6"
-  - "@typescript/typescript-aix-ppc64"
-  - "@typescript/typescript-darwin-arm64"
-  - "@typescript/typescript-darwin-x64"
-  - "@typescript/typescript-freebsd-arm64"
-  - "@typescript/typescript-freebsd-x64"
-  - "@typescript/typescript-linux-arm"
-  - "@typescript/typescript-linux-arm64"
-  - "@typescript/typescript-linux-loong64"
-  - "@typescript/typescript-linux-mips64el"
-  - "@typescript/typescript-linux-ppc64"
-  - "@typescript/typescript-linux-riscv64"
-  - "@typescript/typescript-linux-s390x"
-  - "@typescript/typescript-linux-x64"
-  - "@typescript/typescript-netbsd-arm64"
-  - "@typescript/typescript-netbsd-x64"
-  - "@typescript/typescript-openbsd-arm64"
-  - "@typescript/typescript-openbsd-x64"
-  - "@typescript/typescript-sunos-x64"
-  - "@typescript/typescript-win32-arm64"
-  - "@typescript/typescript-win32-x64"
-  - dependency-cruiser@18.1.0
-  - enhanced-resolve@5.24.1 || 5.24.2
-  - ignore@7.0.6
-  - picomatch@4.0.5
-  - react-circle-flags@0.0.30
-  - '@smithy/core@3.33.2'
-  - '@smithy/credential-provider-imds@4.5.2'
-  - '@smithy/fetch-http-handler@5.7.2'
-  - '@smithy/node-http-handler@4.11.2'
-  - '@smithy/signature-v4@5.7.2'
-  - '@smithy/types@4.17.2'
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
 trustPolicy: no-downgrade
+trustLockfile: false
 trustPolicyExclude:
-  - undici-types@6.21.0
   - semver@6.3.1
-  - reselect@5.1.1
+strictStorePkgContentCheck: true
+strictPeerDependencies: true
+engineStrict: true
+preferFrozenLockfile: true
 allowBuilds:
   bcrypt: true
+# Пины @smithy/* держат доверенные версии для всех потребителей, чтобы под них
+# не заводить отдельные trustPolicyExclude: иначе trustPolicy: no-downgrade
+# придётся разрешать поимённо.
 overrides:
     "@smithy/core": 3.33.2
     '@smithy/fetch-http-handler': 5.7.2

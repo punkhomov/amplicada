@@ -1,17 +1,30 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DocumentRuntimeError } from '@amplicada/platform-core/backend';
 import { DashboardTopics } from '@amplicada/platform-core/contracts';
 import type { BackendModule } from '@amplicada/platform-core/contracts/backend';
 import { moduleManifest } from '../contracts/manifest.js';
+import { registerNotificationTemplateDocuments } from './documents/index.js';
 import { adminBackendLocales } from './locales/index.js';
 import { createDocumentRoutes } from './routes/documents.js';
+import { createNotificationRoutes } from './routes/notifications.js';
 import { createRegistryRoutes } from './routes/registry.js';
 import { createStorageRoutes } from './routes/storage.js';
 import { createTaskRoutes } from './routes/tasks.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const adminModule: BackendModule = {
   ...moduleManifest,
   locales: { backend: { ru: adminBackendLocales.ru, en: adminBackendLocales.en } },
   setup(context, app) {
+    context.migrations.register('admin', join(__dirname, '..', '..', 'migrations'));
+
+    // Шаблоны уведомлений — документы, которыми владеет админка; регистрация не зависит от app:
+    // типы должны быть известны и в worker-роли (например, для чтения карточки по ссылке).
+    registerNotificationTemplateDocuments(context.documents);
+
     context.documents.dashboard.registerTopic(DashboardTopics.SYSTEM, { label: 'admin:dashboard_topic_system', order: 1 });
     context.documents.dashboard.registerLink('modules', {
       module: 'admin',
@@ -24,6 +37,20 @@ const adminModule: BackendModule = {
       topic: DashboardTopics.SYSTEM,
       label: 'admin:dashboard_link_storage',
       path: '/admin/storage',
+    });
+    context.documents.dashboard.registerLink('notifications', {
+      module: 'admin',
+      topic: DashboardTopics.SYSTEM,
+      label: 'admin:dashboard_link_notifications',
+      path: '/admin/notifications',
+      order: 30,
+    });
+    context.documents.dashboard.registerLink('notification-templates', {
+      module: 'admin',
+      topic: DashboardTopics.SYSTEM,
+      label: 'admin:dashboard_link_notification_templates',
+      path: '/admin/notification-template',
+      order: 31,
     });
 
     if (!app) return;
@@ -55,6 +82,7 @@ const adminModule: BackendModule = {
         createDocumentRoutes(fastify, context);
         createTaskRoutes(fastify, context);
         createStorageRoutes(fastify, context);
+        createNotificationRoutes(fastify, context);
       },
       { prefix: '/api/admin' },
     );
