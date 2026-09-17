@@ -38,7 +38,9 @@
     "build": "tsc",
     "dev": "tsc --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"dist/**/*.test.js\""
+    "test": "node --test \"dist/**/*.test.js\"",
+    "ui:sync": "node scripts/shadcn-sync.mjs",
+    "ui:check": "node scripts/shadcn-sync.mjs --check"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",
@@ -49,10 +51,11 @@
     "@fastify/cors": "^11.3.0",
     "@fastify/multipart": "^10.1.1",
     "@fastify/session": "^11.1.2",
+    "@shadcn/react": "0.3.1",
     "@tanstack/react-query": "^5.101.4",
     "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "cn": "0.2.6",
     "croner": "^10.0.1",
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
@@ -74,9 +77,8 @@
     "react-router-dom": "^7.18.2",
     "recharts": "3.10.1",
     "redis": "^6.2.1",
-    "shadcn": "^4.18.0",
+    "shadcn": "^4.21.0",
     "sonner": "^2.0.8",
-    "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
