@@ -85,7 +85,8 @@ amplicada/
 │   ├── module-hr-request/      ← request portal on top of workflow
 │   ├── module-hr-poll/         ← polls and poll responses
 │   ├── module-workflow/        ← BPM engine (processes, nodes, transitions, delegates)
-│   ├── module-admin/           ← management UI over core infrastructure
+│   ├── module-admin/           ← management UI over core infrastructure (data + apps modes)
+│   ├── module-support-chat/    ← support chat: embedded admin app + floating user widget
 │   ├── module-hr-appraisal/    ← placeholder
 │   ├── module-hr-assessment/   ← placeholder
 │   ├── module-hr-learning/     ← placeholder

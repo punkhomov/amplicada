@@ -30,6 +30,7 @@ date: 2026-09-15
 | `module-admin` | [Заметки](module-admin.md) |
 | `module-auth-password` | [Заметки](module-auth-password.md) |
 | `module-hr-poll` | [Заметки](module-hr-poll.md) |
+| `module-support-chat` | [Заметки](module-support-chat.md) — первое приложение админки: таблицы вместо документов, SSE + Redis |
 | `platform-core` | [Заметки](platform-core.md) — UI-кит: вендоринг, синк, `cn`, политика возраста |
 | `module-hr` | — |
 | `module-workflow` | — |
