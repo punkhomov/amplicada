@@ -27,7 +27,16 @@ date: 2026-09-16
 ```yaml
 ignoreScripts: true
 blockExoticSubdeps: true
+strictDepBuilds: true
 minimumReleaseAge: 43200
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+trustPolicy: no-downgrade
+trustLockfile: false
+strictStorePkgContentCheck: true
+strictPeerDependencies: true
+engineStrict: true
+preferFrozenLockfile: true
 ```
 
 Это обязательная политика проекта, включая временные проверки вне монорепозитория.

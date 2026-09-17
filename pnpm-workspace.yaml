@@ -3,7 +3,11 @@ packages:
   - "apps/*"
 ignoreScripts: true
 blockExoticSubdeps: true
+strictDepBuilds: true
+dangerouslyAllowAllBuilds: false
 minimumReleaseAge: 43200
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
   - typescript
   - "@typescript/typescript6"
@@ -39,10 +43,15 @@ minimumReleaseAgeExclude:
   - '@smithy/signature-v4@5.7.2'
   - '@smithy/types@4.17.2'
 trustPolicy: no-downgrade
+trustLockfile: false
 trustPolicyExclude:
   - undici-types@6.21.0
   - semver@6.3.1
   - reselect@5.1.1
+strictStorePkgContentCheck: true
+strictPeerDependencies: true
+engineStrict: true
+preferFrozenLockfile: true
 allowBuilds:
   bcrypt: true
 overrides:
