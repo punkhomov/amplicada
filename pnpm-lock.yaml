@@ -213,6 +213,9 @@ importers:
       '@amplicada/module-hr-request':
         specifier: workspace:*
         version: link:../../packages/module-hr-request
+      '@amplicada/module-support-chat':
+        specifier: workspace:*
+        version: link:../../packages/module-support-chat
       '@amplicada/module-workflow':
         specifier: workspace:*
         version: link:../../packages/module-workflow
@@ -256,6 +259,9 @@ importers:
       '@amplicada/module-hr-request':
         specifier: workspace:*
         version: link:../../packages/module-hr-request
+      '@amplicada/module-support-chat':
+        specifier: workspace:*
+        version: link:../../packages/module-support-chat
       '@amplicada/module-workflow':
         specifier: workspace:*
         version: link:../../packages/module-workflow
@@ -595,6 +601,42 @@ importers:
       react-router-dom:
         specifier: ^7.18.2
         version: 7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/module-support-chat:
+    devDependencies:
+      '@amplicada/module-admin':
+        specifier: workspace:*
+        version: link:../module-admin
+      '@amplicada/platform-core':
+        specifier: workspace:*
+        version: link:../platform-core
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.4
+        version: 19.2.4(@types/react@19.2.18)
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@types/pg@8.21.0)(pg@8.23.0)
+      fastify:
+        specifier: ^5.12.0
+        version: 5.12.0
+      lucide-react:
+        specifier: ^1.31.0
+        version: 1.31.0(react@19.2.8)
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

@@ -1,0 +1,22 @@
+{
+  "app_title": "Поддержка",
+  "app_description": "Обращения пользователей и ответы поддержки",
+  "widget_open": "Написать в поддержку",
+  "widget_close": "Свернуть чат",
+  "widget_title": "Поддержка",
+  "widget_placeholder": "Опишите вопрос…",
+  "widget_send": "Отправить",
+  "widget_empty": "Сообщений пока нет — напишите первым",
+  "widget_closed": "Обращение закрыто. Новое сообщение переоткроет его.",
+  "role_admin": "Поддержка",
+  "role_ai": "ИИ-помощник",
+  "admin_threads_title": "Обращения",
+  "admin_threads_empty": "Обращений пока нет",
+  "admin_no_selection": "Выберите обращение слева",
+  "admin_reply_placeholder": "Ответ пользователю…",
+  "admin_send": "Ответить",
+  "admin_close": "Закрыть",
+  "admin_reopen": "Переоткрыть",
+  "admin_status_open": "Открыто",
+  "admin_status_closed": "Закрыто"
+}

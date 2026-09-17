@@ -1,0 +1,22 @@
+{
+  "app_title": "Support",
+  "app_description": "User requests and support replies",
+  "widget_open": "Contact support",
+  "widget_close": "Collapse chat",
+  "widget_title": "Support",
+  "widget_placeholder": "Describe your question…",
+  "widget_send": "Send",
+  "widget_empty": "No messages yet — write the first one",
+  "widget_closed": "The request is closed. A new message will reopen it.",
+  "role_admin": "Support",
+  "role_ai": "AI assistant",
+  "admin_threads_title": "Requests",
+  "admin_threads_empty": "No requests yet",
+  "admin_no_selection": "Select a request on the left",
+  "admin_reply_placeholder": "Reply to the user…",
+  "admin_send": "Reply",
+  "admin_close": "Close",
+  "admin_reopen": "Reopen",
+  "admin_status_open": "Open",
+  "admin_status_closed": "Closed"
+}
