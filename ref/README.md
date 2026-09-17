@@ -33,6 +33,7 @@
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
 | `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar |
+| `notes/platform-core.md` | `implemented` | D-001…D-005: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
 
 Перед изменением пакета: `notes/<package>.md` (решения, отвергнутое, пробелы) +
@@ -51,6 +52,7 @@
 | `module-auth-password` | [`packages/module-auth-password/docs/`](../packages/module-auth-password/docs/index.md) — optional-интеграция admin |
 | `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
 | `module-workflow` | [`packages/module-workflow/docs/`](../packages/module-workflow/docs/) — пока 4 плоских файла |
+| `platform-core` | [`packages/platform-core/docs/`](../packages/platform-core/docs/index.md) — вендоренный UI-кит: справочник, how-to синка, explanation |
 
 ### Guides (tier 4)
 

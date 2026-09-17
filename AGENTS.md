@@ -72,6 +72,7 @@ Every package exposes exactly 4 entry points in `package.json`:
 - **Drizzle schemas**: every entity has a `schema/*.ts` (table def) and `documents/*.ts` (typed access layer).
 - **Migrations**: per-package in `migrations/`, applied at bootstrap by drizzle's runtime migrator. `drizzle-kit` is **not** wired up — SQL files and `migrations/meta/_journal.json` are written by hand.
 - **Document ids come from the index**: `core.document_index` is the primary table — it issues ids and holds document state. Any code inserting a document row outside `DocumentRuntime` must take its id from `allocateDocumentId(type, tx)` first, or the FK will reject it.
+- **UI kit is vendored**: `platform-core/src/frontend/ui/**` + `hooks/use-mobile.ts` come from shadcn registry — never edit those files by hand (sync overwrites them); update via `pnpm --filter @amplicada/platform-core ui:sync` (`ui:check` verifies normalization). Details: `packages/platform-core/docs/reference/ui-kit.md`.
 
 ## Project Layout
 
