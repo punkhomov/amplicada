@@ -16,10 +16,11 @@ verified_commit: 5767b800
 | Таблица | Ключевые поля | Примечания |
 |---|---|---|
 | `support_chat.threads` | `id`, `user_id` (unique), `status` (`open`/`closed`), `updated_at`, `user_last_read_at`, `admin_last_read_at` | один тред на пользователя, FK на `core.identity_user` |
-| `support_chat.messages` | `id`, `thread_id`, `author_id` (nullable), `author_role` (`user`/`admin`/`ai`), `body`, `created_at` | FK на тред с `ON DELETE CASCADE`; у роли `ai` автора-пользователя нет |
+| `support_chat.messages` | `id`, `thread_id`, `author_id` (nullable), `author_role` (`user`/`admin`/`ai`), `body`, `attachment_key`, `attachment_name`, `attachment_mime`, `attachment_size`, `created_at` | FK на тред с `ON DELETE CASCADE`; у роли `ai` автора-пользователя нет; вложение опционально, `body` при нём может быть пустым |
 
-Миграции — `migrations/0000_init.sql` и `migrations/0001_ai_author.sql` (роль `ai`,
-nullable `author_id`), применяются bootstrap'ом под именем `support-chat`.
+Миграции — `migrations/0000_init.sql`, `migrations/0001_ai_author.sql` (роль `ai`,
+nullable `author_id`) и `migrations/0002_attachments.sql` (метаданные вложения),
+применяются bootstrap'ом под именем `support-chat`.
 Таблицы не участвуют в Document System: это обычные таблицы модуля.
 
 Непрочитанные считаются по отметкам `user_last_read_at` / `admin_last_read_at`
@@ -36,7 +37,7 @@ nullable `author_id`), применяются bootstrap'ом под именем
 
 | Метод | Поведение |
 |---|---|
-| `appendMessage({ threadId, authorRole, body, authorId? })` | Пишет сообщение от любой роли (включая `ai`), обновляет `updated_at` и публикует SSE-события |
+| `appendMessage({ threadId, authorRole, body, authorId?, attachment? })` | Пишет сообщение от любой роли (включая `ai`), обновляет `updated_at` и публикует SSE-события |
 | `getThreadMessages(threadId)` | Сообщения треда со статусом |
 
 Будущий AI-провайдер подключается отдельным модулем: резолвит `support-chat`, слушает
@@ -50,8 +51,10 @@ nullable `author_id`), применяются bootstrap'ом под именем
 | Метод и путь | Тело | Ответ |
 |---|---|---|
 | `GET /api/support-chat/thread` | — | `{ thread: SupportThreadDto \| null }` |
-| `POST /api/support-chat/thread/messages` | `{ body }` | `{ thread: SupportThreadDto }` (создаёт тред при первом сообщении) |
+| `POST /api/support-chat/thread/messages` | `{ body, attachment? }` | `{ thread: SupportThreadDto }` (создаёт тред при первом сообщении) |
 | `POST /api/support-chat/thread/read` | — | `{ ok: true }` |
+| `POST /api/support-chat/attachments` | multipart-часть `file` | `SupportAttachmentUploadDto` — токен для отправки сообщения |
+| `GET /api/support-chat/attachments/:messageId` | — | файл (inline для картинок и PDF, иначе `Content-Disposition: attachment`) |
 
 Маршруты поддержки:
 
@@ -59,13 +62,23 @@ nullable `author_id`), применяются bootstrap'ом под именем
 |---|---|---|
 | `GET /api/support-chat/admin/threads` | — | `SupportAdminThreadDto[]` |
 | `GET /api/support-chat/admin/threads/:id` | — | `SupportAdminThreadDetailDto` |
-| `POST /api/support-chat/admin/threads/:id/messages` | `{ body }` | `{ thread }` |
+| `POST /api/support-chat/admin/threads/:id/messages` | `{ body, attachment? }` | `{ thread }` |
 | `POST /api/support-chat/admin/threads/:id/read` | — | `{ ok: true }` |
 | `PATCH /api/support-chat/admin/threads/:id` | `{ status: 'open' \| 'closed' }` | `{ thread }` |
 
-Ограничения: тело сообщения — непустая строка до 4000 символов (`SUPPORT_CHAT_MESSAGE_MAX_LENGTH`),
-иначе 400; неизвестный тред — 404; `SupportThreadDto` содержит `messages`, `status`,
-`unreadCount` с точки зрения получателя.
+Ограничения: до 4000 символов текста (`SUPPORT_CHAT_MESSAGE_MAX_LENGTH`) — 400 при превышении;
+сообщение без текста допустимо, если есть вложение, и наоборот; неизвестный тред — 404;
+`SupportThreadDto` содержит `messages`, `status`, `unreadCount` с точки зрения получателя.
+
+## Вложения
+
+Файл лежит в S3-хранилище core (сервис `storage`), в БД — только метаданные.
+Поток: `POST /attachments` (multipart, лимит 10 МБ, имя санитизируется, ключ
+`support-chat/<userId>/<uuid><ext>`) → ответ-токен → `POST .../messages` с
+`attachment: { key, name, mime, size }`. Сервис принимает ключ, только если он принадлежит
+участнику разговора (префикс владельца треда или автора), — чужой/подделанный ключ даёт 400.
+Скачивание идёт через API, а не напрямую из S3: доступ тот же, что у админских роутов.
+Файлы-картинки рендерятся превью в пузыре, остальные — чипом с именем и размером.
 
 ## SSE
 
@@ -87,16 +100,25 @@ nullable `author_id`), применяются bootstrap'ом под именем
 пользователя, автопрокрутка у live edge, кнопка «к последнему».
 
 Общий рендер сообщений — `widgets/chat-transcript` (`ChatTranscript`):
-подпись автора только на первом сообщении группы, подряд идущие сообщения одной роли
-схлопываются, время — внутри пузыря на последнем сообщении группы, у входящих групп —
-аватар. Собственные сообщения уходят вправо (`ownRole`: `user` для виджета, `admin`
-для админки). Группировка — чистый хелпер `lib/grouping.ts` с unit-тестами.
+подряд идущие сообщения одной роли схлопываются, время — внутри пузыря на последнем
+сообщении группы. Имя автора (логин; у `ai` — локализованное) и тег роли
+(`role_admin` → «Поддержка», `ai` → «ИИ-помощник», в админке у пользователя —
+«Клиент») — первой строкой внутри пузыря первого сообщения группы. Аватар входящей
+группы — на последнем сообщении, на остальных остаётся пустой слот `MessageAvatar`,
+который держит гуттер: пузыри группы стоят по одной левой границе (канон `Message`).
+Собственные сообщения уходят вправо (`ownRole`: `user` для виджета, `admin` для
+админки); вложения рисуются превью или чипом. Группировка — чистый хелпер
+`lib/grouping.ts` с unit-тестами, формат размера — `lib/format.ts`.
 
 Виджет (`features/support-chat-widget`) подключён к точке `floating` и открывается
-карточкой снизу-справа (`Card`, не Sheet). Админ-страница (`pages/support-chat-admin`)
-регистрируется как приложение `admin:apps` с id `support-chat`. Composer рендерится
-внутри `MessageScrollerProvider` — только так доступен `useMessageScroller().scrollToEnd()`
-после отправки.
+карточкой снизу-справа (`Card`, не Sheet): шапка с подзаголовком, пустое состояние
+на компоненте `Empty`, композер внизу. Админ-страница (`pages/support-chat-admin`)
+регистрируется как приложение `admin:apps` с id `support-chat`.
+
+Общий композер — `widgets/chat-composer`: скрытый `<input type="file">` за кнопкой «+»,
+загрузка вложения отдельным запросом (чип с именем и размером до отправки), отправка
+маленькой круглой кнопкой. Композер рендерится внутри `MessageScrollerProvider` —
+только так доступен `useMessageScroller().scrollToEnd()` после отправки.
 
 ## Интеграция с админкой и core
 

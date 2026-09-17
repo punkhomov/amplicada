@@ -53,7 +53,7 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `ui:sync`, `ui:check`, `shadcn-sync.mjs` | синк вендоренного UI-кита shadcn: скачивание + нормализация импортов — packages/platform-core/scripts/shadcn-sync.mjs |
 | `frontend/ui/*`, `cn` | UI-кит: deep import компонентов, `cn` из пакета `cn`; локальные правки `ui/` перезаписываются синком — packages/platform-core/docs/reference/ui-kit.md |
 | `ref/notes/<pkg>.md`, `packages/*/docs/` | рационал пакета (отвергнутое, отложенное, пробелы) и потребительская документация; читать перед изменением пакета |
-| `support-chat`, `admin:apps`, `floating` | первое встроенное приложение админки: обращения + SSE через Redis-канал, плавающий виджет на точке `floating`, реестр приложений, транскрипты на `MessageScroller`; задел под AI — роль `ai` и сервис `support-chat` — packages/module-support-chat, packages/module-admin/docs/reference/composition.md |
+| `support-chat`, `admin:apps`, `floating` | первое встроенное приложение админки: обращения + SSE через Redis-канал, плавающий виджет-карточка на точке `floating`, реестр приложений, транскрипты на `MessageScroller` с группировкой, вложения через сервис `storage`; задел под AI — роль `ai` и сервис `support-chat` — packages/module-support-chat, packages/module-admin/docs/reference/composition.md |
 
 ## Current Priorities
 

@@ -33,7 +33,7 @@
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
 | `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar; D-002: режим «Приложения» |
-| `notes/module-support-chat.md` | `implemented` | D-001…D-003: таблицы вместо документов, SSE + Redis, приложения админки через общий хост |
+| `notes/module-support-chat.md` | `implemented` | D-001…D-007: таблицы вместо документов, SSE + Redis, приложения админки через общий хост, вложения через storage, карточка-виджет и композер на ките |
 | `notes/platform-core.md` | `implemented` | D-001…D-005: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
 
