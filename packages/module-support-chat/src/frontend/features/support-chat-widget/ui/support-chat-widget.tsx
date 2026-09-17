@@ -1,7 +1,8 @@
 import { useApiClient, useCurrentUser, useMutation, useQuery, useQueryClient, useTranslation } from '@amplicada/platform-core/frontend';
 import { Badge } from '@amplicada/platform-core/frontend/ui/badge';
 import { Button } from '@amplicada/platform-core/frontend/ui/button';
-import { Card, CardHeader, CardTitle } from '@amplicada/platform-core/frontend/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@amplicada/platform-core/frontend/ui/card';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@amplicada/platform-core/frontend/ui/empty';
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -9,38 +10,36 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from '@amplicada/platform-core/frontend/ui/message-scroller';
+import { Spinner } from '@amplicada/platform-core/frontend/ui/spinner';
 import { LifeBuoyIcon, SparklesIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import type { SupportThreadDto } from '../../../../contracts/index.js';
 import { supportChatQueryKeys, supportChatThreadQueryOptions } from '../../../lib/query-options.js';
 import { useSupportChatEvents } from '../../../lib/use-support-chat-events.js';
+import { ChatComposer, type ChatComposerInput } from '../../../widgets/chat-composer/index.js';
 import { ChatTranscript } from '../../../widgets/chat-transcript/index.js';
-import { SupportChatComposer } from './support-chat-composer.js';
 
 export function SupportChatWidget() {
-  const { t } = useTranslation();
+  const { t } = useTranslation('support-chat');
   const { user, loading } = useCurrentUser();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState('');
 
   useSupportChatEvents('user', !!user);
 
-  const { data } = useQuery({ ...supportChatThreadQueryOptions(api), enabled: !!user });
+  const { data, isPending } = useQuery({ ...supportChatThreadQueryOptions(api), enabled: !!user });
   const thread = data?.thread ?? null;
   const unreadCount = thread?.unreadCount ?? 0;
+  const messages = thread?.messages ?? [];
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: supportChatQueryKeys.thread });
   };
 
   const send = useMutation({
-    mutationFn: (body: string) => api.post<{ thread: SupportThreadDto }>('/support-chat/thread/messages', { body }),
-    onSuccess: () => {
-      setDraft('');
-      invalidate();
-    },
+    mutationFn: (input: ChatComposerInput) => api.post<{ thread: SupportThreadDto }>('/support-chat/thread/messages', input),
+    onSuccess: invalidate,
   });
 
   const markRead = useMutation({
@@ -61,7 +60,7 @@ export function SupportChatWidget() {
         <Button
           size="icon-lg"
           className="fixed bottom-4 right-4 z-50 rounded-full shadow-lg"
-          aria-label={t('support-chat:widget_open')}
+          aria-label={t('widget_open')}
           onClick={() => handleOpenChange(true)}
         >
           <LifeBuoyIcon />
@@ -74,43 +73,62 @@ export function SupportChatWidget() {
       {open && (
         <Card className="fixed bottom-20 right-4 z-50 flex h-[min(32rem,calc(100dvh-6rem))] w-[min(24rem,calc(100vw-2rem))] flex-col gap-0 overflow-hidden py-0 shadow-xl">
           <CardHeader className="flex flex-row items-center justify-between gap-2 border-b px-4 py-3">
-            <CardTitle className="text-base">{t('support-chat:widget_title')}</CardTitle>
-            <Button variant="ghost" size="icon-sm" aria-label={t('support-chat:widget_close')} onClick={() => handleOpenChange(false)}>
+            <div className="min-w-0">
+              <CardTitle className="text-base">{t('widget_title')}</CardTitle>
+              <CardDescription className="truncate text-xs">{t('widget_subtitle')}</CardDescription>
+            </div>
+            <Button variant="ghost" size="icon-sm" aria-label={t('widget_close')} onClick={() => handleOpenChange(false)}>
               <XIcon />
             </Button>
           </CardHeader>
 
           <MessageScrollerProvider autoScroll defaultScrollPosition="end">
             <div className="flex-1 min-h-0 flex flex-col">
-              <MessageScroller className="flex-1">
-                <MessageScrollerViewport>
-                  <MessageScrollerContent className="gap-0 px-4 py-3">
-                    <ChatTranscript
-                      messages={thread?.messages ?? []}
-                      ownRole="user"
-                      labelFor={message => t(`support-chat:role_${message.authorRole}`)}
-                      avatarFor={message =>
-                        message.authorRole === 'ai' ? (
-                          <SparklesIcon className="size-4 text-muted-foreground" />
-                        ) : (
-                          <LifeBuoyIcon className="size-4 text-muted-foreground" />
-                        )
-                      }
-                      emptyText={t('support-chat:widget_empty')}
-                    />
-                  </MessageScrollerContent>
-                </MessageScrollerViewport>
-                <MessageScrollerButton />
-              </MessageScroller>
+              {isPending || messages.length === 0 ? (
+                <div className="flex flex-1 items-center justify-center p-4">
+                  {isPending ? (
+                    <Spinner className="size-6 text-muted-foreground" />
+                  ) : (
+                    <Empty className="border-0 p-0">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <LifeBuoyIcon />
+                        </EmptyMedia>
+                        <EmptyTitle>{t('widget_empty_title')}</EmptyTitle>
+                        <EmptyDescription>{t('widget_empty')}</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  )}
+                </div>
+              ) : (
+                <MessageScroller className="flex-1">
+                  <MessageScrollerViewport>
+                    <MessageScrollerContent className="gap-0 px-4 py-3">
+                      <ChatTranscript
+                        messages={messages}
+                        ownRole="user"
+                        nameFor={message => message.authorLogin ?? t(`role_${message.authorRole}`)}
+                        roleTagFor={message => ({ label: t(`role_${message.authorRole}`) })}
+                        avatarFor={message =>
+                          message.authorRole === 'ai' ? (
+                            <SparklesIcon className="size-4 text-muted-foreground" />
+                          ) : (
+                            <LifeBuoyIcon className="size-4 text-muted-foreground" />
+                          )
+                        }
+                        attachmentHrefFor={message => `${api.baseUrl}/support-chat/attachments/${message.id}`}
+                      />
+                    </MessageScrollerContent>
+                  </MessageScrollerViewport>
+                  <MessageScrollerButton />
+                </MessageScroller>
+              )}
 
-              <SupportChatComposer
-                value={draft}
-                onValueChange={setDraft}
-                onSubmit={() => send.mutate(draft.trim())}
+              <ChatComposer
+                placeholder={t('widget_placeholder')}
+                hint={thread?.status === 'closed' ? t('widget_closed') : ''}
                 pending={send.isPending}
-                placeholder={t('support-chat:widget_placeholder')}
-                submitLabel={t('support-chat:widget_send')}
-                hint={thread?.status === 'closed' ? t('support-chat:widget_closed') : ''}
+                onSubmit={input => send.mutateAsync(input).then(() => undefined)}
               />
             </div>
           </MessageScrollerProvider>

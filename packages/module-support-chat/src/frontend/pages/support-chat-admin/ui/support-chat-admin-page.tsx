@@ -7,14 +7,13 @@ import {
   MessageScrollerContent,
   MessageScrollerProvider,
   MessageScrollerViewport,
-  useMessageScroller,
 } from '@amplicada/platform-core/frontend/ui/message-scroller';
-import { Textarea } from '@amplicada/platform-core/frontend/ui/textarea';
-import { SendIcon, SparklesIcon } from 'lucide-react';
+import { SparklesIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { SupportThreadDto } from '../../../../contracts/index.js';
 import { supportChatAdminThreadQueryOptions, supportChatAdminThreadsQueryOptions } from '../../../lib/query-options.js';
 import { useSupportChatEvents } from '../../../lib/use-support-chat-events.js';
+import { ChatComposer, type ChatComposerInput } from '../../../widgets/chat-composer/index.js';
 import { ChatTranscript } from '../../../widgets/chat-transcript/index.js';
 
 function formatTime(value: string): string {
@@ -26,7 +25,6 @@ export function SupportChatAdminPage() {
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
   const markedReadRef = useRef<string | null>(null);
 
   useSupportChatEvents('admin');
@@ -43,11 +41,9 @@ export function SupportChatAdminPage() {
   };
 
   const reply = useMutation({
-    mutationFn: (body: string) => api.post<{ thread: SupportThreadDto }>(`/support-chat/admin/threads/${activeId}/messages`, { body }),
-    onSuccess: () => {
-      setDraft('');
-      invalidate();
-    },
+    mutationFn: (input: ChatComposerInput) =>
+      api.post<{ thread: SupportThreadDto }>(`/support-chat/admin/threads/${activeId}/messages`, input),
+    onSuccess: invalidate,
   });
 
   const changeStatus = useMutation({
@@ -83,7 +79,6 @@ export function SupportChatAdminPage() {
               type="button"
               onClick={() => {
                 setSelectedId(item.id);
-                setDraft('');
                 markedReadRef.current = null;
               }}
               className={cn(
@@ -136,27 +131,26 @@ export function SupportChatAdminPage() {
                       <ChatTranscript
                         messages={thread.messages}
                         ownRole="admin"
-                        labelFor={message => (message.authorRole === 'user' ? userLogin : t(`role_${message.authorRole}`))}
+                        nameFor={message => (message.authorRole === 'user' ? (message.authorLogin ?? userLogin) : null)}
+                        roleTagFor={message => (message.authorRole === 'user' ? { label: t('role_user'), variant: 'outline' } : null)}
                         avatarFor={message =>
                           message.authorRole === 'user' ? (
-                            <span className="text-xs font-medium">{userLogin.slice(0, 1).toUpperCase()}</span>
+                            <span className="text-xs font-medium">{(message.authorLogin ?? userLogin).slice(0, 1).toUpperCase()}</span>
                           ) : (
                             <SparklesIcon className="size-4 text-muted-foreground" />
                           )
                         }
+                        attachmentHrefFor={message => `${api.baseUrl}/support-chat/attachments/${message.id}`}
                       />
                     </MessageScrollerContent>
                   </MessageScrollerViewport>
                   <MessageScrollerButton />
                 </MessageScroller>
 
-                <AdminReplyForm
-                  value={draft}
-                  onValueChange={setDraft}
-                  onSubmit={() => reply.mutate(draft.trim())}
-                  pending={reply.isPending}
+                <ChatComposer
                   placeholder={t('admin_reply_placeholder')}
-                  submitLabel={t('admin_send')}
+                  pending={reply.isPending}
+                  onSubmit={input => reply.mutateAsync(input).then(() => undefined)}
                 />
               </div>
             </MessageScrollerProvider>
@@ -164,53 +158,5 @@ export function SupportChatAdminPage() {
         )}
       </section>
     </div>
-  );
-}
-
-interface AdminReplyFormProps {
-  value: string;
-  onValueChange: (value: string) => void;
-  onSubmit: () => void;
-  pending: boolean;
-  placeholder: string;
-  submitLabel: string;
-}
-
-function AdminReplyForm({ value, onValueChange, onSubmit, pending, placeholder, submitLabel }: AdminReplyFormProps) {
-  const { scrollToEnd } = useMessageScroller();
-
-  const submit = () => {
-    if (!value.trim() || pending) return;
-    onSubmit();
-    scrollToEnd();
-  };
-
-  return (
-    <form
-      className="shrink-0 border-t p-3 flex flex-col gap-2"
-      onSubmit={event => {
-        event.preventDefault();
-        submit();
-      }}
-    >
-      <Textarea
-        value={value}
-        rows={2}
-        placeholder={placeholder}
-        onChange={event => onValueChange(event.target.value)}
-        onKeyDown={event => {
-          if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            submit();
-          }
-        }}
-      />
-      <div className="flex justify-end">
-        <Button type="submit" size="sm" disabled={!value.trim() || pending}>
-          <SendIcon data-icon="inline-start" />
-          {submitLabel}
-        </Button>
-      </div>
-    </form>
   );
 }

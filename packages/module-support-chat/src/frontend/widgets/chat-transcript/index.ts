@@ -1,1 +1,2 @@
-export { ChatTranscript } from './ui/chat-transcript.js';
+export { formatBytes } from './lib/format.js';
+export { ChatTranscript, type ChatTranscriptRoleTag } from './ui/chat-transcript.js';

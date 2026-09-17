@@ -4,7 +4,7 @@ import type { SupportMessageDto } from '../../../../contracts/index.js';
 import { groupMessages } from './grouping.js';
 
 function message(id: string, authorRole: SupportMessageDto['authorRole']): SupportMessageDto {
-  return { id, authorRole, authorId: null, body: id, createdAt: new Date().toISOString() };
+  return { id, authorRole, authorId: null, authorLogin: null, body: id, attachment: null, createdAt: new Date().toISOString() };
 }
 
 test('одиночное сообщение — single', () => {
