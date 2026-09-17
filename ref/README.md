@@ -74,6 +74,7 @@
 | `plans/2026-09-14-module-lifecycle-review.md` | `draft` | Первый архитектурный разбор: зависимости и порядок загрузки, дефект shutdown, владение ресурсами и удаление модулей; предложения и следующие итерации, без изменения runtime |
 | `plans/2026-09-15-auth-node-method.md` | `implemented` | Метод аутентификации — свойство узла: `auth-node` + `GET /api/auth/context`, платформа редиректит на `loginUrl` метода и не содержит страницы логина; парольный логин — `/auth/password/login`, `/me` и `/logout` переехали в core |
 | `plans/2026-09-15-notifications/` | `implemented` | Уведомления: core-сервис `notification` + outbox с ретраями, канальный модуль `module-notification-email` (SMTP + адресная книга), админ-лог доставок `/admin/notifications`, Mailpit в dev, ADR-04. Подпланы `01`–`04` сделаны; разблокирует регистрацию/сброс пароля/2FA в auth |
+| `plans/2026-09-17-notification-contract-v2.md` | `draft` | Notification API v2: ломающий контракт под auth/workflow/learning/рассылки — `sendMany` с batch, шаблоны-документы ядра с code-fixtures (read-only), именованные отправители, `dedupeKey`, `scheduledAt`, вложения, `cc/bcc/replyTo/headers`; миграция `core/0007`, переезд типа из `module-admin`. Ждёт решения по открытым вопросам |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |
 | `plans/2026-07-13-frontend-core-reorg.md` | `implemented` | Реорганизация core/sdk (выполнен) |
 | `plans/2026-07-13-server-sessions.md` | `implemented` | Безопасные серверные сессии (Redis + @fastify/session + bcrypt) |
