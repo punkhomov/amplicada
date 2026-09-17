@@ -1,5 +1,5 @@
 import { identityUser } from '@amplicada/platform-core/backend';
-import { text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { integer, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { supportChatSchema } from './_schema.js';
 import { supportChatThreads } from './threads.js';
 
@@ -11,6 +11,10 @@ export const supportChatMessages = supportChatSchema.table('messages', {
   authorId: uuid('author_id').references(() => identityUser.id),
   authorRole: text('author_role').$type<'user' | 'admin' | 'ai'>().notNull(),
   body: text('body').notNull(),
+  attachmentKey: text('attachment_key'),
+  attachmentName: text('attachment_name'),
+  attachmentMime: text('attachment_mime'),
+  attachmentSize: integer('attachment_size'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -12,6 +12,8 @@ export {
 export type {
   SupportAdminThreadDetailDto,
   SupportAdminThreadDto,
+  SupportAttachmentDto,
+  SupportAttachmentUploadDto,
   SupportAuthorRole,
   SupportMessageDto,
   SupportThreadDto,

@@ -1,12 +1,26 @@
 export type SupportThreadStatus = 'open' | 'closed';
 export type SupportAuthorRole = 'user' | 'admin' | 'ai';
 
+export interface SupportAttachmentDto {
+  name: string;
+  mime: string;
+  size: number;
+}
+
+/** Ответ на загрузку файла: `key` — токен, который передаётся при отправке сообщения. */
+export interface SupportAttachmentUploadDto extends SupportAttachmentDto {
+  key: string;
+}
+
 export interface SupportMessageDto {
   id: string;
   /** null для ролей без пользователя-автора (ai). */
   authorId: string | null;
+  /** Логин автора; null, когда автора-пользователя нет (ai). */
+  authorLogin: string | null;
   authorRole: SupportAuthorRole;
   body: string;
+  attachment: SupportAttachmentDto | null;
   createdAt: string;
 }
 

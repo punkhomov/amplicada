@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   SUPPORT_CHAT_EVENTS,
   type SupportAdminThreadDto,
+  type SupportAttachmentUploadDto,
   type SupportAuthorRole,
   type SupportChatBackendService,
   type SupportChatEventPayload,
@@ -13,6 +14,7 @@ import {
 } from '../../contracts/index.js';
 import { type SupportChatMessageRow, supportChatMessages } from '../schemas/messages.js';
 import { type SupportChatThreadRow, supportChatThreads } from '../schemas/threads.js';
+import { isAttachmentKeyAllowed, userAttachmentPrefix } from './attachments.js';
 import { countUnread, previewText, statusAfterUserMessage } from './helpers.js';
 
 export class SupportChatError extends Error {
@@ -27,12 +29,19 @@ export class SupportChatError extends Error {
 
 export interface SupportThreadWithMessages {
   thread: SupportChatThreadRow;
-  messages: SupportChatMessageRow[];
+  messages: SupportChatMessageWithAuthor[];
 }
+
+/** Строка сообщения вместе с логином автора: имя показывается в подписи группы в UI. */
+export type SupportChatMessageWithAuthor = SupportChatMessageRow & { authorLogin: string | null };
 
 export interface SupportChatService extends SupportChatBackendService {
   getUserThread(userId: string): Promise<SupportThreadWithMessages | null>;
-  sendUserMessage(userId: string, body: string): Promise<SupportThreadWithMessages & { message: SupportChatMessageRow }>;
+  sendUserMessage(
+    userId: string,
+    body: string,
+    attachment?: SupportAttachmentUploadDto | null,
+  ): Promise<SupportThreadWithMessages & { message: SupportChatMessageWithAuthor }>;
   markUserRead(userId: string): Promise<void>;
   listThreads(): Promise<SupportAdminThreadDto[]>;
   getThread(threadId: string): Promise<SupportThreadWithMessages & { userLogin: string }>;
@@ -40,9 +49,12 @@ export interface SupportChatService extends SupportChatBackendService {
     threadId: string,
     adminId: string,
     body: string,
-  ): Promise<SupportThreadWithMessages & { message: SupportChatMessageRow }>;
+    attachment?: SupportAttachmentUploadDto | null,
+  ): Promise<SupportThreadWithMessages & { message: SupportChatMessageWithAuthor }>;
   markAdminRead(threadId: string): Promise<void>;
   setStatus(threadId: string, status: SupportThreadStatus): Promise<SupportThreadWithMessages>;
+  /** Вложение сообщения для скачивания; `null` — сообщения нет или файла в нём нет. */
+  getMessageAttachment(messageId: string): Promise<{ threadUserId: string; key: string; name: string; mime: string } | null>;
 }
 
 export interface CreateSupportChatServiceOptions {
@@ -52,19 +64,42 @@ export interface CreateSupportChatServiceOptions {
 
 type SupportChatTx = Parameters<Parameters<BackendDbService['transaction']>[0]>[0];
 
-export function toMessageDto(row: SupportChatMessageRow): SupportMessageDto {
+/**
+ * Прикладывать можно только объекты, загруженные участниками этого разговора:
+ * собственный префикс автора сообщения или префикс владельца треда (публичный
+ * сервис для AI тоже ходит от имени треда).
+ */
+function assertAttachmentAllowed(attachment: SupportAttachmentUploadDto, authorId: string | null, threadUserId: string): void {
+  const allowed = [threadUserId, ...(authorId ? [authorId] : [])].map(userAttachmentPrefix);
+  if (!isAttachmentKeyAllowed(attachment.key, allowed)) {
+    throw new SupportChatError('Attachment does not belong to this conversation', 400);
+  }
+}
+
+/** Общее подмножество `db` и транзакции: обоим нужен один и тот же select сообщений. */
+type MessageReader = Pick<BackendDbService, 'select'>;
+
+export function toMessageDto(message: SupportChatMessageWithAuthor): SupportMessageDto {
   return {
-    id: row.id,
-    authorId: row.authorId,
-    authorRole: row.authorRole,
-    body: row.body,
-    createdAt: row.createdAt.toISOString(),
+    id: message.id,
+    authorId: message.authorId,
+    authorLogin: message.authorLogin,
+    authorRole: message.authorRole,
+    body: message.body,
+    attachment: message.attachmentKey
+      ? {
+          name: message.attachmentName ?? 'file',
+          mime: message.attachmentMime ?? 'application/octet-stream',
+          size: message.attachmentSize ?? 0,
+        }
+      : null,
+    createdAt: message.createdAt.toISOString(),
   };
 }
 
 export function toThreadDto(
   thread: SupportChatThreadRow,
-  messages: SupportChatMessageRow[],
+  messages: SupportChatMessageWithAuthor[],
   readerRole: SupportAuthorRole,
 ): SupportThreadDto {
   const lastReadAt = readerRole === 'user' ? thread.userLastReadAt : thread.adminLastReadAt;
@@ -81,12 +116,15 @@ export function toThreadDto(
 export function createSupportChatService(options: CreateSupportChatServiceOptions): SupportChatService {
   const { db, publish } = options;
 
-  async function loadMessages(threadId: string): Promise<SupportChatMessageRow[]> {
-    return db
-      .select()
+  async function loadMessages(reader: MessageReader, threadId: string): Promise<SupportChatMessageWithAuthor[]> {
+    const rows = await reader
+      .select({ message: supportChatMessages, authorLogin: identityUser.login })
       .from(supportChatMessages)
+      .leftJoin(identityUser, eq(identityUser.id, supportChatMessages.authorId))
       .where(eq(supportChatMessages.threadId, threadId))
       .orderBy(asc(supportChatMessages.createdAt));
+
+    return rows.map(({ message, authorLogin }) => ({ ...message, authorLogin }));
   }
 
   async function loadThreadOrThrow(threadId: string) {
@@ -117,11 +155,23 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
     authorRole: SupportAuthorRole,
     authorId: string | null,
     body: string,
+    attachment: SupportAttachmentUploadDto | null,
     now: Date,
   ) {
+    if (attachment) assertAttachmentAllowed(attachment, authorId, thread.userId);
     const [message] = await tx
       .insert(supportChatMessages)
-      .values({ threadId: thread.id, authorId, authorRole, body, createdAt: now })
+      .values({
+        threadId: thread.id,
+        authorId,
+        authorRole,
+        body,
+        attachmentKey: attachment?.key ?? null,
+        attachmentName: attachment?.name ?? null,
+        attachmentMime: attachment?.mime ?? null,
+        attachmentSize: attachment?.size ?? null,
+        createdAt: now,
+      })
       .returning();
 
     const patch: Partial<SupportChatThreadRow> = { updatedAt: now };
@@ -133,13 +183,11 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
 
     const [updated] = await tx.update(supportChatThreads).set(patch).where(eq(supportChatThreads.id, thread.id)).returning();
 
-    const messages = await tx
-      .select()
-      .from(supportChatMessages)
-      .where(eq(supportChatMessages.threadId, thread.id))
-      .orderBy(asc(supportChatMessages.createdAt));
+    const messages = await loadMessages(tx, thread.id);
 
-    return { thread: updated, messages, message };
+    // Автор только что вставленного сообщения уже есть в выборке — заодно получает authorLogin.
+    const stored = messages.find(candidate => candidate.id === message.id) ?? { ...message, authorLogin: null };
+    return { thread: updated, messages, message: stored };
   }
 
   async function appendMessage(input: Parameters<SupportChatBackendService['appendMessage']>[0]): Promise<SupportMessageDto> {
@@ -147,7 +195,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
     const result = await db.transaction(async tx => {
       const [thread] = await tx.select().from(supportChatThreads).where(eq(supportChatThreads.id, input.threadId)).limit(1);
       if (!thread) throw new SupportChatError('Thread not found', 404);
-      return writeMessage(tx, thread, input.authorRole, input.authorId ?? null, input.body, now);
+      return writeMessage(tx, thread, input.authorRole, input.authorId ?? null, input.body, input.attachment ?? null, now);
     });
     emitMessage(result.thread, result.message);
     return toMessageDto(result.message);
@@ -160,17 +208,17 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
 
     async getThreadMessages(threadId) {
       const thread = await loadThreadOrThrow(threadId);
-      const messages = await loadMessages(thread.id);
+      const messages = await loadMessages(db, thread.id);
       return { threadId: thread.id, status: thread.status, messages: messages.map(toMessageDto) };
     },
 
     async getUserThread(userId) {
       const [thread] = await db.select().from(supportChatThreads).where(eq(supportChatThreads.userId, userId)).limit(1);
       if (!thread) return null;
-      return { thread, messages: await loadMessages(thread.id) };
+      return { thread, messages: await loadMessages(db, thread.id) };
     },
 
-    async sendUserMessage(userId, body) {
+    async sendUserMessage(userId, body, attachment) {
       const now = new Date();
       const result = await db.transaction(async tx => {
         const [existing] = await tx.select().from(supportChatThreads).where(eq(supportChatThreads.userId, userId)).limit(1);
@@ -183,7 +231,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
             .returning();
         }
 
-        return writeMessage(tx, thread, 'user', userId, body, now);
+        return writeMessage(tx, thread, 'user', userId, body, attachment ?? null, now);
       });
       emitMessage(result.thread, result.message);
       return result;
@@ -214,6 +262,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
         .selectDistinctOn([supportChatMessages.threadId], {
           threadId: supportChatMessages.threadId,
           body: supportChatMessages.body,
+          attachmentName: supportChatMessages.attachmentName,
           createdAt: supportChatMessages.createdAt,
         })
         .from(supportChatMessages)
@@ -242,7 +291,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
           status: row.status,
           updatedAt: row.updatedAt.toISOString(),
           unreadCount: unreadByThread.get(row.id) ?? 0,
-          lastMessagePreview: last ? previewText(last.body) : null,
+          lastMessagePreview: last ? previewText(last.body.trim() ? last.body : (last.attachmentName ?? '')) : null,
         };
       });
     },
@@ -250,15 +299,15 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
     async getThread(threadId) {
       const thread = await loadThreadOrThrow(threadId);
       const [user] = await db.select({ login: identityUser.login }).from(identityUser).where(eq(identityUser.id, thread.userId)).limit(1);
-      return { thread, messages: await loadMessages(thread.id), userLogin: user?.login ?? '' };
+      return { thread, messages: await loadMessages(db, thread.id), userLogin: user?.login ?? '' };
     },
 
-    async sendAdminMessage(threadId, adminId, body) {
+    async sendAdminMessage(threadId, adminId, body, attachment) {
       const now = new Date();
       const result = await db.transaction(async tx => {
         const [thread] = await tx.select().from(supportChatThreads).where(eq(supportChatThreads.id, threadId)).limit(1);
         if (!thread) throw new SupportChatError('Thread not found', 404);
-        return writeMessage(tx, thread, 'admin', adminId, body, now);
+        return writeMessage(tx, thread, 'admin', adminId, body, attachment ?? null, now);
       });
       emitMessage(result.thread, result.message);
       return result;
@@ -269,6 +318,28 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
       await db.update(supportChatThreads).set({ adminLastReadAt: new Date() }).where(eq(supportChatThreads.id, threadId));
     },
 
+    async getMessageAttachment(messageId) {
+      const [row] = await db
+        .select({
+          threadUserId: supportChatThreads.userId,
+          key: supportChatMessages.attachmentKey,
+          name: supportChatMessages.attachmentName,
+          mime: supportChatMessages.attachmentMime,
+        })
+        .from(supportChatMessages)
+        .innerJoin(supportChatThreads, eq(supportChatThreads.id, supportChatMessages.threadId))
+        .where(eq(supportChatMessages.id, messageId))
+        .limit(1);
+
+      if (!row?.key) return null;
+      return {
+        threadUserId: row.threadUserId,
+        key: row.key,
+        name: row.name ?? 'file',
+        mime: row.mime ?? 'application/octet-stream',
+      };
+    },
+
     async setStatus(threadId, status) {
       await loadThreadOrThrow(threadId);
       const [thread] = await db
@@ -276,7 +347,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
         .set({ status, updatedAt: new Date() })
         .where(eq(supportChatThreads.id, threadId))
         .returning();
-      const messages = await loadMessages(threadId);
+      const messages = await loadMessages(db, threadId);
       publish?.(SUPPORT_CHAT_EVENTS.THREAD_UPDATED, {
         threadId: thread.id,
         userId: thread.userId,
