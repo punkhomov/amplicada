@@ -19,7 +19,7 @@ interface SectionTab {
 
 const SECTION_TABS: SectionTab[] = [
   { id: 'data', labelKey: 'admin_tab_data', path: '/admin' },
-  { id: 'apps', labelKey: 'admin_tab_apps', path: '/admin/apps', disabled: true },
+  { id: 'apps', labelKey: 'admin_tab_apps', path: '/admin/apps' },
 ];
 
 function generateAvatarUrl(login: string): string {

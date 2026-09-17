@@ -7,6 +7,10 @@
 
   "admin_breadcrumb_root": "Админ",
 
+  "admin_apps_empty": "Пока нет ни одного приложения",
+  "admin_apps_empty_hint": "Приложения регистрируются модулями через сервис admin:apps.",
+  "admin_apps_not_found": "Приложение не найдено",
+
   "admin_modules_title": "Модули",
 
   "admin_storage_title": "Хранилище",

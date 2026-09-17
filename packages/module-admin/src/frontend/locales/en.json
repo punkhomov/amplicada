@@ -7,6 +7,10 @@
 
   "admin_breadcrumb_root": "Admin",
 
+  "admin_apps_empty": "No applications yet",
+  "admin_apps_empty_hint": "Modules register applications through the admin:apps service.",
+  "admin_apps_not_found": "Application not found",
+
   "admin_modules_title": "Modules",
 
   "admin_storage_title": "Storage",
