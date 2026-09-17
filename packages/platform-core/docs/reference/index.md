@@ -10,3 +10,4 @@ verified_commit: ce72875d
 | Подсистема | Файл |
 |---|---|
 | Вендоренный UI-кит (shadcn/ui) | [ui-kit.md](./ui-kit.md) |
+| Frontend: точки расширения | [frontend-extension-points.md](./frontend-extension-points.md) |
