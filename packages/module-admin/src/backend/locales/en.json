@@ -3,5 +3,17 @@
   "dashboard_topic_documents": "Documents",
   "dashboard_link_modules": "Modules",
   "dashboard_link_storage": "Storage",
-  "dashboard_link_notifications": "Notifications"
+  "dashboard_link_notifications": "Notifications",
+  "dashboard_link_notification_templates": "Notification templates",
+  "template_label": "Notification template",
+  "template_field_name": "Name",
+  "template_field_subject": "Subject",
+  "template_field_locale": "Locale",
+  "template_field_locale_help": "Optional: message locale for the recipient",
+  "template_locale_ru": "Русский",
+  "template_locale_en": "English",
+  "template_field_body": "Text (plain text)",
+  "template_field_html": "HTML",
+  "template_field_html_help": "When empty, only the plain text part is sent",
+  "template_field_updated": "Updated"
 }

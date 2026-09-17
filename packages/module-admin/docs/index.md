@@ -16,6 +16,7 @@ verified_commit: 61bed2d7
 | Сервисы и интеграции действий | [Справочник](./reference/composition.md) |
 | Режим «Приложения» (`admin:apps`, `/admin/apps`) | [Справочник](./reference/composition.md) |
 | Страница хранилища (`/admin/storage`, Explorer UI, операции, HTTP API, превью) | [Справочник](./reference/storage.md) |
+| Шаблоны уведомлений (`/admin/notification-template`, рассылка) | [Справочник](./reference/notification-templates.md) |
 | Frontend: интеграция; остальные страницы и слоты | [Справочник](./reference/composition.md); полное покрытие — нет |
 | HTTP API (кроме storage), env | — нет |
 | Схемы БД и миграции | — нет |
