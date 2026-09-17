@@ -1,11 +1,9 @@
-"use client"
-
 import * as React from "react"
+import { cn } from "cn"
 import useEmblaCarousel, {
   type UseEmblaCarouselType,
 } from "embla-carousel-react"
 
-import { cn } from "../lib/utils.js"
 import { Button } from "./button.js"
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 

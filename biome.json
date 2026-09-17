@@ -15,6 +15,7 @@
       "!!**/.turbo",
       "!!**/node_modules",
       "!!packages/platform-core/src/frontend/ui",
+      "!!packages/platform-core/src/frontend/hooks/use-mobile.ts",
       "!!.agents",
       "!!packages/learning-parser/fixtures"
     ]

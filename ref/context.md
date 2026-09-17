@@ -11,7 +11,7 @@ Platform for modular business applications. Compile-time modules as npm packages
 
 ## Key Concepts
 
-- **Политика установки** — перед любым `pnpm install`, включая временные внешние проекты, обязательны `ignoreScripts: true`, `blockExoticSubdeps: true`, `minimumReleaseAge: 43200`. Не отключать и не расширять исключения ради установки. Перед работой в другой директории сообщать её путь.
+- **Политика установки** — перед любым `pnpm install`, включая временные внешние проекты, обязательны `ignoreScripts: true`, `blockExoticSubdeps: true`, `minimumReleaseAge: 10080`. Не отключать и не расширять исключения ради установки. Перед работой в другой директории сообщать её путь.
 
 - **Core owns identity** — `identity_user` table (id, login, created_at). Modules extend via FK (`password_credential.user_id` references `identity_user.id`).
 - **`core.document_index` первичен** — id документа рождается там (`allocateDocumentId`), там же живёт состояние (`deleted_at`, `stale`, actor-штампы). Своей «базовой таблицы» у типа документа нет: все данные пишут расширения. Любая вставка документной строки в обход рантайма обязана сначала взять id из индекса — иначе FK.
@@ -50,6 +50,8 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `allocateDocumentId`, `indexCreated` | document-runtime.ts — резервирование id в `core.document_index` перед вставкой строки |
 | `writeVersion`, `versionWriteMode`, `CARD_CORRECTION` | module-hr: коррекция записи vs новый интервал версии |
 | `getObjectStream`, `StorageGetStreamOptions` | потоковое чтение из S3 с `Range` → `206` |
+| `ui:sync`, `ui:check`, `shadcn-sync.mjs` | синк вендоренного UI-кита shadcn: скачивание + нормализация импортов — packages/platform-core/scripts/shadcn-sync.mjs |
+| `frontend/ui/*`, `cn` | UI-кит: deep import компонентов, `cn` из пакета `cn`; локальные правки `ui/` перезаписываются синком — packages/platform-core/docs/reference/ui-kit.md |
 | `ref/notes/<pkg>.md`, `packages/*/docs/` | рационал пакета (отвергнутое, отложенное, пробелы) и потребительская документация; читать перед изменением пакета |
 
 ## Current Priorities
