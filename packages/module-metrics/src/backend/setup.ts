@@ -86,6 +86,7 @@ export const metricsModule: BackendModule = {
       recordMeasurement: (series, value) => buffer.record(series, value),
       sinks: sinkRegistry,
       logger,
+      eventBus: context.eventBus,
     });
     metricsService = service;
     context.services.register('metrics', service);
@@ -125,6 +126,7 @@ export const metricsModule: BackendModule = {
       await service.ensurePartitions();
       const dropped = await service.prune();
       if (dropped.length > 0) logger.info({ dropped }, 'Metrics partitions pruned');
+      await service.pruneAlertEvents(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
     });
 
     if (!app) return;
@@ -155,10 +157,12 @@ export const metricsModule: BackendModule = {
     if (taskCollectorDeps) unsubscribeTasks = createTaskCollector(taskCollectorDeps);
     flusher?.start();
     metricsService?.startSinks();
+    metricsService?.startAlerts();
   },
 
   async stop() {
     unsubscribeTasks?.();
+    await metricsService?.stopAlerts();
     await metricsService?.stopSinks();
     await flusher?.stop();
   },

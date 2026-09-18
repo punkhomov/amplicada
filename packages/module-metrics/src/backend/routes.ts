@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { BackendAuthService } from '@amplicada/platform-core/contracts/backend';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { METRIC_EVENT_KINDS, type MetricEventKind, type MetricsSettingsPatch, type SinkConfigPatch } from '../contracts/index.js';
+import {
+  type AlertRuleInput,
+  METRIC_EVENT_KINDS,
+  type MetricEventKind,
+  type MetricsSettingsPatch,
+  type SinkConfigPatch,
+} from '../contracts/index.js';
 import { type MetricsService, MetricsSettingsError, toEventDto } from './services/metrics-service.js';
 
 export interface MetricsRoutesDeps {
@@ -115,6 +121,49 @@ export function createMetricsRoutes(fastify: FastifyInstance, deps: MetricsRoute
       stepSeconds,
     };
   });
+
+  const alertError = (error: unknown, reply: FastifyReply) => {
+    if (error instanceof MetricsSettingsError) return reply.code(400).send({ error: error.message });
+    throw error;
+  };
+
+  fastify.get('/admin/alert-rules', { preHandler: requireUser }, async () => ({
+    rules: await deps.service.listAlertRules(),
+  }));
+
+  fastify.post('/admin/alert-rules', { preHandler: requireUser }, async (request, reply) => {
+    try {
+      return await deps.service.createAlertRule(request.body as AlertRuleInput);
+    } catch (error) {
+      return alertError(error, reply);
+    }
+  });
+
+  fastify.patch('/admin/alert-rules/:id', { preHandler: requireUser }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      return await deps.service.updateAlertRule(id, request.body as AlertRuleInput);
+    } catch (error) {
+      return alertError(error, reply);
+    }
+  });
+
+  fastify.delete('/admin/alert-rules/:id', { preHandler: requireUser }, async request => {
+    const { id } = request.params as { id: string };
+    return { deleted: await deps.service.deleteAlertRule(id) };
+  });
+
+  fastify.get('/admin/alerts', { preHandler: requireUser }, async () => ({
+    instances: await deps.service.listAlertInstances(),
+  }));
+
+  fastify.get('/admin/alert-events', { preHandler: requireUser }, async request => {
+    const query = request.query as { limit?: string };
+    const limit = query.limit ? Number.parseInt(query.limit, 10) : 50;
+    return { events: await deps.service.listAlertEvents(limit) };
+  });
+
+  fastify.post('/admin/alerts/evaluate', { preHandler: requireUser }, async () => deps.service.evaluateAlerts());
 
   fastify.get('/admin/sinks', { preHandler: requireUser }, async () => deps.service.listSinks());
 

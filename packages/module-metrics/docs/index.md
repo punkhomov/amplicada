@@ -23,7 +23,8 @@ verified_commit: 9e0cfb80
 диагностика: **ошибки** группируются в issues по fingerprint (стек + маршрут) со стеком
 примеров, **Web Vitals** считаются p75/p95 и раскладываются по рейтингам. Наружу события отдают
 **выходы** (webhook с HMAC-подписью, очередь с ретраями и DLQ, журнал доставки, CSV-экспорт);
-все выключены по умолчанию.
+все выключены по умолчанию. **Алерты** следят за порогами событий и измерений (pending →
+firing → resolved) и публикуют переходы в шину ядра.
 
 Осознанно не входит на текущем этапе: измерения (HTTP/SQL/задачи), Web Vitals и ошибки,
 воронки/retention, алерты, внешние выходы (Яндекс.Метрика, webhook, CSV), экспорт.
@@ -38,6 +39,7 @@ verified_commit: 9e0cfb80
 | Задачи | `metrics.maintenance` (партиции вперёд + retention), расписание — в админке | `src/backend/setup.ts` |
 | Бизнес-метрики | `metrics.emit`, extension point `metrics:definitions`, сервис `metrics:panels` | `src/backend/services/metrics-service.ts`, `src/frontend/lib/panel-registry.ts` |
 | Выходы | webhook, `metrics.outbox`, журнал доставки, CSV-экспорт | `src/backend/sinks/`, `migrations/0004_outputs.sql` |
+| Алерты | правила, состояния, история, evaluate-интервал | `src/backend/alerts/`, `migrations/0005_alerts.sql` |
 | Frontend | приложение админки `/admin/apps/metrics`, трекер на extension point `floating` | `src/frontend/setup.tsx` |
 | Технические коллекторы | `http:observer`, обёртка `pg-pool`, подписка на `TASK_EVENTS` | `src/backend/collectors/` |
 | Ошибки и Web Vitals | `error.frontend` + `web_vital.*`, issues, p75 карточки | `src/frontend/lib/{error-capture,vitals}.ts`, `src/backend/services/{error-fingerprint,web-vitals}.ts` |
@@ -75,6 +77,7 @@ verified_commit: 9e0cfb80
 | Интеграции и потребители | [reference/business-metrics.md](./reference/business-metrics.md) |
 | Ошибки и Web Vitals | [reference/errors-and-vitals.md](./reference/errors-and-vitals.md) |
 | Выходы (webhook, очередь, экспорт) | [reference/outputs.md](./reference/outputs.md) |
+| Алерты | [reference/alerts.md](./reference/alerts.md) |
 | Ограничения для потребителя | [explanation/architecture.md](./explanation/architecture.md#ограничения) |
 
 ## Freshness
@@ -88,4 +91,4 @@ verified_commit: 9e0cfb80
   бизнес-события поддержки (`thread.opened`, `message.sent`, `status_changed`),
   определения/сводки/серии, группировка ошибок (2 issue из 3 событий, шаблон с `<n>`),
   samples со стеком, p75 Web Vitals (LCP/CLS) с рейтингами, webhook-доставка (sent),
-  DLQ на 400, CSV-экспорт.
+  DLQ на 400, CSV-экспорт, алерты (firing после evaluate и auto-resolved по интервалу).

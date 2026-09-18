@@ -1,5 +1,16 @@
 export { moduleManifest } from './manifest.js';
 export type {
+  AlertCondition,
+  AlertEvaluationResultDto,
+  AlertEventDto,
+  AlertEventsDto,
+  AlertInstanceDto,
+  AlertInstancesDto,
+  AlertRuleDto,
+  AlertRuleInput,
+  AlertRulesDto,
+  AlertSeverity,
+  AlertTarget,
   ClientEventContext,
   ClientEventInput,
   CollectRequest,

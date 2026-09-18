@@ -27,6 +27,11 @@ order: 20
 | `GET` | `/api/metrics/errors` | требуется | Issues сгруппированных ошибок (`from`, `to`, `limit`) |
 | `GET` | `/api/metrics/errors/:fingerprint/samples` | требуется | Примеры ошибки (стек, контекст) |
 | `GET` | `/api/metrics/vitals` | требуется | p75/p95 и рейтинги Web Vitals |
+| `GET/POST` | `/api/metrics/admin/alert-rules` | требуется | Правила алертов |
+| `PATCH/DELETE` | `/api/metrics/admin/alert-rules/:id` | требуется | Изменение и удаление правила |
+| `GET` | `/api/metrics/admin/alerts` | требуется | Активные состояния алертов |
+| `GET` | `/api/metrics/admin/alert-events` | требуется | История срабатываний |
+| `POST` | `/api/metrics/admin/alerts/evaluate` | требуется | Немедленная проверка правил |
 | `GET/PATCH` | `/api/metrics/admin/sinks[/:id]` | требуется | Конфиги выходов и их изменение |
 | `POST` | `/api/metrics/admin/sinks/:id/test` | требуется | Тестовое сообщение через выход |
 | `GET` | `/api/metrics/admin/deliveries` | требуется | Журнал доставки |

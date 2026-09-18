@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { BackendDbService } from '@amplicada/platform-core/contracts/backend';
 import type {
+  AlertEvaluationResultDto,
+  AlertEventDto,
+  AlertInstanceDto,
+  AlertRuleDto,
+  AlertRuleInput,
+  AlertTarget,
   ClientEventInput,
   CollectResponse,
   MetricCatalogEntryDto,
@@ -23,11 +29,12 @@ import type {
   SlowQueryDto,
   SqlSummaryDto,
 } from '../../contracts/index.js';
+import { decideAlertState, isBreaching } from '../alerts/alert-evaluator.js';
 import type { CollectorConfig } from '../collectors/config.js';
 import type { SlowQueryInsert } from '../collectors/sql-collector.js';
-import type { MetricEventRow, MetricsSettingsRow, NewMetricEventRow, SinkConfigRow } from '../schemas/index.js';
+import type { AlertRuleRow, MetricEventRow, MetricsSettingsRow, NewMetricEventRow, SinkConfigRow } from '../schemas/index.js';
 import { OutboxDispatcher } from '../sinks/outbox-dispatcher.js';
-import type { MetricSink, SinkRegistry } from '../sinks/sink.js';
+import type { SinkRegistry } from '../sinks/sink.js';
 import { errorFingerprint } from './error-fingerprint.js';
 import { EventBuffer } from './event-buffer.js';
 import type { AggregatedMeasurement, MeasurementSeries } from './measurement-buffer.js';
@@ -76,6 +83,17 @@ export interface MetricsService {
   startSinks(): void;
   stopSinks(): Promise<void>;
   exportEventsCsv(input: { from: Date; to: Date; kind?: MetricEventKind; name?: string; limit?: number }): Promise<string>;
+  listAlertRules(): Promise<AlertRuleDto[]>;
+  createAlertRule(input: AlertRuleInput): Promise<AlertRuleDto>;
+  updateAlertRule(id: string, input: AlertRuleInput): Promise<AlertRuleDto>;
+  deleteAlertRule(id: string): Promise<boolean>;
+  listAlertInstances(): Promise<AlertInstanceDto[]>;
+  listAlertEvents(limit?: number): Promise<AlertEventDto[]>;
+  evaluateAlerts(now?: Date): Promise<AlertEvaluationResultDto>;
+  /** Удаление старых событий алертов (retention 30 дней). */
+  pruneAlertEvents(before: Date): Promise<number>;
+  startAlerts(): void;
+  stopAlerts(): Promise<void>;
   eventSeries(input: {
     name?: string;
     eventPrefix?: string;
@@ -180,11 +198,14 @@ export function createMetricsService({
   recordMeasurement,
   sinks,
   logger,
+  eventBus,
 }: {
   db: BackendDbService;
   pseudonymizer: Pseudonymizer;
   limiter: IngestRateLimiter;
   getDefinitions: () => MetricDefinition[];
+  /** Шина ядра: события алертов (`metrics.alert`) для будущих уведомлений. */
+  eventBus?: { emit(type: string, payload: unknown): void };
   /** Web Vitals дополнительно идут в измерительный конвейер (гистограммы). */
   recordMeasurement?: (series: MeasurementSeries, value: number) => void;
   /** Выходы наружу (webhook и т.п.) — опционально: без них очереди не наполняются. */
@@ -194,6 +215,54 @@ export function createMetricsService({
   const store = createPostgresMetricsStore(db);
   const eventBuffer = new EventBuffer();
   const dispatcher = sinks ? new OutboxDispatcher({ store, registry: sinks, logger: logger ?? { error: () => undefined } }) : null;
+  let alertTimer: ReturnType<typeof setInterval> | null = null;
+  let alertsRunning = false;
+
+  function toAlertRuleDto(row: AlertRuleRow): AlertRuleDto {
+    return {
+      id: row.id,
+      name: row.name,
+      enabled: row.enabled,
+      severity: row.severity,
+      target: row.target,
+      windowMs: row.windowMs,
+      condition: row.condition,
+      delivery: row.delivery,
+      labels: row.labels,
+      annotations: row.annotations,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  function validateAlertRule(input: AlertRuleInput): void {
+    if (typeof input.name !== 'string' || input.name.trim().length === 0) {
+      throw new MetricsSettingsError('name is required');
+    }
+    if (!input.target || typeof input.target.key !== 'string' || input.target.key.length === 0) {
+      throw new MetricsSettingsError('target.key is required');
+    }
+    if (input.target.kind !== 'event' && input.target.kind !== 'measurement') {
+      throw new MetricsSettingsError('target.kind must be event or measurement');
+    }
+    if (!Number.isInteger(input.windowMs) || input.windowMs < 60_000 || input.windowMs > 24 * 60 * 60 * 1000) {
+      throw new MetricsSettingsError('windowMs must be between 60000 and 86400000');
+    }
+    if (input.condition.kind === 'threshold' && !Number.isFinite(input.condition.value)) {
+      throw new MetricsSettingsError('condition.value must be a finite number');
+    }
+    if (input.severity && !['info', 'warning', 'critical'].includes(input.severity)) {
+      throw new MetricsSettingsError('severity must be info, warning or critical');
+    }
+  }
+
+  async function targetValue(target: AlertTarget, from: Date, to: Date): Promise<number> {
+    if (target.kind === 'event') return store.eventCount(target, from, to);
+    const summary = await store.measurementSummary(target, from, to);
+    if (target.metric === 'avg') return summary.avgMs;
+    if (target.metric === 'p95') return summary.p95Ms;
+    return summary.calls;
+  }
 
   function eventPayload(row: NewMetricEventRow): Record<string, unknown> {
     return {
@@ -462,6 +531,166 @@ export function createMetricsService({
         error: row.error,
         at: row.at.toISOString(),
       }));
+    },
+
+    async listAlertRules() {
+      const rows = await store.listAlertRules();
+      return rows.map(toAlertRuleDto);
+    },
+
+    async createAlertRule(input) {
+      validateAlertRule(input);
+      const created = await store.insertAlertRule({
+        id: randomUUID(),
+        name: input.name.trim(),
+        enabled: input.enabled ?? true,
+        severity: input.severity ?? 'warning',
+        target: input.target,
+        windowMs: input.windowMs,
+        condition: input.condition,
+        labels: input.labels ?? {},
+        annotations: input.annotations ?? {},
+      });
+      return toAlertRuleDto(created);
+    },
+
+    async updateAlertRule(id, input) {
+      validateAlertRule(input);
+      const updated = await store.updateAlertRule(id, {
+        name: input.name.trim(),
+        enabled: input.enabled ?? true,
+        severity: input.severity ?? 'warning',
+        target: input.target,
+        windowMs: input.windowMs,
+        condition: input.condition,
+        labels: input.labels ?? {},
+        annotations: input.annotations ?? {},
+      });
+      if (!updated) throw new MetricsSettingsError(`Unknown alert rule "${id}"`);
+      return toAlertRuleDto(updated);
+    },
+
+    async deleteAlertRule(id) {
+      return store.deleteAlertRule(id);
+    },
+
+    async listAlertInstances() {
+      const rows = await store.listAlertInstances();
+      return rows.map(row => ({
+        ruleId: row.ruleId,
+        ruleName: row.ruleName,
+        state: row.state === 'firing' ? 'firing' : 'pending',
+        value: row.value,
+        activeAt: row.activeAt.toISOString(),
+        lastEvalAt: row.lastEvalAt.toISOString(),
+      }));
+    },
+
+    async listAlertEvents(limit) {
+      const rows = await store.listAlertEvents(limit ?? 50);
+      return rows.map(row => ({
+        id: row.id,
+        ruleId: row.ruleId,
+        ruleName: row.ruleName,
+        state: row.state,
+        severity: row.severity,
+        value: row.value,
+        message: row.message,
+        at: row.at.toISOString(),
+      }));
+    },
+
+    async evaluateAlerts(now = new Date()) {
+      if (alertsRunning) return { evaluated: 0, firing: 0, resolved: 0 };
+      alertsRunning = true;
+      const result = { evaluated: 0, firing: 0, resolved: 0 };
+      try {
+        const rules = await store.listAlertRules(true);
+        for (const rule of rules) {
+          const from = new Date(now.getTime() - rule.windowMs);
+          const value = await targetValue(rule.target, from, now);
+          const breaching = rule.condition.kind === 'absence' ? value === 0 : isBreaching(value, rule.condition);
+          const existing = await store.getAlertInstance(rule.id, 'default');
+          const decision = decideAlertState(
+            existing
+              ? { state: existing.state === 'firing' ? 'firing' : 'pending', activeAt: existing.activeAt, value: existing.value ?? 0 }
+              : null,
+            breaching,
+            rule.condition.kind === 'threshold' ? (rule.condition.forMs ?? 0) : (rule.condition.forMs ?? 0),
+            now.getTime(),
+          );
+
+          if (decision.remove) {
+            await store.deleteAlertInstance(rule.id, 'default');
+          } else if (decision.state === 'resolved') {
+            await store.deleteAlertInstance(rule.id, 'default');
+            await store.insertAlertEvent({
+              ruleId: rule.id,
+              state: 'resolved',
+              severity: rule.severity,
+              value,
+              labels: rule.labels,
+              message: rule.annotations.summary ?? null,
+            });
+            eventBus?.emit('metrics.alert', {
+              ruleId: rule.id,
+              name: rule.name,
+              state: 'resolved',
+              severity: rule.severity,
+              value,
+            });
+            result.resolved += 1;
+          } else {
+            await store.upsertAlertInstance({
+              ruleId: rule.id,
+              fingerprint: 'default',
+              state: decision.state,
+              value,
+              labels: rule.labels,
+              activeAt: existing?.activeAt ?? now,
+              lastEvalAt: now,
+              resolvedAt: null,
+            });
+            if (decision.emit === 'alert') {
+              await store.insertAlertEvent({
+                ruleId: rule.id,
+                state: 'firing',
+                severity: rule.severity,
+                value,
+                labels: rule.labels,
+                message: rule.annotations.summary ?? null,
+              });
+              eventBus?.emit('metrics.alert', {
+                ruleId: rule.id,
+                name: rule.name,
+                state: 'firing',
+                severity: rule.severity,
+                value,
+              });
+              result.firing += 1;
+            }
+          }
+          result.evaluated += 1;
+        }
+        return result;
+      } finally {
+        alertsRunning = false;
+      }
+    },
+
+    async pruneAlertEvents(before) {
+      return store.pruneAlertEvents(before);
+    },
+
+    startAlerts() {
+      if (alertTimer) return;
+      alertTimer = setInterval(() => void this.evaluateAlerts().catch(() => undefined), 60_000);
+      alertTimer.unref?.();
+    },
+
+    async stopAlerts() {
+      if (alertTimer) clearInterval(alertTimer);
+      alertTimer = null;
     },
 
     async dispatchOutbox() {

@@ -22,6 +22,7 @@ import {
   metricsQueryKeys,
   metricsSettingsQueryOptions,
 } from '../../../lib/query-options.js';
+import { AlertsTab } from './alerts-tab.js';
 import { BusinessTab } from './business-tab.js';
 import { DeliveryTab } from './delivery-tab.js';
 import { ErrorsTab } from './errors-tab.js';
@@ -108,6 +109,7 @@ export function MetricsAdminPage() {
             <TabsTrigger value="business">{t('tab_business')}</TabsTrigger>
             <TabsTrigger value="panels">{t('tab_panels')}</TabsTrigger>
             <TabsTrigger value="delivery">{t('tab_delivery')}</TabsTrigger>
+            <TabsTrigger value="alerts">{t('tab_alerts')}</TabsTrigger>
             <TabsTrigger value="catalog">{t('tab_catalog')}</TabsTrigger>
             <TabsTrigger value="settings">{t('tab_settings')}</TabsTrigger>
           </TabsList>
@@ -203,6 +205,10 @@ export function MetricsAdminPage() {
 
           <TabsContent value="panels">
             <PanelsTab api={api} period={period} onPeriodChange={setPeriod} />
+          </TabsContent>
+
+          <TabsContent value="alerts">
+            <AlertsTab api={api} />
           </TabsContent>
 
           <TabsContent value="delivery">

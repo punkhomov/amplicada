@@ -1,4 +1,6 @@
 export { metricsSchema } from './_schema.js';
+export type { AlertEventRow, AlertInstanceRow, AlertRuleRow } from './alerts.js';
+export { metricsAlertEvents, metricsAlertInstances, metricsAlertRules } from './alerts.js';
 export type { ErrorIssueRow } from './error-issues.js';
 export { metricsErrorIssues } from './error-issues.js';
 export type { MetricEventRow, NewMetricEventRow } from './events.js';

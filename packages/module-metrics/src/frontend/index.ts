@@ -24,6 +24,9 @@ export { metricsPanelsService } from './lib/panel-registry.js';
 export type { MetricsPeriod } from './lib/query-options.js';
 export {
   METRICS_PERIODS,
+  metricsAlertEventsQueryOptions,
+  metricsAlertInstancesQueryOptions,
+  metricsAlertRulesQueryOptions,
   metricsCatalogQueryOptions,
   metricsContextQueryOptions,
   metricsDefinitionsQueryOptions,

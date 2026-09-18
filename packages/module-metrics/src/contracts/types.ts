@@ -146,6 +146,85 @@ export interface MetricPanel {
   aggregate?: 'count';
 }
 
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+
+/** Что мониторит правило: событие или измерение (роут/SQL/задача/витал). */
+export interface AlertTarget {
+  kind: 'event' | 'measurement';
+  key: string;
+  metric?: 'count' | 'avg' | 'p95';
+  /** Фильтры: `route`, `module`, `actor_kind`, `status_class` (измерения) или `attributes.<key>`. */
+  filters?: Record<string, string>;
+}
+
+export type AlertCondition =
+  | { kind: 'threshold'; op: 'gt' | 'gte' | 'lt' | 'lte'; value: number; forMs?: number }
+  | { kind: 'absence'; forMs?: number };
+
+export interface AlertRuleDto {
+  id: string;
+  name: string;
+  enabled: boolean;
+  severity: AlertSeverity;
+  target: AlertTarget;
+  windowMs: number;
+  condition: AlertCondition;
+  delivery: { eventBus?: boolean };
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertRuleInput {
+  name: string;
+  enabled?: boolean;
+  severity?: AlertSeverity;
+  target: AlertTarget;
+  windowMs: number;
+  condition: AlertCondition;
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+}
+
+export interface AlertRulesDto {
+  rules: AlertRuleDto[];
+}
+
+export interface AlertInstanceDto {
+  ruleId: string;
+  ruleName: string;
+  state: 'pending' | 'firing';
+  value: number | null;
+  activeAt: string;
+  lastEvalAt: string;
+}
+
+export interface AlertInstancesDto {
+  instances: AlertInstanceDto[];
+}
+
+export interface AlertEventDto {
+  id: number;
+  ruleId: string;
+  ruleName: string;
+  state: 'firing' | 'resolved';
+  severity: AlertSeverity;
+  value: number | null;
+  message: string | null;
+  at: string;
+}
+
+export interface AlertEventsDto {
+  events: AlertEventDto[];
+}
+
+export interface AlertEvaluationResultDto {
+  evaluated: number;
+  firing: number;
+  resolved: number;
+}
+
 export interface SinkConfigDto {
   id: string;
   /** i18n-ключ заголовка выхода (из реестра sink'ов). */

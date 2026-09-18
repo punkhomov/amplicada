@@ -1,5 +1,8 @@
 import type { ApiClient } from '@amplicada/platform-core/frontend';
 import type {
+  AlertEventsDto,
+  AlertInstancesDto,
+  AlertRulesDto,
   ErrorIssuesDto,
   ErrorSamplesDto,
   MetricDefinition,
@@ -27,6 +30,9 @@ export const metricsQueryKeys = {
   routes: (period: MetricsPeriod) => ['metrics', 'routes', period] as const,
   sql: (period: MetricsPeriod) => ['metrics', 'sql', period] as const,
   sinks: ['metrics', 'sinks'] as const,
+  alertRules: ['metrics', 'alert-rules'] as const,
+  alertInstances: ['metrics', 'alert-instances'] as const,
+  alertEvents: ['metrics', 'alert-events'] as const,
   deliveries: (sinkId: string) => ['metrics', 'deliveries', sinkId] as const,
   errors: (period: MetricsPeriod) => ['metrics', 'errors', period] as const,
   errorSamples: (fingerprint: string) => ['metrics', 'error-samples', fingerprint] as const,
@@ -49,6 +55,30 @@ const PERIOD_MS: Record<MetricsPeriod, number> = {
 
 function periodRange(period: MetricsPeriod, now = Date.now()): { from: string; to: string } {
   return { from: new Date(now - PERIOD_MS[period]).toISOString(), to: new Date(now).toISOString() };
+}
+
+export function metricsAlertRulesQueryOptions(api: ApiClient) {
+  return {
+    queryKey: metricsQueryKeys.alertRules,
+    queryFn: () => api.get<AlertRulesDto>('/metrics/admin/alert-rules'),
+    refetchInterval: 30_000,
+  };
+}
+
+export function metricsAlertInstancesQueryOptions(api: ApiClient) {
+  return {
+    queryKey: metricsQueryKeys.alertInstances,
+    queryFn: () => api.get<AlertInstancesDto>('/metrics/admin/alerts'),
+    refetchInterval: 15_000,
+  };
+}
+
+export function metricsAlertEventsQueryOptions(api: ApiClient) {
+  return {
+    queryKey: metricsQueryKeys.alertEvents,
+    queryFn: () => api.get<AlertEventsDto>('/metrics/admin/alert-events?limit=30'),
+    refetchInterval: 30_000,
+  };
 }
 
 export function metricsSinksQueryOptions(api: ApiClient) {

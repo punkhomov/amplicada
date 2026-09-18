@@ -55,7 +55,13 @@ webhook-адаптер (HMAC-подпись, таймаут, классифик�
 `metrics.outbox` с диспетчером (батчи, backoff 30 с → 1 ч, 6 попыток, DLQ), журнал
 `metrics.sink_deliveries`, API `admin/sinks|deliveries|outbox/dispatch`, CSV-экспорт событий
 и вкладка «Доставка». Все выходы выключены по умолчанию. Осталось по этапу: адаптер
-Яндекс.Метрики (Measurement Protocol + Offline Conversions) и алерты-правила.
+Яндекс.Метрики (Measurement Protocol + Offline Conversions).
+
+**Обновление 2026-09-18 (этап 05, часть 2):** алерты. Правила (порог/отсутствие данных) по
+событиям и измерениям с фильтрами, чистая машина состояний pending → firing → resolved
+(`alert-evaluator`), хранение состояний и истории, публикация переходов в шину ядра
+(`metrics.alert`) для будущего notification, ручной и интервальный (60 с) прогон, вкладка
+«Алерты». Ограничения: одна серия на правило, без silences/anomaly/burn-rate.
 Рационал — `ref/notes/module-metrics.md`.
 
 Зонтичная папка по модулю метрик (`module-metrics`). Исследование возможности и направления:

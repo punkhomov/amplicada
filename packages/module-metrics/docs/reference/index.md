@@ -16,4 +16,5 @@ order: 30
 | [Бизнес-метрики](./business-metrics.md) | `emit`, определения, панели модулей |
 | [Ошибки и Web Vitals](./errors-and-vitals.md) | Issues, группировка, p75 метрик |
 | [Выходы](./outputs.md) | Webhook, очередь доставки, DLQ, CSV-экспорт |
+| [Алерты](./alerts.md) | Правила, состояния pending/firing/resolved, история |
 | [Хранение и настройки](./settings.md) | Таблицы, поля настроек, задача обслуживания, env |

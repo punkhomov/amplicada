@@ -1,10 +1,16 @@
 import type { BackendDbService } from '@amplicada/platform-core/contracts/backend';
 import { and, count, desc, eq, gte, ilike, inArray, lt, max, min, type SQL, sql } from 'drizzle-orm';
-import type { MetricCatalogEntryDto, MetricEventKind } from '../../contracts/index.js';
+import type { AlertTarget, MetricCatalogEntryDto, MetricEventKind } from '../../contracts/index.js';
 import {
+  type AlertEventRow,
+  type AlertInstanceRow,
+  type AlertRuleRow,
   type ErrorIssueRow,
   type MetricEventRow,
   type MetricsSettingsRow,
+  metricsAlertEvents,
+  metricsAlertInstances,
+  metricsAlertRules,
   metricsErrorIssues,
   metricsEvents,
   metricsOutbox,
@@ -85,6 +91,12 @@ export interface SinkConfigPatchRow {
   mapping?: Record<string, unknown>;
 }
 
+export interface MeasurementAlertSummary {
+  calls: number;
+  avgMs: number;
+  p95Ms: number;
+}
+
 export interface OutboxEnqueueRow {
   sinkId: string;
   itemKind: string;
@@ -150,6 +162,160 @@ export function createPostgresMetricsStore(db: BackendDbService) {
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(metricsEvents.occurredAt))
         .limit(limit);
+    },
+
+    // --- Алерты: правила, состояния, история ---
+
+    async listAlertRules(enabledOnly = false): Promise<AlertRuleRow[]> {
+      const query = db.select().from(metricsAlertRules).orderBy(desc(metricsAlertRules.createdAt));
+      if (enabledOnly) return query.where(eq(metricsAlertRules.enabled, true));
+      return query;
+    },
+
+    async getAlertRule(id: string): Promise<AlertRuleRow | undefined> {
+      const [row] = await db.select().from(metricsAlertRules).where(eq(metricsAlertRules.id, id)).limit(1);
+      return row;
+    },
+
+    async insertAlertRule(row: typeof metricsAlertRules.$inferInsert): Promise<AlertRuleRow> {
+      const [created] = await db.insert(metricsAlertRules).values(row).returning();
+      return created;
+    },
+
+    async updateAlertRule(id: string, patch: Partial<typeof metricsAlertRules.$inferInsert>): Promise<AlertRuleRow | undefined> {
+      const [row] = await db
+        .update(metricsAlertRules)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(metricsAlertRules.id, id))
+        .returning();
+      return row;
+    },
+
+    async deleteAlertRule(id: string): Promise<boolean> {
+      const deleted = await db.delete(metricsAlertRules).where(eq(metricsAlertRules.id, id)).returning({ id: metricsAlertRules.id });
+      return deleted.length > 0;
+    },
+
+    async listAlertInstances(): Promise<(AlertInstanceRow & { ruleName: string })[]> {
+      const rows = await db
+        .select({ instance: metricsAlertInstances, ruleName: metricsAlertRules.name })
+        .from(metricsAlertInstances)
+        .innerJoin(metricsAlertRules, eq(metricsAlertRules.id, metricsAlertInstances.ruleId))
+        .orderBy(desc(metricsAlertInstances.activeAt));
+      return rows.map(row => ({ ...row.instance, ruleName: row.ruleName }));
+    },
+
+    async getAlertInstance(ruleId: string, fingerprint: string): Promise<AlertInstanceRow | undefined> {
+      const [row] = await db
+        .select()
+        .from(metricsAlertInstances)
+        .where(and(eq(metricsAlertInstances.ruleId, ruleId), eq(metricsAlertInstances.fingerprint, fingerprint)))
+        .limit(1);
+      return row;
+    },
+
+    async upsertAlertInstance(row: typeof metricsAlertInstances.$inferInsert): Promise<void> {
+      await db
+        .insert(metricsAlertInstances)
+        .values(row)
+        .onConflictDoUpdate({
+          target: [metricsAlertInstances.ruleId, metricsAlertInstances.fingerprint],
+          set: {
+            state: row.state,
+            value: row.value,
+            labels: row.labels,
+            lastEvalAt: row.lastEvalAt,
+            activeAt: row.activeAt,
+            resolvedAt: null,
+          },
+        });
+    },
+
+    async deleteAlertInstance(ruleId: string, fingerprint: string): Promise<void> {
+      await db
+        .delete(metricsAlertInstances)
+        .where(and(eq(metricsAlertInstances.ruleId, ruleId), eq(metricsAlertInstances.fingerprint, fingerprint)));
+    },
+
+    async insertAlertEvent(row: typeof metricsAlertEvents.$inferInsert): Promise<void> {
+      await db.insert(metricsAlertEvents).values(row);
+    },
+
+    async listAlertEvents(limit = 50): Promise<(AlertEventRow & { ruleName: string })[]> {
+      const rows = await db
+        .select({ event: metricsAlertEvents, ruleName: metricsAlertRules.name })
+        .from(metricsAlertEvents)
+        .innerJoin(metricsAlertRules, eq(metricsAlertRules.id, metricsAlertEvents.ruleId))
+        .orderBy(desc(metricsAlertEvents.at))
+        .limit(Math.min(Math.max(limit, 1), 200));
+      return rows.map(row => ({ ...row.event, ruleName: row.ruleName }));
+    },
+
+    async pruneAlertEvents(before: Date): Promise<number> {
+      const deleted = await db.delete(metricsAlertEvents).where(lt(metricsAlertEvents.at, before)).returning({ id: metricsAlertEvents.id });
+      return deleted.length;
+    },
+
+    /** Значение цели за окно: число событий по имени (с фильтрами). */
+    async eventCount(target: AlertTarget, from: Date, to: Date): Promise<number> {
+      const conditions: SQL[] = [eq(metricsEvents.name, target.key), gte(metricsEvents.occurredAt, from), lt(metricsEvents.occurredAt, to)];
+      for (const [key, value] of Object.entries(target.filters ?? {})) {
+        if (key === 'route') conditions.push(eq(metricsEvents.route, value));
+        else if (key === 'module') conditions.push(eq(metricsEvents.module, value));
+        else if (key === 'actor_kind') conditions.push(eq(metricsEvents.actorKind, value));
+        else if (key.startsWith('attributes.')) {
+          conditions.push(sql`${metricsEvents.attributes}->>${key.slice('attributes.'.length)} = ${value}`);
+        }
+      }
+      const [row] = await db
+        .select({ value: count() })
+        .from(metricsEvents)
+        .where(and(...conditions));
+      return Number(row?.value ?? 0);
+    },
+
+    /** Сводка измерения за окно: calls, avg и p95 (из гистограмм), значения в мс. */
+    async measurementSummary(target: AlertTarget, from: Date, to: Date): Promise<MeasurementAlertSummary> {
+      const dimFilters = Object.entries(target.filters ?? {}).map(([key, value]) => sql`and s.dims->>${key} = ${value}`);
+
+      const totals = await db.execute(sql`
+        select coalesce(sum(p.count), 0)::bigint as calls,
+               coalesce(sum(p.sum), 0) as total,
+               coalesce(max(s.unit), 's') as unit
+        from metrics.points p
+        join metrics.series s on s.id = p.series_id
+        where s.instrument = ${target.key} and p.bucket >= ${from} and p.bucket < ${to} ${dimFilters}
+      `);
+      const totalRow = (totals.rows as { calls: string; total: number; unit: string }[])[0];
+      const calls = Number(totalRow?.calls ?? 0);
+      const total = Number(totalRow?.total ?? 0);
+      const toMs = totalRow?.unit === 'ms' || totalRow?.unit === '1' ? 1 : 1000;
+
+      const histogram = await db.execute(sql`
+        select (b.idx - 1)::int as idx, sum((b.value)::bigint)::bigint as count
+        from metrics.points p
+        join metrics.series s on s.id = p.series_id
+        cross join lateral jsonb_array_elements_text(p.histogram->'bucketCounts') with ordinality as b(value, idx)
+        where s.instrument = ${target.key} and p.bucket >= ${from} and p.bucket < ${to} ${dimFilters}
+        group by 1
+      `);
+      const boundsResult = await db.execute(sql`
+        select boundaries from metrics.series
+        where instrument = ${target.key} and boundaries is not null
+        limit 1
+      `);
+      const boundaries = (boundsResult.rows as { boundaries: number[] }[])[0]?.boundaries ?? LATENCY_BOUNDARIES_SECONDS;
+      const merged = createHistogram(boundaries);
+      for (const row of histogram.rows as { idx: number; count: string }[]) {
+        const index = Number(row.idx);
+        if (index >= 0 && index < merged.bucketCounts.length) merged.bucketCounts[index] += Number(row.count);
+      }
+
+      return {
+        calls,
+        avgMs: calls > 0 ? (total / calls) * toMs : 0,
+        p95Ms: (percentileFromHistogram(merged, 0.95) ?? 0) * toMs,
+      };
     },
 
     // --- Выходы: конфиги, очередь, доставки ---
