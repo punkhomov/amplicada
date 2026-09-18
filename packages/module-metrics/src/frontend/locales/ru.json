@@ -178,5 +178,6 @@
   "health_alerts": "Алерты",
   "health_alerts_hint": "firing / pending",
   "health_hint": "Счётчики приёма — с момента старта процесса; объёмы данных и очередь — из БД. Приблизительные строки берутся из статистики Postgres.",
-  "health_tables": "Таблицы"
+  "health_tables": "Таблицы",
+  "settings_sample_click_hint": "Собираются только клики по элементам с data-metrics"
 }

@@ -116,6 +116,8 @@ export function MyThreadPage() {
           <Button
             size="sm"
             variant={thread.status === 'closed' ? 'outline' : 'secondary'}
+            data-metrics="ui.click.support_status_set"
+            data-metrics-status={thread.status === 'closed' ? 'open' : 'closed'}
             disabled={setStatus.isPending}
             onClick={() => setStatus.mutate(thread.status === 'closed' ? 'open' : 'closed')}
           >

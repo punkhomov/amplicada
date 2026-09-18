@@ -65,7 +65,7 @@ export function MyThreadsPage() {
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-6 overflow-y-auto px-6 py-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">{t('portal_title')}</h1>
-        <Button onClick={() => navigate('/support/new')}>
+        <Button data-metrics="ui.click.support_new_request" onClick={() => navigate('/support/new')}>
           <PlusIcon data-icon="inline-start" />
           {t('portal_new')}
         </Button>
@@ -89,7 +89,7 @@ export function MyThreadsPage() {
             <EmptyDescription>{t('portal_empty')}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={() => navigate('/support/new')}>
+            <Button data-metrics="ui.click.support_new_request" onClick={() => navigate('/support/new')}>
               <PlusIcon data-icon="inline-start" />
               {t('portal_new')}
             </Button>

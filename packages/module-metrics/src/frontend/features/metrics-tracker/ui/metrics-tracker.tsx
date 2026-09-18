@@ -1,7 +1,7 @@
 import { frontendErrors, useApiClient, useQuery } from '@amplicada/platform-core/frontend';
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { extractClickAttributes } from '../../../lib/clicks.js';
+import { extractClickAttributes, isValidMetricEventName } from '../../../lib/clicks.js';
 import { errorEventFromUnknown } from '../../../lib/error-capture.js';
 import { detectMetricsOptOut } from '../../../lib/optout.js';
 import { metricsContextQueryOptions } from '../../../lib/query-options.js';
@@ -9,8 +9,6 @@ import { chunkEvents, DEFAULT_FLUSH_INTERVAL_MS, MetricsQueue } from '../../../l
 import { normalizeRoute } from '../../../lib/route.js';
 import { currentSessionId } from '../../../lib/session.js';
 import { observeWebVitals } from '../../../lib/vitals.js';
-
-const EVENT_NAME_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
 
 function sendBatch(chunk: unknown[], viaBeacon: boolean): void {
   const body = JSON.stringify({ events: chunk });
@@ -100,7 +98,7 @@ export function MetricsTracker() {
     const onClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target.closest('[data-metrics]') : null;
       const name = target?.getAttribute('data-metrics');
-      if (!target || !name || !EVENT_NAME_RE.test(name)) return;
+      if (!target || !isValidMetricEventName(name)) return;
       if (sampleClickRate <= 0 || Math.random() > sampleClickRate) return;
       queueRef.current?.push({
         id: crypto.randomUUID(),

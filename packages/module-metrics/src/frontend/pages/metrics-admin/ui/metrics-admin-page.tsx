@@ -305,7 +305,10 @@ export function MetricsAdminPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm">{t('settings_sample_click')}</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm">{t('settings_sample_click')}</span>
+                    <span className="text-xs text-muted-foreground">{t('settings_sample_click_hint')}</span>
+                  </div>
                   <Input
                     className="w-28"
                     type="number"

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { extractClickAttributes } from './clicks.js';
+import { extractClickAttributes, isValidMetricEventName } from './clicks.js';
 
 test('собирает только data-metrics-* и обрезает значения', () => {
   const attributes = extractClickAttributes([
@@ -12,6 +12,14 @@ test('собирает только data-metrics-* и обрезает знач�
   assert.deepEqual(Object.keys(attributes).sort(), ['format', 'long']);
   assert.equal(attributes.format, 'csv');
   assert.equal(attributes.long.length, 256);
+});
+
+test('имена событий: только точечная нотация в lower_snake', () => {
+  assert.equal(isValidMetricEventName('ui.click.support_send'), true);
+  assert.equal(isValidMetricEventName('ui.click'), true);
+  assert.equal(isValidMetricEventName('singleword'), false);
+  assert.equal(isValidMetricEventName('Bad.Name'), false);
+  assert.equal(isValidMetricEventName(null), false);
 });
 
 test('пустой ключ и слишком длинный ключ игнорируются', () => {

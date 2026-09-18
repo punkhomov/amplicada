@@ -178,5 +178,6 @@
   "health_alerts": "Alerts",
   "health_alerts_hint": "firing / pending",
   "health_hint": "Ingest counters are since process start; data volumes and queue come from the DB. Approximate rows come from Postgres statistics.",
-  "health_tables": "Tables"
+  "health_tables": "Tables",
+  "settings_sample_click_hint": "Only clicks on elements with data-metrics are collected"
 }

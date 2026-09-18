@@ -35,7 +35,7 @@ order: 30
 | `enabled` | boolean | `true` | — |
 | `retentionEventsDays` | integer | `30` | 1–3650 |
 | `samplePageviewRate` | number | `1` | 0–1 |
-| `sampleClickRate` | number | `0.1` | 0–1 |
+| `sampleClickRate` | number | `1` | 0–1 |
 | `ingestEventsPerMinute` | integer | `600` | 1–100000 |
 | `retentionPointsDays` | integer | `30` | 1–3650 |
 | `slowSqlThresholdMs` | integer | `1000` | 1–600000 |
