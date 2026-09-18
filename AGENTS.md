@@ -15,6 +15,13 @@
 - All packages build with bare `tsc`. Only `apps/web` uses Vite.
 - All packages extend root `tsconfig.json` with `"extends": "../../tsconfig.json"`.
 
+## Dev Workflow
+- **Перед работой над фичей останови dev**: `pkill -f "[t]urbo dev"; pkill -f "[v]ite/bin/vite.js"; pkill -f "[t]sx --watch"` (bracket-трюк обязателен, иначе pkill убивает свой же шелл).
+- **После завершения работы подними dev и оставь рабочим** для пользователя:
+  `setsid nohup pnpm dev > /tmp/opencode/dev.log 2>&1 < /dev/null & disown`
+- Проверка: `curl -s -o /dev/null -w "%{http_code}" http://localhost:5173/` (web) и `http://localhost:3000/` (api).
+- Инфра (postgres/redis/seaweedfs): `pnpm infra:up` (docker compose, файл `docker-compose.infra.yaml`).
+
 ## Package Structure
 
 Every package shares the same layout:
