@@ -31,13 +31,27 @@ order: 10
 ## Таксономия имён
 
 - `page.*` — просмотры (`page.view`), эмитит клиентский трекер.
-- `ui.*` — интерфейсные события; зарезервировано на этапы 01–02.
+- `ui.*` — клики по элементам с `data-metrics` (см. ниже), эмитит клиентский трекер.
 - `error.*`, `web_vital.*` — этап 04.
 - `<module>.*` — бизнес-события модулей (`support.thread.opened`), этап 03.
 - Значения не кодируются в имя: `error.frontend` + `attributes['error.type']`, а не
   `error.frontend.TypeError`.
 
 Правила и отвергнутые альтернативы — `ref/notes/module-metrics.md`.
+
+## Клики `ui.*` через `data-metrics`
+
+Трекер слушает клики в capture-фазе и реагирует только на элементы с атрибутом
+`data-metrics` — имя события целиком (Autocapture всего DOM не используется). Дополнительные
+`data-metrics-*`-атрибуты попадают в `attributes`, плюс всегда есть `element` (тег).
+
+```html
+<button data-metrics="ui.click.export" data-metrics-format="csv">Экспорт</button>
+```
+
+Даст событие `ui.click.export` с `attributes = { element: 'button', format: 'csv' }`. Доля
+таких событий регулируется настройкой `sampleClickRate` (по умолчанию 0.1); в событии
+сохраняется фактическая `sampling.rate`. Текст элемента не собирается.
 
 ## Дедупликация
 

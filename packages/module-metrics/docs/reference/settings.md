@@ -15,7 +15,7 @@ order: 30
 | Таблица | Назначение | Ключевые поля |
 |---|---|---|
 | `metrics.events` | Append-only журнал, партиции по `occurred_at` (месяц) | PK `(occurred_at, id)`, `name`, `kind`, `actor_hash`, `session_hash`, `route`, `attributes` (jsonb), `sampling_rate` |
-| `metrics.settings` | Синглтон настроек | `id = 'default'`, `enabled`, `retention_events_days`, `sample_pageview_rate`, `sample_click_rate`, `store_raw_urls` |
+| `metrics.settings` | Синглтон настроек | `id = 'default'`, `enabled`, `retention_events_days`, `sample_pageview_rate`, `sample_click_rate`, `ingest_events_per_minute`, `store_raw_urls` |
 
 Индексы `metrics.events`: btree `(name, occurred_at desc)`, частичные по `actor_hash` и
 `session_hash`, BRIN по `occurred_at`. Партиции создаются миграцией (текущий + 2 месяца) и
@@ -29,6 +29,7 @@ order: 30
 | `retentionEventsDays` | integer | `30` | 1–3650 |
 | `samplePageviewRate` | number | `1` | 0–1 |
 | `sampleClickRate` | number | `0.1` | 0–1 |
+| `ingestEventsPerMinute` | integer | `600` | 1–100000 |
 | `storeRawUrls` | boolean | `false` | — |
 
 ## Задача обслуживания
@@ -53,5 +54,5 @@ order: 30
 
 ## Ограничения
 
-- Rate-limit приёма и opt-out на клиенте — этап 01/06 плана.
+- Сырых событий в открытом виде нет: см. [explanation/pseudonymization.md](../explanation/pseudonymization.md).
 - Измерения, ошибки, Web Vitals, алерты, sinks — этапы 02–05; таблиц под них пока нет.

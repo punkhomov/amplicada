@@ -12,10 +12,11 @@ verified_commit: 9e0cfb80
 > пробелы — в `ref/notes/module-metrics.md`. Направление развития — `ref/plans/2026-09-18-metrics-module/`.
 
 Журнал событий платформы и админ-приложение к нему. Сейчас модуль умеет: принимать батчи
-клиентских событий (`page.view` из плавающего трекера), дедуплицировать их, псевдонимизировать
-актора и сессию, партиционировать журнал по месяцам, удалять старое по retention и показывать
-ленту событий в админке. Потребители (модули) смогут писать бизнес-события через сервис
-`metrics`, когда появится `emit` (этап 03 плана).
+клиентских событий (`page.view` на смену маршрута и `ui.*` по кликам на `data-metrics`),
+дедуплицировать их, псевдонимизировать актора и сессию, ограничивать приём (429 с `Retry-After`),
+уважать opt-out/DNT/GPC, партиционировать журнал по месяцам, удалять старое по retention и
+показывать ленту, каталог наблюдаемых событий и настройки в админке. Потребители (модули) смогут
+писать бизнес-события через сервис `metrics`, когда появится `emit` (этап 03 плана).
 
 Осознанно не входит на текущем этапе: измерения (HTTP/SQL/задачи), Web Vitals и ошибки,
 воронки/retention, алерты, внешние выходы (Яндекс.Метрика, webhook, CSV), экспорт.
@@ -25,7 +26,7 @@ verified_commit: 9e0cfb80
 | Что | Как | Где в коде |
 |---|---|---|
 | Backend-сервис | `context.services.resolve<MetricsService>('metrics')` | `src/backend/services/metrics-service.ts` |
-| HTTP API | `POST /api/metrics/collect`, `GET /api/metrics/context`, `GET /api/metrics/events`, `GET/PATCH /api/metrics/admin/settings` | `src/backend/routes.ts` |
+| HTTP API | `POST /api/metrics/collect`, `GET /api/metrics/context`, `/events`, `/catalog`, `GET/PATCH /api/metrics/admin/settings` | `src/backend/routes.ts` |
 | Схема БД | `metrics.events` (партиции по месяцам), `metrics.settings` (синглтон) | `src/backend/schemas/`, `migrations/0000_init.sql` |
 | Задачи | `metrics.maintenance` (партиции вперёд + retention), расписание — в админке | `src/backend/setup.ts` |
 | Frontend | приложение админки `/admin/apps/metrics`, трекер на extension point `floating` | `src/frontend/setup.tsx` |
@@ -63,7 +64,7 @@ verified_commit: 9e0cfb80
 
 ## Freshness
 
-- Сверено с кодом: 2026-09-18, коммит `9e0cfb80` (дерево на момент сверки грязное —
-  реализация этапа 00 ещё не закоммичена).
+- Сверено с кодом: 2026-09-18, коммит `9e0cfb80`.
 - Не проверено вживую: отображение админ-приложения в браузере (API и приём проверены
-  curl'ом); работа трекера в реальном браузере (проверен только прокси Vite).
+  curl'ом); opt-out/DNT-ветки трекера и клики `data-metrics` в реальном браузере
+  (серверная сторона и каталог проверены curl'ом).

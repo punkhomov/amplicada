@@ -9,6 +9,8 @@ export type {
 } from '../contracts/index.js';
 export { METRIC_EVENT_KINDS } from '../contracts/index.js';
 export { MetricsTracker } from './features/metrics-tracker/index.js';
+export { extractClickAttributes } from './lib/clicks.js';
+export { detectMetricsOptOut, isMetricsOptedOut, METRICS_OPT_OUT_KEY } from './lib/optout.js';
 export {
   metricsContextQueryOptions,
   metricsEventsQueryOptions,

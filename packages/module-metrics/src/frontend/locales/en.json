@@ -28,5 +28,11 @@
   "settings_store_raw_urls": "Store raw URLs",
   "settings_store_raw_urls_hint": "Off by default: only the route template is stored, without parameters",
   "settings_save": "Save",
-  "settings_saved": "Saved"
+  "settings_saved": "Saved",
+  "tab_catalog": "Catalog",
+  "catalog_empty": "Catalog is empty — no events received yet.",
+  "col_event_count": "Events",
+  "col_first_seen": "First seen",
+  "col_last_seen": "Last seen",
+  "settings_ingest_rate": "Ingest, events/min"
 }

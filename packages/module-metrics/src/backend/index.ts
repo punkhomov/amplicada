@@ -5,6 +5,8 @@ export { createPostgresMetricsStore } from './services/metrics-store.js';
 export { dropExpiredEventPartitions, ensureEventPartitions, partitionName } from './services/partitions.js';
 export type { PseudonymPurpose } from './services/pseudonym.js';
 export { Pseudonymizer } from './services/pseudonym.js';
+export type { RateLimitDecision, RateLimiterRedis } from './services/rate-limiter.js';
+export { IngestRateLimiter } from './services/rate-limiter.js';
 export type { BatchValidation, EventLimits, ValidatedEvent, ValidateResult } from './services/validation.js';
 export { DEFAULT_EVENT_LIMITS, validateBatch, validateClientEvent } from './services/validation.js';
 export { metricsModule as module } from './setup.js';

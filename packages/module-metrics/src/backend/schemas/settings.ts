@@ -8,6 +8,7 @@ export const metricsSettings = metricsSchema.table('settings', {
   retentionEventsDays: integer('retention_events_days').notNull().default(30),
   samplePageviewRate: real('sample_pageview_rate').notNull().default(1),
   sampleClickRate: real('sample_click_rate').notNull().default(0.1),
+  ingestEventsPerMinute: integer('ingest_events_per_minute').notNull().default(600),
   storeRawUrls: boolean('store_raw_urls').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

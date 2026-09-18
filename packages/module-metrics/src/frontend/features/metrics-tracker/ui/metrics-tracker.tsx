@@ -1,10 +1,14 @@
 import { useApiClient, useQuery } from '@amplicada/platform-core/frontend';
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { extractClickAttributes } from '../../../lib/clicks.js';
+import { detectMetricsOptOut } from '../../../lib/optout.js';
 import { metricsContextQueryOptions } from '../../../lib/query-options.js';
 import { chunkEvents, DEFAULT_FLUSH_INTERVAL_MS, MetricsQueue } from '../../../lib/queue.js';
 import { normalizeRoute } from '../../../lib/route.js';
 import { currentSessionId } from '../../../lib/session.js';
+
+const EVENT_NAME_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
 
 function sendBatch(chunk: unknown[], viaBeacon: boolean): void {
   const body = JSON.stringify({ events: chunk });
@@ -24,8 +28,9 @@ function sendBatch(chunk: unknown[], viaBeacon: boolean): void {
 }
 
 /**
- * Клиентский трекер: pageview на смену маршрута, батчи раз в 10 секунд, флаш при уходе
- * со страницы через beacon. Молчит, если сбор выключен или включён opt-out.
+ * Клиентский трекер: `page.view` на смену маршрута, `ui.*` по `data-metrics`-атрибутам,
+ * батчи раз в 10 секунд, флаш при уходе со страницы через beacon. Молчит при выключенном
+ * сборе, opt-out (localStorage `metrics.optout`) и DNT/GPC.
  */
 export function MetricsTracker() {
   const location = useLocation();
@@ -34,10 +39,13 @@ export function MetricsTracker() {
   const queueRef = useRef<MetricsQueue | null>(null);
   if (queueRef.current === null) queueRef.current = new MetricsQueue();
   const lastPathRef = useRef<string | null>(null);
+  const optedOutRef = useRef<boolean | null>(null);
+  if (optedOutRef.current === null) optedOutRef.current = detectMetricsOptOut();
 
-  const enabled = context?.enabled ?? false;
+  const enabled = (context?.enabled ?? false) && !optedOutRef.current;
   const maxBatchEvents = context?.limits.maxBatchEvents ?? 100;
   const samplePageviewRate = context?.sampleRates.pageview ?? 1;
+  const sampleClickRate = context?.sampleRates.ui ?? 0;
 
   useEffect(() => {
     if (!enabled) return;
@@ -83,6 +91,35 @@ export function MetricsTracker() {
       sampling: { rate: samplePageviewRate },
     });
   }, [location.pathname, enabled, samplePageviewRate]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const onClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target.closest('[data-metrics]') : null;
+      const name = target?.getAttribute('data-metrics');
+      if (!target || !name || !EVENT_NAME_RE.test(name)) return;
+      if (sampleClickRate <= 0 || Math.random() > sampleClickRate) return;
+      queueRef.current?.push({
+        id: crypto.randomUUID(),
+        name,
+        kind: 'ui',
+        occurredAt: new Date().toISOString(),
+        sessionId: currentSessionId(),
+        context: {
+          route: normalizeRoute(window.location.pathname),
+          url: window.location.pathname,
+          referrer: document.referrer || undefined,
+        },
+        attributes: {
+          element: target.tagName.toLowerCase(),
+          ...extractClickAttributes(Array.from(target.attributes)),
+        },
+        sampling: { rate: sampleClickRate },
+      });
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [enabled, sampleClickRate]);
 
   return null;
 }

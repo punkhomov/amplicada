@@ -1,11 +1,18 @@
 import type { ApiClient } from '@amplicada/platform-core/frontend';
-import type { MetricEventKind, MetricsContextDto, MetricsEventListDto, MetricsSettingsDto } from '../../contracts/index.js';
+import type {
+  MetricEventKind,
+  MetricsCatalogDto,
+  MetricsContextDto,
+  MetricsEventListDto,
+  MetricsSettingsDto,
+} from '../../contracts/index.js';
 
 export const METRICS_REFETCH_INTERVAL_MS = 15_000;
 
 export const metricsQueryKeys = {
   context: ['metrics', 'context'] as const,
   events: (kind: string, name: string) => ['metrics', 'events', kind, name] as const,
+  catalog: ['metrics', 'catalog'] as const,
   settings: ['metrics', 'settings'] as const,
 };
 
@@ -29,6 +36,14 @@ export function metricsEventsQueryOptions(api: ApiClient, filters: { kind?: Metr
     queryKey: metricsQueryKeys.events(filters.kind ?? 'all', filters.name ?? ''),
     queryFn: () => api.get<MetricsEventListDto>(`/metrics/events${query ? `?${query}` : ''}`),
     refetchInterval: METRICS_REFETCH_INTERVAL_MS,
+  };
+}
+
+export function metricsCatalogQueryOptions(api: ApiClient) {
+  return {
+    queryKey: metricsQueryKeys.catalog,
+    queryFn: () => api.get<MetricsCatalogDto>('/metrics/catalog'),
+    refetchInterval: METRICS_REFETCH_INTERVAL_MS * 4,
   };
 }
 

@@ -5,10 +5,13 @@ export type {
   CollectRequest,
   CollectResponse,
   MetricAttrValue,
+  MetricCatalogEntryDto,
   MetricEventDto,
   MetricEventKind,
+  MetricsCatalogDto,
   MetricsContextDto,
   MetricsEventListDto,
+  MetricsRateLimitedDto,
   MetricsSettingsDto,
   MetricsSettingsPatch,
 } from './types.js';

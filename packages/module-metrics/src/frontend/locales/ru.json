@@ -28,5 +28,11 @@
   "settings_store_raw_urls": "Хранить сырые URL",
   "settings_store_raw_urls_hint": "Выключено по умолчанию: в данных только шаблон маршрута, без параметров",
   "settings_save": "Сохранить",
-  "settings_saved": "Сохранено"
+  "settings_saved": "Сохранено",
+  "tab_catalog": "Каталог",
+  "catalog_empty": "Каталог пуст — события ещё не приходили.",
+  "col_event_count": "Событий",
+  "col_first_seen": "Первое",
+  "col_last_seen": "Последнее",
+  "settings_ingest_rate": "Приём, событий/мин"
 }

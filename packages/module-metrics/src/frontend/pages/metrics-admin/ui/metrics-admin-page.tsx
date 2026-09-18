@@ -15,7 +15,12 @@ import {
   type MetricsSettingsDto,
   type MetricsSettingsPatch,
 } from '../../../../contracts/index.js';
-import { metricsEventsQueryOptions, metricsQueryKeys, metricsSettingsQueryOptions } from '../../../lib/query-options.js';
+import {
+  metricsCatalogQueryOptions,
+  metricsEventsQueryOptions,
+  metricsQueryKeys,
+  metricsSettingsQueryOptions,
+} from '../../../lib/query-options.js';
 
 const KIND_VARIANT: Record<MetricEventKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   page: 'secondary',
@@ -64,6 +69,7 @@ export function MetricsAdminPage() {
     }),
   );
   const settingsQuery = useQuery(metricsSettingsQueryOptions(api));
+  const catalogQuery = useQuery(metricsCatalogQueryOptions(api));
 
   useEffect(() => {
     if (settingsQuery.data) setDraft(settingsQuery.data);
@@ -86,6 +92,7 @@ export function MetricsAdminPage() {
         <Tabs defaultValue="events" className="gap-4">
           <TabsList>
             <TabsTrigger value="events">{t('tab_events')}</TabsTrigger>
+            <TabsTrigger value="catalog">{t('tab_catalog')}</TabsTrigger>
             <TabsTrigger value="settings">{t('tab_settings')}</TabsTrigger>
           </TabsList>
 
@@ -150,6 +157,47 @@ export function MetricsAdminPage() {
             </div>
           </TabsContent>
 
+          <TabsContent value="catalog">
+            <div className="rounded-xl border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('col_name')}</TableHead>
+                    <TableHead>{t('col_kind')}</TableHead>
+                    <TableHead>{t('col_event_count')}</TableHead>
+                    <TableHead>{t('col_first_seen')}</TableHead>
+                    <TableHead>{t('col_last_seen')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(catalogQuery.data?.entries ?? []).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                        {t('catalog_empty')}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    (catalogQuery.data?.entries ?? []).map(entry => (
+                      <TableRow key={`${entry.kind}:${entry.name}`}>
+                        <TableCell className="font-mono text-xs">{entry.name}</TableCell>
+                        <TableCell>
+                          <Badge variant={KIND_VARIANT[entry.kind]}>{t(`kind_${entry.kind}`)}</Badge>
+                        </TableCell>
+                        <TableCell className="tabular-nums">{entry.eventCount}</TableCell>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {new Date(entry.firstSeen).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {new Date(entry.lastSeen).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
           <TabsContent value="settings" className="max-w-xl">
             {draft ? (
               <div className="flex flex-col gap-5 rounded-xl border bg-card p-5">
@@ -207,6 +255,19 @@ export function MetricsAdminPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm">{t('settings_ingest_rate')}</span>
+                  <Input
+                    className="w-28"
+                    type="number"
+                    min={1}
+                    max={100000}
+                    aria-label={t('settings_ingest_rate')}
+                    value={draft.ingestEventsPerMinute}
+                    onChange={event => patchDraft({ ingestEventsPerMinute: Number(event.target.value) })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{t('settings_store_raw_urls')}</span>
                     <span className="text-xs text-muted-foreground">{t('settings_store_raw_urls_hint')}</span>
@@ -227,6 +288,7 @@ export function MetricsAdminPage() {
                         retentionEventsDays: draft.retentionEventsDays,
                         samplePageviewRate: draft.samplePageviewRate,
                         sampleClickRate: draft.sampleClickRate,
+                        ingestEventsPerMinute: draft.ingestEventsPerMinute,
                         storeRawUrls: draft.storeRawUrls,
                       })
                     }

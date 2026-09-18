@@ -1,6 +1,6 @@
 import type { BackendDbService } from '@amplicada/platform-core/contracts/backend';
-import { and, desc, eq, ilike, type SQL } from 'drizzle-orm';
-import type { MetricEventKind } from '../../contracts/index.js';
+import { and, count, desc, eq, ilike, max, min, type SQL } from 'drizzle-orm';
+import type { MetricCatalogEntryDto, MetricEventKind } from '../../contracts/index.js';
 import { type MetricEventRow, type MetricsSettingsRow, metricsEvents, metricsSettings, type NewMetricEventRow } from '../schemas/index.js';
 
 export interface EventListFilter {
@@ -10,7 +10,10 @@ export interface EventListFilter {
 }
 
 export type MetricsSettingsPatchRow = Partial<
-  Pick<MetricsSettingsRow, 'enabled' | 'retentionEventsDays' | 'samplePageviewRate' | 'sampleClickRate' | 'storeRawUrls'>
+  Pick<
+    MetricsSettingsRow,
+    'enabled' | 'retentionEventsDays' | 'samplePageviewRate' | 'sampleClickRate' | 'ingestEventsPerMinute' | 'storeRawUrls'
+  >
 >;
 
 export function createPostgresMetricsStore(db: BackendDbService) {
@@ -32,6 +35,31 @@ export function createPostgresMetricsStore(db: BackendDbService) {
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(metricsEvents.occurredAt))
         .limit(limit);
+    },
+
+    /** Что уже приходило: имя, вид, объём, первое/последнее появление — витрина для админки. */
+    async catalog(limit = 200): Promise<MetricCatalogEntryDto[]> {
+      const eventCount = count();
+      const rows = await db
+        .select({
+          name: metricsEvents.name,
+          kind: metricsEvents.kind,
+          eventCount,
+          firstSeen: min(metricsEvents.occurredAt),
+          lastSeen: max(metricsEvents.occurredAt),
+        })
+        .from(metricsEvents)
+        .groupBy(metricsEvents.name, metricsEvents.kind)
+        .orderBy(desc(eventCount))
+        .limit(Math.min(Math.max(limit, 1), 500));
+
+      return rows.map(row => ({
+        name: row.name,
+        kind: row.kind,
+        eventCount: row.eventCount,
+        firstSeen: (row.firstSeen ?? new Date()).toISOString(),
+        lastSeen: (row.lastSeen ?? new Date()).toISOString(),
+      }));
     },
 
     async getSettingsRow(): Promise<MetricsSettingsRow | undefined> {

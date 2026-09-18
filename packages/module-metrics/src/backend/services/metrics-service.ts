@@ -2,6 +2,7 @@ import type { BackendDbService } from '@amplicada/platform-core/contracts/backen
 import type {
   ClientEventInput,
   CollectResponse,
+  MetricCatalogEntryDto,
   MetricEventDto,
   MetricsContextDto,
   MetricsSettingsDto,
@@ -11,6 +12,7 @@ import type { MetricEventRow, MetricsSettingsRow } from '../schemas/index.js';
 import { createPostgresMetricsStore, type EventListFilter } from './metrics-store.js';
 import { dropExpiredEventPartitions, ensureEventPartitions } from './partitions.js';
 import type { Pseudonymizer } from './pseudonym.js';
+import type { IngestRateLimiter, RateLimitDecision } from './rate-limiter.js';
 import { DEFAULT_EVENT_LIMITS, validateBatch } from './validation.js';
 
 export class MetricsSettingsError extends Error {}
@@ -22,6 +24,9 @@ export interface MetricsActor {
 export interface MetricsService {
   collect(rawBody: unknown, actor?: MetricsActor): Promise<CollectResponse>;
   listEvents(filter?: EventListFilter): Promise<MetricEventDto[]>;
+  listCatalog(): Promise<MetricCatalogEntryDto[]>;
+  /** Минутный лимит приёма по ключу (хеш сессии/пользователя/IP) — вызывается до `collect`. */
+  checkIngestRate(key: string, cost: number): Promise<RateLimitDecision>;
   getSettings(): Promise<MetricsSettingsDto>;
   updateSettings(patch: MetricsSettingsPatch): Promise<MetricsSettingsDto>;
   getContext(): Promise<MetricsContextDto>;
@@ -35,6 +40,7 @@ function toSettingsDto(row: MetricsSettingsRow): MetricsSettingsDto {
     retentionEventsDays: row.retentionEventsDays,
     samplePageviewRate: row.samplePageviewRate,
     sampleClickRate: row.sampleClickRate,
+    ingestEventsPerMinute: row.ingestEventsPerMinute,
     storeRawUrls: row.storeRawUrls,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -68,7 +74,15 @@ function clampRate(value: number, field: string): number {
   return value;
 }
 
-export function createMetricsService({ db, pseudonymizer }: { db: BackendDbService; pseudonymizer: Pseudonymizer }): MetricsService {
+export function createMetricsService({
+  db,
+  pseudonymizer,
+  limiter,
+}: {
+  db: BackendDbService;
+  pseudonymizer: Pseudonymizer;
+  limiter: IngestRateLimiter;
+}): MetricsService {
   const store = createPostgresMetricsStore(db);
 
   async function settingsOrThrow(): Promise<MetricsSettingsRow> {
@@ -117,6 +131,15 @@ export function createMetricsService({ db, pseudonymizer }: { db: BackendDbServi
       return rows.map(toEventDto);
     },
 
+    async listCatalog() {
+      return store.catalog();
+    },
+
+    async checkIngestRate(key, cost) {
+      const settings = await settingsOrThrow();
+      return limiter.consume(key, cost, settings.ingestEventsPerMinute);
+    },
+
     async getSettings() {
       return toSettingsDto(await settingsOrThrow());
     },
@@ -132,6 +155,12 @@ export function createMetricsService({ db, pseudonymizer }: { db: BackendDbServi
       }
       if (patch.samplePageviewRate !== undefined) values.samplePageviewRate = clampRate(patch.samplePageviewRate, 'samplePageviewRate');
       if (patch.sampleClickRate !== undefined) values.sampleClickRate = clampRate(patch.sampleClickRate, 'sampleClickRate');
+      if (patch.ingestEventsPerMinute !== undefined) {
+        if (!Number.isInteger(patch.ingestEventsPerMinute) || patch.ingestEventsPerMinute < 1 || patch.ingestEventsPerMinute > 100_000) {
+          throw new MetricsSettingsError('ingestEventsPerMinute must be an integer between 1 and 100000');
+        }
+        values.ingestEventsPerMinute = patch.ingestEventsPerMinute;
+      }
       if (patch.storeRawUrls !== undefined) values.storeRawUrls = Boolean(patch.storeRawUrls);
 
       const row = await store.updateSettingsRow(values);

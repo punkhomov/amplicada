@@ -17,6 +17,7 @@ order: 20
 | `POST` | `/api/metrics/collect` | опционально (сессия) | Приём батча клиентских событий |
 | `GET` | `/api/metrics/context` | нет | Bootstrap-конфиг трекера |
 | `GET` | `/api/metrics/events` | требуется | Лента событий (админка) |
+| `GET` | `/api/metrics/catalog` | требуется | Каталог наблюдаемых имён событий с объёмом и first/last seen |
 | `GET` | `/api/metrics/admin/settings` | требуется | Настройки метрик |
 | `PATCH` | `/api/metrics/admin/settings` | требуется | Изменение настроек |
 
@@ -34,6 +35,15 @@ order: 20
   `too_old`, `too_large`, `batch_too_large`, `invalid_body`;
 - `disabled: true` — сбор выключен настройками, батч не записан (всё равно 202).
 
+При превышении минутного лимита (`ingestEventsPerMinute`, по умолчанию 600) — **429**:
+
+```json
+{ "error": "rate_limited", "retryAfter": 44 }
+```
+
+с заголовком `retry-after`. Ключ лимита — хеш пользователя, сессии или IP (Redis, секундное
+окно с TTL 2 минуты).
+
 ### `GET /context`
 
 ```json
@@ -43,6 +53,11 @@ order: 20
   "limits": { "maxBatchEvents": 500, "maxEventBytes": 8192, "maxAttributes": 32, "maxStringLength": 256 }
 }
 ```
+
+### `GET /catalog`
+
+Ответ: `{ "entries": [{ "name", "kind", "eventCount", "firstSeen", "lastSeen" }] }` — агрегат
+по всей таблице, отсортирован по объёму (до 500 имён). Используется вкладкой «Каталог».
 
 ### `GET /events`
 
@@ -69,6 +84,10 @@ extension point `floating`:
 
 - `page.view` на смену маршрута; `route` нормализуется (`/support/<uuid>` → `/support/:id`) —
   `src/frontend/lib/route.ts`;
+- `ui.*` — клики по `data-metrics`-элементам с сэмплированием `sampleClickRate`
+  (`src/frontend/lib/clicks.ts`);
+- opt-out: флаг `localStorage['metrics.optout']`, DNT и GPC (`src/frontend/lib/optout.ts`) —
+  трекер не поднимается вовсе;
 - сессия — `sessionStorage`, ротация после 30 минут неактивности — `src/frontend/lib/session.ts`;
 - очередь — до 200 событий, батчи по 10 секунд / при `visibilitychange` через
   `navigator.sendBeacon` с фолбэком на `fetch keepalive` — `src/frontend/lib/queue.ts`;

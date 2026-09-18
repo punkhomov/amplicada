@@ -12,6 +12,7 @@ import { moduleManifest } from '../contracts/manifest.js';
 import { createMetricsRoutes } from './routes.js';
 import { createMetricsService, type MetricsService } from './services/metrics-service.js';
 import { Pseudonymizer } from './services/pseudonym.js';
+import { IngestRateLimiter, type RateLimiterRedis } from './services/rate-limiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,6 +27,7 @@ export const metricsModule: BackendModule = {
     context.migrations.register('metrics', join(__dirname, '..', '..', 'migrations'));
 
     const db = context.services.resolve<BackendDbService>('db');
+    const redis = context.services.resolve<RateLimiterRedis>('redis');
     const secrets = context.services.resolve<BackendSecretsService>('secrets');
     const authService = context.services.resolve<BackendAuthService>('auth-service');
 
@@ -35,7 +37,11 @@ export const metricsModule: BackendModule = {
       logger.warn('AMPLICADA_METRICS_PSEUDONYM_SALT не задан: псевдонимы не переживут рестарт процесса');
     }
 
-    const service = createMetricsService({ db, pseudonymizer: new Pseudonymizer(salt) });
+    const service = createMetricsService({
+      db,
+      pseudonymizer: new Pseudonymizer(salt),
+      limiter: new IngestRateLimiter(redis),
+    });
     metricsService = service;
     context.services.register('metrics', service);
 

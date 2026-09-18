@@ -57,6 +57,7 @@ export interface MetricsSettingsDto {
   retentionEventsDays: number;
   samplePageviewRate: number;
   sampleClickRate: number;
+  ingestEventsPerMinute: number;
   storeRawUrls: boolean;
   updatedAt: string;
 }
@@ -66,7 +67,26 @@ export interface MetricsSettingsPatch {
   retentionEventsDays?: number;
   samplePageviewRate?: number;
   sampleClickRate?: number;
+  ingestEventsPerMinute?: number;
   storeRawUrls?: boolean;
+}
+
+/** Ответ приёма при превышении минутного лимита событий (HTTP 429). */
+export interface MetricsRateLimitedDto {
+  error: 'rate_limited';
+  retryAfter: number;
+}
+
+export interface MetricCatalogEntryDto {
+  name: string;
+  kind: MetricEventKind;
+  eventCount: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface MetricsCatalogDto {
+  entries: MetricCatalogEntryDto[];
 }
 
 export interface MetricEventDto {
