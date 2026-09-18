@@ -21,6 +21,7 @@ export const supportChatFrontendModule: FrontendModule = {
       titleKey: 'support-chat:app_title',
       descriptionKey: 'support-chat:app_description',
       icon: LifeBuoyIcon,
+      iconClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
       order: 10,
       component: SupportChatAdminPage,
     });

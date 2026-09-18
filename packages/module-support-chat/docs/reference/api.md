@@ -16,12 +16,13 @@ verified_commit: 5767b800
 | Таблица | Ключевые поля | Примечания |
 |---|---|---|
 | `support_chat.threads` | `id`, `user_id`, `status` (`open`/`pending`/`solved`/`closed`), `kind` (`question`/`incident`), `severity`, `incident_thread_id`, `resolved_by`, `close_reason`, `resolved_at`, `closed_at`, `created_at`, `updated_at`, `user_last_read_at`, `admin_last_read_at` | обращений у пользователя может быть несколько (unique снят в `0003`), FK на `core.identity_user`, индекс `(user_id, updated_at DESC)` |
+| `support_chat.settings` | синглтон (`id = 'default'`): `ai_enabled`, `ai_provider`, `ai_model`, `ai_system_prompt`, `updated_at` | задел под AI-провайдера; значения сохраняются, ответчик появится вместе с AI-модулем |
 | `support_chat.messages` | `id`, `thread_id`, `author_id` (nullable), `author_role` (`user`/`admin`/`ai`), `body`, `attachment_key`, `attachment_name`, `attachment_mime`, `attachment_size`, `created_at` | FK на тред с `ON DELETE CASCADE`; у роли `ai` автора-пользователя нет; вложение опционально, `body` при нём может быть пустым |
 
 Миграции — `0000_init.sql`, `0001_ai_author.sql` (роль `ai`), `0002_attachments.sql`
-(вложения), `0003_multi_threads.sql` (несколько обращений) и `0004_lifecycle_and_incidents.sql`
-(статусы «чей ход», атрибуты закрытия, инциденты), применяются bootstrap'ом под
-именем `support-chat`.
+(вложения), `0003_multi_threads.sql` (несколько обращений), `0004_lifecycle_and_incidents.sql`
+(статусы «чей ход», атрибуты закрытия, инциденты) и `0005_settings.sql` (синглтон
+настроек), применяются bootstrap'ом под именем `support-chat`.
 
 ### Жизненный цикл
 
@@ -99,6 +100,8 @@ verified_commit: 5767b800
 | `POST /api/support-chat/admin/threads/:id/read` | — | `{ ok: true }` |
 | `PATCH /api/support-chat/admin/threads/:id` | `{ status?, closeReason?, kind?, severity?, incidentThreadId? }` | `{ thread }` |
 | `POST /api/support-chat/admin/threads/:id/broadcast` | `{ body }` | `{ recipients }` — сообщение во все привязанные к инциденту обращения |
+| `GET /api/support-chat/admin/settings` | — | `SupportSettingsDto` |
+| `PATCH /api/support-chat/admin/settings` | `{ aiEnabled?, aiProvider?, aiModel?, aiSystemPrompt? }` | `SupportSettingsDto`; провайдер — из `SUPPORT_AI_PROVIDERS` (`openai`/`anthropic`/`google`/`local`) |
 
 Ограничения: до 4000 символов текста (`SUPPORT_CHAT_MESSAGE_MAX_LENGTH`) — 400 при превышении;
 сообщение без текста допустимо, если есть вложение, и наоборот; неизвестный тред — 404;
@@ -157,14 +160,24 @@ verified_commit: 5767b800
 строкой «кто решил и почему»; при открытии обращение помечается прочитанным. Пункт
 навигации «Мои обращения» регистрируется модулем.
 
-Админка: фильтр списка по статусу со счётчиками, действия по статусу (вернуть в работу,
-ждём ответа, решено, закрыть, закрыть как дубликат), управление инцидентом (сделать
-инцидентом с серьёзностью, понизить, привязать/отвязать обращение), список связанных
-обращений и рассылка обновления по инциденту. На узких экранах админка показывает либо
-список, либо переписку с кнопкой «назад».
+Админка: панели-карточки без жёстких разделителей, почтовые папки списка —
+«Все», «Вопросы» (нет ответа поддержки и привязки к инциденту), «Обращения»
+(поддержка отвечала или обращение затронуто инцидентом), «Инциденты» — со счётчиками
+и красными бейджами непрочитанного; в шапке списка — счётчик открытых обращений
+(`open` + `pending`) и кнопка настроек. Фильтр списка по статусу со счётчиками, действия по статусу (вернуть в работу, ждём ответа, решено, закрыть,
+закрыть как дубликат), управление инцидентом (сделать инцидентом с серьёзностью,
+понизить, привязать/отвязать обращение), список связанных обращений и рассылка
+обновления по инциденту. Заголовок приложения подставляется в шапку админки через
+`useAdminHeader` (`module-admin`), своей полосы в контенте нет. На узких экранах
+админка показывает либо список, либо переписку с кнопкой «назад»; иконка приложения
+в каталоге задаётся `iconClass`.
 
 Загрузка показывается скелетонами, закрытие/решение — системной строкой в конце ленты
 (`ChatTranscriptMarker` + `lifecycleNote`), пустой список — `Empty` с кнопкой создания.
+
+Настройки (`widgets/support-settings-dialog`): диалог с секцией «ИИ-ассистент» —
+включение, провайдер, модель, системная инструкция; значения сохраняются в
+`support_chat.settings` и будут прочитаны ответчиком, когда появится AI-модуль.
 
 Админ-страница (`pages/support-chat-admin`) регистрируется как приложение
 `admin:apps` с id `support-chat`.

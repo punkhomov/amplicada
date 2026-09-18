@@ -72,7 +72,7 @@ export function ChatComposer({ placeholder, hint, pending, onSubmit }: ChatCompo
 
   return (
     <form
-      className="shrink-0 border-t p-3"
+      className="shrink-0 p-3"
       onSubmit={event => {
         event.preventDefault();
         void submit();

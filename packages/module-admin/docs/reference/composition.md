@@ -61,7 +61,13 @@ runtime dependencies самостоятельно. Сервис существу
 
 `AdminApp` (`src/contracts/apps.ts:3`): `id` и `component` обязательны; `titleKey` и
 `descriptionKey` — i18n-ключи вида `support-chat:app_title` (локали модуля неймспейсятся
-его id), `icon` — компонент иконки, `order` — порядок в каталоге.
+его id), `icon` — компонент иконки, `iconClass` — tailwind-классы подложки иконки
+в каталоге (`bg-sky-500/10 text-sky-600`), `order` — порядок в каталоге.
+
+Заголовок открытого приложения подставляется в шапку админки, а не рисуется отдельной
+полосой: страница вызывает `useAdminHeader(render, deps)`
+(`src/frontend/lib/admin-header.ts`), и пока она смонтирована, layout показывает её
+заголовок слева вместо «Администрирование» и вкладок.
 
 ```ts
 import type { AdminAppsService } from '@amplicada/module-admin/frontend';

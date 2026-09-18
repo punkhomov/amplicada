@@ -10,12 +10,15 @@ import {
   type SupportChatBackendService,
   type SupportChatEventPayload,
   type SupportMessageDto,
+  type SupportSettingsDto,
+  type SupportSettingsPatch,
   type SupportThreadDto,
   type SupportThreadStatus,
   type SupportUserStatusPatch,
   type SupportUserThreadSummaryDto,
 } from '../../contracts/index.js';
 import { type SupportChatMessageRow, supportChatMessages } from '../schemas/messages.js';
+import { type SupportChatSettingsRow, supportChatSettings } from '../schemas/settings.js';
 import { type SupportChatThreadRow, supportChatThreads } from '../schemas/threads.js';
 import { isAttachmentKeyAllowed, userAttachmentPrefix } from './attachments.js';
 import {
@@ -98,6 +101,9 @@ export interface SupportChatService extends SupportChatBackendService {
   setUserThreadStatus(userId: string, threadId: string, patch: SupportUserStatusPatch): Promise<SupportThreadWithMessages>;
   /** Рассылка сообщения поддержки по обращениям, привязанным к инциденту; возвращает число получателей. */
   broadcastToLinked(threadId: string, adminId: string, body: string): Promise<number>;
+  /** Настройки поддержки (синглтон): пока задел под AI-провайдера. */
+  getSettings(): Promise<SupportSettingsDto>;
+  updateSettings(patch: SupportSettingsPatch): Promise<SupportSettingsDto>;
   /** Вложение сообщения для скачивания; `null` — сообщения нет или файла в нём нет. */
   getMessageAttachment(messageId: string): Promise<{ threadUserId: string; key: string; name: string; mime: string } | null>;
 }
@@ -139,6 +145,16 @@ export function toMessageDto(message: SupportChatMessageWithAuthor): SupportMess
         }
       : null,
     createdAt: message.createdAt.toISOString(),
+  };
+}
+
+export function toSettingsDto(row: SupportChatSettingsRow): SupportSettingsDto {
+  return {
+    aiEnabled: row.aiEnabled,
+    aiProvider: row.aiProvider as SupportSettingsDto['aiProvider'],
+    aiModel: row.aiModel,
+    aiSystemPrompt: row.aiSystemPrompt,
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -463,8 +479,18 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
         .where(and(inArray(supportChatMessages.threadId, ids), eq(supportChatMessages.authorRole, 'user')))
         .groupBy(supportChatMessages.threadId);
 
+      const replyRows = await db
+        .select({
+          threadId: supportChatMessages.threadId,
+          hasReply: sql<boolean>`bool_or(${supportChatMessages.authorRole} = 'admin')`,
+        })
+        .from(supportChatMessages)
+        .where(inArray(supportChatMessages.threadId, ids))
+        .groupBy(supportChatMessages.threadId);
+
       const lastByThread = new Map(lastMessages.map(row => [row.threadId, row]));
       const unreadByThread = new Map(unreadRows.map(row => [row.threadId, row.unread]));
+      const replyByThread = new Map(replyRows.map(row => [row.threadId, row.hasReply]));
 
       return rows.map<SupportAdminThreadDto>(row => {
         const last = lastByThread.get(row.id);
@@ -476,6 +502,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
           kind: row.kind,
           severity: row.severity,
           incidentThreadId: row.incidentThreadId,
+          hasSupportReply: replyByThread.get(row.id) ?? false,
           updatedAt: row.updatedAt.toISOString(),
           unreadCount: unreadByThread.get(row.id) ?? 0,
           lastMessagePreview: last ? previewMessage(last.body, last.attachmentName) : null,
@@ -617,6 +644,29 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
         await appendMessage({ threadId: item.id, authorRole: 'admin', authorId: adminId, body });
       }
       return linked.length;
+    },
+
+    async getSettings() {
+      const [row] = await db.select().from(supportChatSettings).limit(1);
+      if (row) return toSettingsDto(row);
+      const [created] = await db.insert(supportChatSettings).values({}).returning();
+      return toSettingsDto(created);
+    },
+
+    async updateSettings(patch) {
+      await db.insert(supportChatSettings).values({}).onConflictDoNothing();
+      const [row] = await db
+        .update(supportChatSettings)
+        .set({
+          ...(patch.aiEnabled !== undefined ? { aiEnabled: patch.aiEnabled } : {}),
+          ...(patch.aiProvider !== undefined ? { aiProvider: patch.aiProvider } : {}),
+          ...(patch.aiModel !== undefined ? { aiModel: patch.aiModel } : {}),
+          ...(patch.aiSystemPrompt !== undefined ? { aiSystemPrompt: patch.aiSystemPrompt } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(supportChatSettings.id, 'default'))
+        .returning();
+      return toSettingsDto(row);
     },
   };
 }

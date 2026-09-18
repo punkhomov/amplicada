@@ -7,6 +7,8 @@ export interface AdminApp {
   /** i18n-ключ описания. */
   descriptionKey?: string;
   icon?: ComponentType<{ className?: string }>;
+  /** Tailwind-классы подложки иконки в каталоге: фон/цвет, например `bg-sky-500/10 text-sky-600`. */
+  iconClass?: string;
   order?: number;
   component: ComponentType;
 }

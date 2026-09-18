@@ -13,6 +13,7 @@ export type {
   SupportAdminThreadDetailDto,
   SupportAdminThreadDto,
   SupportAdminThreadPatch,
+  SupportAiProvider,
   SupportAttachmentDto,
   SupportAttachmentUploadDto,
   SupportAuthorRole,
@@ -20,9 +21,12 @@ export type {
   SupportIncidentSeverity,
   SupportMessageDto,
   SupportResolvedBy,
+  SupportSettingsDto,
+  SupportSettingsPatch,
   SupportThreadDto,
   SupportThreadKind,
   SupportThreadStatus,
   SupportUserStatusPatch,
   SupportUserThreadSummaryDto,
 } from './types.js';
+export { SUPPORT_AI_PROVIDERS } from './types.js';

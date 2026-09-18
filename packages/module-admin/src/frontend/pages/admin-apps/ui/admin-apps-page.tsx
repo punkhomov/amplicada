@@ -1,5 +1,5 @@
-import { useFrontendContext, useTranslation } from '@amplicada/platform-core/frontend';
-import { Card, CardDescription, CardHeader, CardTitle } from '@amplicada/platform-core/frontend/ui/card';
+import { cn, useFrontendContext, useTranslation } from '@amplicada/platform-core/frontend';
+import { Card, CardContent, CardDescription, CardTitle } from '@amplicada/platform-core/frontend/ui/card';
 import { Link } from 'react-router-dom';
 import type { AdminAppsService } from '../../../../contracts/apps.js';
 import { AdminBreadcrumbs } from '../../../widgets/admin-breadcrumbs/index.js';
@@ -31,14 +31,21 @@ export function AdminAppsPage() {
                   to={`/admin/apps/${app.id}`}
                   className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Card className="h-full transition-colors hover:bg-muted/50">
-                    <CardHeader>
-                      <div className="flex items-center gap-2">
-                        {Icon && <Icon className="size-5 text-muted-foreground" />}
-                        <CardTitle>{t(app.titleKey)}</CardTitle>
+                  <Card className="h-full transition-all hover:border-foreground/15 hover:shadow-sm">
+                    <CardContent className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          'flex size-10 shrink-0 items-center justify-center rounded-lg',
+                          app.iconClass ?? 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {Icon && <Icon className="size-5" />}
                       </div>
-                      {app.descriptionKey && <CardDescription>{t(app.descriptionKey)}</CardDescription>}
-                    </CardHeader>
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <CardTitle>{t(app.titleKey)}</CardTitle>
+                        {app.descriptionKey && <CardDescription>{t(app.descriptionKey)}</CardDescription>}
+                      </div>
+                    </CardContent>
                   </Card>
                 </Link>
               );

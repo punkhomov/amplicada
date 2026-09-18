@@ -69,6 +69,8 @@ export interface SupportAdminThreadDto {
   kind: SupportThreadKind;
   severity: SupportIncidentSeverity | null;
   incidentThreadId: string | null;
+  /** Отвечала ли уже поддержка: разделяет «вопросы» и «обращения» в списке. */
+  hasSupportReply: boolean;
   updatedAt: string;
   unreadCount: number;
   lastMessagePreview: string | null;
@@ -95,4 +97,23 @@ export interface SupportAdminThreadPatch {
   kind?: SupportThreadKind;
   severity?: SupportIncidentSeverity | null;
   incidentThreadId?: string | null;
+}
+
+/** Провайдеры, из которых можно выбрать ассистента (ответчик появится вместе с AI-модулем). */
+export const SUPPORT_AI_PROVIDERS = ['openai', 'anthropic', 'google', 'local'] as const;
+export type SupportAiProvider = (typeof SUPPORT_AI_PROVIDERS)[number];
+
+export interface SupportSettingsDto {
+  aiEnabled: boolean;
+  aiProvider: SupportAiProvider | null;
+  aiModel: string | null;
+  aiSystemPrompt: string | null;
+  updatedAt: string;
+}
+
+export interface SupportSettingsPatch {
+  aiEnabled?: boolean;
+  aiProvider?: SupportAiProvider | null;
+  aiModel?: string | null;
+  aiSystemPrompt?: string | null;
 }

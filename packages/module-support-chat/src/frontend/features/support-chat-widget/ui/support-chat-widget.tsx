@@ -73,13 +73,16 @@ export function SupportChatWidget() {
       {!open && (
         <Button
           size="icon-lg"
-          className="fixed bottom-4 right-4 z-50 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95"
+          className="fixed right-4 bottom-4 z-50 size-14 rounded-full shadow-xl transition-transform hover:scale-105 active:scale-95 [&_svg:not([class*='size-'])]:size-6"
           aria-label={t('widget_open')}
           onClick={() => handleOpenChange(true)}
         >
           <LifeBuoyIcon />
           {unreadTotal > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-5 min-w-5 justify-center px-1 text-xs tabular-nums ring-2 ring-background">
+            <Badge
+              variant="destructive"
+              className="absolute -top-0.5 -right-0.5 h-5 min-w-5 justify-center px-1 text-xs tabular-nums ring-2 ring-background"
+            >
               {unreadTotal}
             </Badge>
           )}

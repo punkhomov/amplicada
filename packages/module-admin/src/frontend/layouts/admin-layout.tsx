@@ -8,7 +8,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@amplicada/platform-core/frontend/ui/dropdown-menu';
+import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { type AdminHeaderApi, AdminHeaderContext, type AdminHeaderRender } from '../lib/admin-header.js';
 
 interface SectionTab {
   id: string;
@@ -34,6 +36,9 @@ export function AdminLayout() {
   const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
+  // Функцию рендера храним в обёртке: React трактует голую функцию в useState как updater.
+  const [header, setHeader] = useState<{ render: AdminHeaderRender } | null>(null);
+  const headerApi = useMemo<AdminHeaderApi>(() => ({ setHeader: render => setHeader(render ? { render } : null) }), []);
 
   const activeSection =
     SECTION_TABS.slice()
@@ -49,21 +54,27 @@ export function AdminLayout() {
       <header className="shrink-0 border-b bg-background">
         <div className="w-full max-w-screen-2xl mx-auto px-8">
           <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-4">
-              <span className="text-lg font-semibold">{t('admin_title')}</span>
-              <ButtonGroup>
-                {SECTION_TABS.map(tab => (
-                  <Button
-                    key={tab.id}
-                    size="sm"
-                    variant={activeSection === tab.id ? 'default' : 'outline'}
-                    disabled={tab.disabled}
-                    onClick={() => navigate(tab.path)}
-                  >
-                    {t(tab.labelKey)}
-                  </Button>
-                ))}
-              </ButtonGroup>
+            <div className="flex min-w-0 items-center gap-4">
+              {header ? (
+                header.render()
+              ) : (
+                <>
+                  <span className="text-lg font-semibold">{t('admin_title')}</span>
+                  <ButtonGroup>
+                    {SECTION_TABS.map(tab => (
+                      <Button
+                        key={tab.id}
+                        size="sm"
+                        variant={activeSection === tab.id ? 'default' : 'outline'}
+                        disabled={tab.disabled}
+                        onClick={() => navigate(tab.path)}
+                      >
+                        {t(tab.labelKey)}
+                      </Button>
+                    ))}
+                  </ButtonGroup>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <LanguageSwitcher />
@@ -85,9 +96,11 @@ export function AdminLayout() {
           </div>
         </div>
       </header>
-      <main className="flex-1 min-h-0">
-        <Outlet />
-      </main>
+      <AdminHeaderContext.Provider value={headerApi}>
+        <main className="flex-1 min-h-0">
+          <Outlet />
+        </main>
+      </AdminHeaderContext.Provider>
       <footer className="shrink-0 border-t bg-background">
         <div className="w-full max-w-screen-2xl mx-auto px-8">
           <span className="text-muted-foreground font-mono">built with Amplicada</span>

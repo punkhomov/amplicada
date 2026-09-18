@@ -30,7 +30,7 @@ import {
 } from '@amplicada/platform-core/frontend/ui/message-scroller';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@amplicada/platform-core/frontend/ui/select';
 import { Textarea } from '@amplicada/platform-core/frontend/ui/textarea';
-import { AlertTriangleIcon, ArrowLeftIcon, BellIcon, ChevronDownIcon, Link2OffIcon, SparklesIcon } from 'lucide-react';
+import { AlertTriangleIcon, ArrowLeftIcon, BellIcon, ChevronDownIcon, Link2OffIcon, SettingsIcon, SparklesIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   SupportAdminThreadDto,
@@ -39,11 +39,13 @@ import type {
   SupportThreadDto,
   SupportThreadStatus,
 } from '../../../../contracts/index.js';
+import { folderCounts, matchesFolder, THREAD_FOLDERS, type ThreadFolder } from '../../../lib/folders.js';
 import { supportChatAdminThreadQueryOptions, supportChatAdminThreadsQueryOptions } from '../../../lib/query-options.js';
 import { isActiveStatus, statusBadgeVariant } from '../../../lib/status.js';
 import { useSupportChatEvents } from '../../../lib/use-support-chat-events.js';
 import { ChatComposer, type ChatComposerInput } from '../../../widgets/chat-composer/index.js';
 import { ChatTranscript } from '../../../widgets/chat-transcript/index.js';
+import { SupportSettingsDialog } from '../../../widgets/support-settings-dialog/index.js';
 
 type StatusFilter = 'all' | 'active' | SupportThreadStatus;
 
@@ -64,7 +66,9 @@ export function SupportChatAdminPage() {
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [folder, setFolder] = useState<ThreadFolder>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastText, setBroadcastText] = useState('');
@@ -136,7 +140,11 @@ export function SupportChatAdminPage() {
     };
   }, [threads]);
 
+  const counts = useMemo(() => folderCounts(threads), [threads]);
+  const openCount = useMemo(() => threads.filter(item => isActiveStatus(item.status)).length, [threads]);
+
   const visibleThreads = threads.filter(item => {
+    if (!matchesFolder(item, folder)) return false;
     if (statusFilter === 'all') return true;
     if (statusFilter === 'active') return isActiveStatus(item.status);
     return item.status === statusFilter;
@@ -153,10 +161,57 @@ export function SupportChatAdminPage() {
   const closeWithReason = (reason: SupportCloseReason) => updateThread.mutate({ status: 'closed', closeReason: reason });
 
   return (
-    <div className="h-full min-h-0 flex">
-      <aside className={cn('shrink-0 overflow-y-auto border-r', isMobile ? 'w-full' : 'w-80', showDetail && isMobile && 'hidden')}>
-        <div className="sticky top-0 bg-background border-b px-4 py-3 flex flex-col gap-2">
-          <h2 className="font-semibold">{t('admin_threads_title')}</h2>
+    <div className="flex h-full min-h-0 gap-3 p-3">
+      <aside
+        className={cn(
+          'flex shrink-0 flex-col overflow-hidden rounded-xl border bg-muted/20',
+          isMobile ? 'w-full' : 'w-80',
+          showDetail && isMobile && 'hidden',
+        )}
+      >
+        <div className="flex flex-col gap-2 p-3">
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="truncate font-semibold">{t('admin_threads_title')}</h2>
+              {openCount > 0 ? (
+                <Badge variant="secondary" className="tabular-nums" title={t('admin_open_count')}>
+                  {openCount}
+                </Badge>
+              ) : null}
+            </div>
+            <Button variant="ghost" size="icon-sm" aria-label={t('admin_settings')} onClick={() => setSettingsOpen(true)}>
+              <SettingsIcon />
+            </Button>
+          </div>
+
+          <div className="flex flex-col">
+            {THREAD_FOLDERS.map(item => {
+              const countsForFolder = counts[item];
+              const active = folder === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setFolder(item)}
+                  className={cn(
+                    'flex cursor-pointer items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors',
+                    active ? 'bg-background shadow-xs' : 'hover:bg-background/60',
+                  )}
+                >
+                  <span className={cn('truncate', countsForFolder.unread > 0 && 'font-medium')}>{t(`folder_${item}`)}</span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {countsForFolder.unread > 0 ? (
+                      <Badge variant="destructive" className="h-5 min-w-5 justify-center px-1 text-xs tabular-nums">
+                        {countsForFolder.unread}
+                      </Badge>
+                    ) : null}
+                    <span className="text-xs text-muted-foreground tabular-nums">{countsForFolder.total}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <Select value={statusFilter} onValueChange={value => setStatusFilter(value as StatusFilter)}>
             <SelectTrigger size="sm" className="w-full">
               <SelectValue />
@@ -171,21 +226,23 @@ export function SupportChatAdminPage() {
           </Select>
         </div>
 
-        {visibleThreads.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">{t('admin_threads_empty')}</p>
-        ) : (
-          visibleThreads.map(item => (
-            <ThreadListItem key={item.id} item={item} active={activeId === item.id} onSelect={() => selectThread(item.id)} />
-          ))
-        )}
+        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1.5">
+          {visibleThreads.length === 0 ? (
+            <p className="px-2.5 py-3 text-sm text-muted-foreground">{t('admin_threads_empty')}</p>
+          ) : (
+            visibleThreads.map(item => (
+              <ThreadListItem key={item.id} item={item} active={activeId === item.id} onSelect={() => selectThread(item.id)} />
+            ))
+          )}
+        </div>
       </aside>
 
-      <section className={cn('min-h-0 flex-1 flex-col', showDetail ? 'flex' : 'hidden')}>
+      <section className={cn('min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card', showDetail ? 'flex' : 'hidden')}>
         {!thread || !activeId ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">{t('admin_no_selection')}</div>
         ) : (
           <>
-            <div className="shrink-0 border-b px-4 py-3 flex flex-col gap-2">
+            <div className="flex shrink-0 flex-col gap-2 px-4 py-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   {isMobile ? (
@@ -372,6 +429,8 @@ export function SupportChatAdminPage() {
         </DialogContent>
       </Dialog>
 
+      <SupportSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
       <Dialog open={broadcastOpen} onOpenChange={setBroadcastOpen}>
         <DialogContent>
           <DialogHeader>
@@ -406,8 +465,8 @@ function ThreadListItem({ item, active, onSelect }: { item: SupportAdminThreadDt
       type="button"
       onClick={onSelect}
       className={cn(
-        'flex w-full cursor-pointer gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/50',
-        active && 'bg-muted',
+        'flex w-full cursor-pointer gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-background/70',
+        active && 'bg-background shadow-xs ring-1 ring-primary/25',
       )}
     >
       <Avatar size="sm" className="mt-0.5">

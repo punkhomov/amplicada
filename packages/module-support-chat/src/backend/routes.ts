@@ -3,11 +3,13 @@ import type { Readable } from 'node:stream';
 import type { BackendSetupContext, BackendStorageService } from '@amplicada/platform-core/contracts/backend';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
+  SUPPORT_AI_PROVIDERS,
   SUPPORT_CHAT_EVENTS,
   SUPPORT_CHAT_MESSAGE_MAX_LENGTH,
   type SupportAdminThreadPatch,
   type SupportAttachmentUploadDto,
   type SupportChatEventPayload,
+  type SupportSettingsPatch,
 } from '../contracts/index.js';
 import {
   buildAttachmentKey,
@@ -322,6 +324,40 @@ export function createSupportChatRoutes(fastify: FastifyInstance, context: Backe
 
     const recipients = await service.broadcastToLinked(id, user.id, body);
     return { recipients };
+  });
+
+  // Настройки поддержки: пока задел под AI-провайдера (ответчик появится позже).
+  fastify.get('/admin/settings', async () => service.getSettings());
+
+  fastify.patch('/admin/settings', async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const patch: SupportSettingsPatch = {};
+
+    if (body.aiEnabled !== undefined) {
+      if (typeof body.aiEnabled !== 'boolean') return reply.code(400).send({ error: 'aiEnabled must be a boolean' });
+      patch.aiEnabled = body.aiEnabled;
+    }
+    if (body.aiProvider !== undefined) {
+      if (body.aiProvider !== null && !isOneOf(body.aiProvider, SUPPORT_AI_PROVIDERS)) {
+        return reply.code(400).send({ error: 'Unknown AI provider' });
+      }
+      patch.aiProvider = body.aiProvider as SupportSettingsPatch['aiProvider'];
+    }
+    if (body.aiModel !== undefined) {
+      if (body.aiModel !== null && (typeof body.aiModel !== 'string' || body.aiModel.length > 200)) {
+        return reply.code(400).send({ error: 'Invalid model name' });
+      }
+      patch.aiModel = body.aiModel as string | null;
+    }
+    if (body.aiSystemPrompt !== undefined) {
+      if (body.aiSystemPrompt !== null && (typeof body.aiSystemPrompt !== 'string' || body.aiSystemPrompt.length > 4000)) {
+        return reply.code(400).send({ error: 'System prompt is too long' });
+      }
+      patch.aiSystemPrompt = body.aiSystemPrompt as string | null;
+    }
+    if (Object.keys(patch).length === 0) return reply.code(400).send({ error: 'Nothing to update' });
+
+    return service.updateSettings(patch);
   });
 
   fastify.get('/admin/events', (request, reply) => {

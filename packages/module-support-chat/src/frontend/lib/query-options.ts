@@ -2,6 +2,7 @@ import type { ApiClient } from '@amplicada/platform-core/frontend';
 import type {
   SupportAdminThreadDetailDto,
   SupportAdminThreadDto,
+  SupportSettingsDto,
   SupportThreadDto,
   SupportUserThreadSummaryDto,
 } from '../../contracts/index.js';
@@ -14,6 +15,7 @@ export const supportChatQueryKeys = {
   myThread: (id: string) => ['support-chat', 'thread', id] as const,
   adminThreads: ['support-chat', 'admin', 'threads'] as const,
   adminThread: (id: string) => ['support-chat', 'admin', 'thread', id] as const,
+  settings: ['support-chat', 'settings'] as const,
 };
 
 /** Активное обращение виджета: свежее по updatedAt, плюс непрочитанное по всем обращениям. */
@@ -47,6 +49,13 @@ export function supportChatAdminThreadsQueryOptions(api: ApiClient) {
     queryKey: supportChatQueryKeys.adminThreads,
     queryFn: () => api.get<SupportAdminThreadDto[]>('/support-chat/admin/threads'),
     refetchInterval: SUPPORT_CHAT_REFETCH_INTERVAL_MS,
+  };
+}
+
+export function supportChatSettingsQueryOptions(api: ApiClient) {
+  return {
+    queryKey: supportChatQueryKeys.settings,
+    queryFn: () => api.get<SupportSettingsDto>('/support-chat/admin/settings'),
   };
 }
 
