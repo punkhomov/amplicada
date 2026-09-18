@@ -107,8 +107,8 @@ export function createSupportChatRoutes(fastify: FastifyInstance, context: Backe
 
   fastify.get('/thread', async request => {
     const user = currentUser(request);
-    const result = await service.getUserThread(user.id);
-    return { thread: result ? toThreadDto(result.thread, result.messages, 'user') : null };
+    const [result, unreadTotal] = await Promise.all([service.getActiveUserThread(user.id), service.getUserUnreadTotal(user.id)]);
+    return { thread: result ? toThreadDto(result.thread, result.messages, 'user') : null, unreadTotal };
   });
 
   fastify.post('/thread/messages', async (request, reply) => {
@@ -123,6 +123,48 @@ export function createSupportChatRoutes(fastify: FastifyInstance, context: Backe
   fastify.post('/thread/read', async request => {
     const user = currentUser(request);
     await service.markUserRead(user.id);
+    return { ok: true };
+  });
+
+  // Страница «Мои обращения»: список всех обращений пользователя и работа с конкретным.
+  // Виджет рядом пишет в активное (свежее) обращение — эти маршруты его не трогают.
+
+  fastify.get('/threads', async request => {
+    const user = currentUser(request);
+    return service.listUserThreads(user.id);
+  });
+
+  fastify.post('/threads', async (request, reply) => {
+    const user = currentUser(request);
+    const input = readMessageInput(request, reply);
+    if (!input) return reply;
+
+    const result = await service.createUserThread(user.id, input.body, input.attachment);
+    return { thread: toThreadDto(result.thread, result.messages, 'user') };
+  });
+
+  fastify.get('/threads/:id', async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const result = await service.getUserThreadById(user.id, id);
+    if (!result) return reply.code(404).send({ error: 'Thread not found' });
+    return { thread: toThreadDto(result.thread, result.messages, 'user') };
+  });
+
+  fastify.post('/threads/:id/messages', async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const input = readMessageInput(request, reply);
+    if (!input) return reply;
+
+    const result = await service.sendUserThreadMessage(user.id, id, input.body, input.attachment);
+    return { thread: toThreadDto(result.thread, result.messages, 'user') };
+  });
+
+  fastify.post('/threads/:id/read', async request => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    await service.markUserThreadRead(user.id, id);
     return { ok: true };
   });
 

@@ -33,6 +33,19 @@ export interface SupportThreadDto {
   messages: SupportMessageDto[];
 }
 
+/** Строка списка «Мои обращения»: без сообщений, но со сводкой по ним. */
+export interface SupportUserThreadSummaryDto {
+  id: string;
+  status: SupportThreadStatus;
+  createdAt: string;
+  updatedAt: string;
+  unreadCount: number;
+  messageCount: number;
+  lastMessagePreview: string | null;
+  /** Логины поддержки, которые отвечали в этом обращении. */
+  participants: string[];
+}
+
 export interface SupportAdminThreadDto {
   id: string;
   userId: string;

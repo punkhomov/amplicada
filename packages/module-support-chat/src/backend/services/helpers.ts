@@ -23,3 +23,17 @@ export function previewText(body: string, limit = 120): string {
   if (collapsed.length <= limit) return collapsed;
   return `${collapsed.slice(0, limit - 1).trimEnd()}…`;
 }
+
+/** Превью для списков: текст, а если его нет — имя вложения. */
+export function previewMessage(body: string, attachmentName: string | null): string {
+  return body.trim() ? previewText(body) : (attachmentName ?? '');
+}
+
+/** Логины поддержки, отвечавшей в треде: «кто со мной переписывался». */
+export function collectParticipants(messages: Array<{ authorRole: SupportAuthorRole; authorLogin: string | null }>): string[] {
+  const logins = new Set<string>();
+  for (const message of messages) {
+    if (message.authorRole === 'admin' && message.authorLogin) logins.add(message.authorLogin);
+  }
+  return [...logins];
+}

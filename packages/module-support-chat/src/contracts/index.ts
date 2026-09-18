@@ -18,4 +18,5 @@ export type {
   SupportMessageDto,
   SupportThreadDto,
   SupportThreadStatus,
+  SupportUserThreadSummaryDto,
 } from './types.js';

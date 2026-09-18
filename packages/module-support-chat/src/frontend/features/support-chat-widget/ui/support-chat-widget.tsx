@@ -11,8 +11,9 @@ import {
   MessageScrollerViewport,
 } from '@amplicada/platform-core/frontend/ui/message-scroller';
 import { Spinner } from '@amplicada/platform-core/frontend/ui/spinner';
-import { LifeBuoyIcon, SparklesIcon, XIcon } from 'lucide-react';
+import { LifeBuoyIcon, MessagesSquareIcon, SparklesIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { SupportThreadDto } from '../../../../contracts/index.js';
 import { supportChatQueryKeys, supportChatThreadQueryOptions } from '../../../lib/query-options.js';
 import { useSupportChatEvents } from '../../../lib/use-support-chat-events.js';
@@ -24,13 +25,15 @@ export function SupportChatWidget() {
   const { user, loading } = useCurrentUser();
   const api = useApiClient();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   useSupportChatEvents('user', !!user);
 
   const { data, isPending } = useQuery({ ...supportChatThreadQueryOptions(api), enabled: !!user });
   const thread = data?.thread ?? null;
-  const unreadCount = thread?.unreadCount ?? 0;
+  /** Бейдж считает непрочитанное по всем обращениям, а не только по активному. */
+  const unreadTotal = data?.unreadTotal ?? 0;
   const messages = thread?.messages ?? [];
 
   const invalidate = () => {
@@ -51,7 +54,7 @@ export function SupportChatWidget() {
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
-    if (next && unreadCount > 0) markRead.mutate();
+    if (next && (thread?.unreadCount ?? 0) > 0) markRead.mutate();
   };
 
   return (
@@ -64,8 +67,8 @@ export function SupportChatWidget() {
           onClick={() => handleOpenChange(true)}
         >
           <LifeBuoyIcon />
-          {unreadCount > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-5 min-w-5 justify-center px-1 text-xs tabular-nums">{unreadCount}</Badge>
+          {unreadTotal > 0 && (
+            <Badge className="absolute -top-1 -right-1 h-5 min-w-5 justify-center px-1 text-xs tabular-nums">{unreadTotal}</Badge>
           )}
         </Button>
       )}
@@ -77,9 +80,22 @@ export function SupportChatWidget() {
               <CardTitle className="text-base">{t('widget_title')}</CardTitle>
               <CardDescription className="truncate text-xs">{t('widget_subtitle')}</CardDescription>
             </div>
-            <Button variant="ghost" size="icon-sm" aria-label={t('widget_close')} onClick={() => handleOpenChange(false)}>
-              <XIcon />
-            </Button>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('widget_all_requests')}
+                onClick={() => {
+                  setOpen(false);
+                  navigate('/support');
+                }}
+              >
+                <MessagesSquareIcon />
+              </Button>
+              <Button variant="ghost" size="icon-sm" aria-label={t('widget_close')} onClick={() => handleOpenChange(false)}>
+                <XIcon />
+              </Button>
+            </div>
           </CardHeader>
 
           <MessageScrollerProvider autoScroll defaultScrollPosition="end">

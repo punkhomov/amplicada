@@ -4,7 +4,7 @@ import { supportChatSchema } from './_schema.js';
 
 export const supportChatThreads = supportChatSchema.table('threads', {
   id: uuid('id').primaryKey().defaultRandom(),
-  /** Один тред на пользователя (unique-индекс в миграции). */
+  /** Владелец обращения; обращений у пользователя может быть несколько. */
   userId: uuid('user_id')
     .notNull()
     .references(() => identityUser.id),

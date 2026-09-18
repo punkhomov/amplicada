@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { countUnread, previewText, statusAfterUserMessage } from './helpers.js';
+import { collectParticipants, countUnread, previewMessage, previewText, statusAfterUserMessage } from './helpers.js';
 
 const base = new Date('2026-09-17T10:00:00Z');
 const earlier = new Date('2026-09-17T09:00:00Z');
@@ -48,4 +48,23 @@ test('previewText схлопывает пробелы и обрезает дли
   const preview = previewText('a'.repeat(200), 20);
   assert.equal(preview.length, 20);
   assert.ok(preview.endsWith('…'));
+});
+
+test('previewMessage падает на имя вложения, когда текста нет', () => {
+  assert.equal(previewMessage('привет', null), 'привет');
+  assert.equal(previewMessage('   ', 'file.png'), 'file.png');
+  assert.equal(previewMessage('', null), '');
+});
+
+test('collectParticipants собирает логины поддержки по порядку и без дублей', () => {
+  const messages = [
+    { authorRole: 'user' as const, authorLogin: 'petya' },
+    { authorRole: 'admin' as const, authorLogin: 'ivan' },
+    { authorRole: 'admin' as const, authorLogin: 'ivan' },
+    { authorRole: 'ai' as const, authorLogin: null },
+    { authorRole: 'admin' as const, authorLogin: 'olga' },
+  ];
+
+  assert.deepEqual(collectParticipants(messages), ['ivan', 'olga']);
+  assert.deepEqual(collectParticipants([]), []);
 });

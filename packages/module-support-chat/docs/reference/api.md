@@ -15,12 +15,13 @@ verified_commit: 5767b800
 
 | Таблица | Ключевые поля | Примечания |
 |---|---|---|
-| `support_chat.threads` | `id`, `user_id` (unique), `status` (`open`/`closed`), `updated_at`, `user_last_read_at`, `admin_last_read_at` | один тред на пользователя, FK на `core.identity_user` |
+| `support_chat.threads` | `id`, `user_id`, `status` (`open`/`closed`), `created_at`, `updated_at`, `user_last_read_at`, `admin_last_read_at` | обращений у пользователя может быть несколько (unique снят в `0003`), FK на `core.identity_user`, индекс `(user_id, updated_at DESC)` |
 | `support_chat.messages` | `id`, `thread_id`, `author_id` (nullable), `author_role` (`user`/`admin`/`ai`), `body`, `attachment_key`, `attachment_name`, `attachment_mime`, `attachment_size`, `created_at` | FK на тред с `ON DELETE CASCADE`; у роли `ai` автора-пользователя нет; вложение опционально, `body` при нём может быть пустым |
 
 Миграции — `migrations/0000_init.sql`, `migrations/0001_ai_author.sql` (роль `ai`,
-nullable `author_id`) и `migrations/0002_attachments.sql` (метаданные вложения),
-применяются bootstrap'ом под именем `support-chat`.
+nullable `author_id`), `migrations/0002_attachments.sql` (метаданные вложения) и
+`migrations/0003_multi_threads.sql` (снят unique по `user_id`), применяются
+bootstrap'ом под именем `support-chat`.
 Таблицы не участвуют в Document System: это обычные таблицы модуля.
 
 Непрочитанные считаются по отметкам `user_last_read_at` / `admin_last_read_at`
@@ -50,9 +51,14 @@ nullable `author_id`) и `migrations/0002_attachments.sql` (метаданные
 
 | Метод и путь | Тело | Ответ |
 |---|---|---|
-| `GET /api/support-chat/thread` | — | `{ thread: SupportThreadDto \| null }` |
-| `POST /api/support-chat/thread/messages` | `{ body, attachment? }` | `{ thread: SupportThreadDto }` (создаёт тред при первом сообщении) |
-| `POST /api/support-chat/thread/read` | — | `{ ok: true }` |
+| `GET /api/support-chat/thread` | — | `{ thread: SupportThreadDto \| null, unreadTotal }` — активное (свежее по `updated_at`) обращение для виджета |
+| `POST /api/support-chat/thread/messages` | `{ body, attachment? }` | `{ thread }` — продолжает активное обращение, создаёт его, если обращений ещё нет |
+| `POST /api/support-chat/thread/read` | — | `{ ok: true }` — отметка активного обращения |
+| `GET /api/support-chat/threads` | — | `SupportUserThreadSummaryDto[]` — все обращения пользователя со сводкой |
+| `POST /api/support-chat/threads` | `{ body, attachment? }` | `{ thread }` — новое обращение с первым сообщением |
+| `GET /api/support-chat/threads/:id` | — | `{ thread }`; чужое обращение — 404 |
+| `POST /api/support-chat/threads/:id/messages` | `{ body, attachment? }` | `{ thread }` |
+| `POST /api/support-chat/threads/:id/read` | — | `{ ok: true }` |
 | `POST /api/support-chat/attachments` | multipart-часть `file` | `SupportAttachmentUploadDto` — токен для отправки сообщения |
 | `GET /api/support-chat/attachments/:messageId` | — | файл (inline для картинок и PDF, иначе `Content-Disposition: attachment`) |
 
@@ -112,8 +118,18 @@ nullable `author_id`) и `migrations/0002_attachments.sql` (метаданные
 
 Виджет (`features/support-chat-widget`) подключён к точке `floating` и открывается
 карточкой снизу-справа (`Card`, не Sheet): шапка с подзаголовком, пустое состояние
-на компоненте `Empty`, композер внизу. Админ-страница (`pages/support-chat-admin`)
-регистрируется как приложение `admin:apps` с id `support-chat`.
+на компоненте `Empty`, композер внизу; бейдж считает непрочитанное по всем обращениям,
+кнопка в шапке ведёт на страницу «Мои обращения». Виджет всегда показывает активное
+(свежее) обращение.
+
+Портальные страницы: `pages/my-threads` на `/support` — список обращений (статус,
+превью последнего сообщения, непрочитанное, кто отвечал, число сообщений) и
+`pages/my-thread` на `/support/:id` и `/support/new` — история переписки с
+продолжением в композере; при открытии обращение помечается прочитанным. Пункт
+навигации «Мои обращения» регистрируется модулем.
+
+Админ-страница (`pages/support-chat-admin`) регистрируется как приложение
+`admin:apps` с id `support-chat`.
 
 Общий композер — `widgets/chat-composer`: скрытый `<input type="file">` за кнопкой «+»,
 загрузка вложения отдельным запросом (чип с именем и размером до отправки), отправка

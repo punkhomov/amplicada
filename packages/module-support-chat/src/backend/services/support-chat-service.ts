@@ -11,11 +11,12 @@ import {
   type SupportMessageDto,
   type SupportThreadDto,
   type SupportThreadStatus,
+  type SupportUserThreadSummaryDto,
 } from '../../contracts/index.js';
 import { type SupportChatMessageRow, supportChatMessages } from '../schemas/messages.js';
 import { type SupportChatThreadRow, supportChatThreads } from '../schemas/threads.js';
 import { isAttachmentKeyAllowed, userAttachmentPrefix } from './attachments.js';
-import { countUnread, previewText, statusAfterUserMessage } from './helpers.js';
+import { collectParticipants, countUnread, previewMessage, statusAfterUserMessage } from './helpers.js';
 
 export class SupportChatError extends Error {
   constructor(
@@ -36,12 +37,34 @@ export interface SupportThreadWithMessages {
 export type SupportChatMessageWithAuthor = SupportChatMessageRow & { authorLogin: string | null };
 
 export interface SupportChatService extends SupportChatBackendService {
-  getUserThread(userId: string): Promise<SupportThreadWithMessages | null>;
+  /** Активное обращение пользователя — свежее по updatedAt; его показывает плавающий виджет. */
+  getActiveUserThread(userId: string): Promise<SupportThreadWithMessages | null>;
+  /** Все обращения пользователя со сводкой для страницы «Мои обращения». */
+  listUserThreads(userId: string): Promise<SupportUserThreadSummaryDto[]>;
+  /** Сумма непрочитанного по всем обращениям — для бейджа на виджете. */
+  getUserUnreadTotal(userId: string): Promise<number>;
+  /** Обращение пользователя по id; `null` — чужое или несуществующее. */
+  getUserThreadById(userId: string, threadId: string): Promise<SupportThreadWithMessages | null>;
+  /** Новое обращение с первым сообщением. */
+  createUserThread(
+    userId: string,
+    body: string,
+    attachment?: SupportAttachmentUploadDto | null,
+  ): Promise<SupportThreadWithMessages & { message: SupportChatMessageWithAuthor }>;
+  /** Сообщение в конкретное обращение пользователя (в отличие от виджета, который пишет в активное). */
+  sendUserThreadMessage(
+    userId: string,
+    threadId: string,
+    body: string,
+    attachment?: SupportAttachmentUploadDto | null,
+  ): Promise<SupportThreadWithMessages & { message: SupportChatMessageWithAuthor }>;
+  markUserThreadRead(userId: string, threadId: string): Promise<void>;
   sendUserMessage(
     userId: string,
     body: string,
     attachment?: SupportAttachmentUploadDto | null,
   ): Promise<SupportThreadWithMessages & { message: SupportChatMessageWithAuthor }>;
+  /** Отметка прочтения активного обращения (виджет). */
   markUserRead(userId: string): Promise<void>;
   listThreads(): Promise<SupportAdminThreadDto[]>;
   getThread(threadId: string): Promise<SupportThreadWithMessages & { userLogin: string }>;
@@ -125,6 +148,26 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
       .orderBy(asc(supportChatMessages.createdAt));
 
     return rows.map(({ message, authorLogin }) => ({ ...message, authorLogin }));
+  }
+
+  /** Сообщения нескольких тредов одним запросом: страница «Мои обращения» показывает сводки. */
+  async function loadMessagesForThreads(threadIds: string[]): Promise<Map<string, SupportChatMessageWithAuthor[]>> {
+    const grouped = new Map<string, SupportChatMessageWithAuthor[]>();
+    if (threadIds.length === 0) return grouped;
+
+    const rows = await db
+      .select({ message: supportChatMessages, authorLogin: identityUser.login })
+      .from(supportChatMessages)
+      .leftJoin(identityUser, eq(identityUser.id, supportChatMessages.authorId))
+      .where(inArray(supportChatMessages.threadId, threadIds))
+      .orderBy(asc(supportChatMessages.createdAt));
+
+    for (const { message, authorLogin } of rows) {
+      const list = grouped.get(message.threadId) ?? [];
+      list.push({ ...message, authorLogin });
+      grouped.set(message.threadId, list);
+    }
+    return grouped;
   }
 
   async function loadThreadOrThrow(threadId: string) {
@@ -212,9 +255,57 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
       return { threadId: thread.id, status: thread.status, messages: messages.map(toMessageDto) };
     },
 
-    async getUserThread(userId) {
-      const [thread] = await db.select().from(supportChatThreads).where(eq(supportChatThreads.userId, userId)).limit(1);
+    async getActiveUserThread(userId) {
+      const [thread] = await db
+        .select()
+        .from(supportChatThreads)
+        .where(eq(supportChatThreads.userId, userId))
+        .orderBy(desc(supportChatThreads.updatedAt))
+        .limit(1);
       if (!thread) return null;
+      return { thread, messages: await loadMessages(db, thread.id) };
+    },
+
+    async listUserThreads(userId) {
+      const threads = await db
+        .select()
+        .from(supportChatThreads)
+        .where(eq(supportChatThreads.userId, userId))
+        .orderBy(desc(supportChatThreads.updatedAt));
+      if (threads.length === 0) return [];
+
+      const messagesByThread = await loadMessagesForThreads(threads.map(thread => thread.id));
+
+      return threads.map<SupportUserThreadSummaryDto>(thread => {
+        const messages = messagesByThread.get(thread.id) ?? [];
+        const last = messages[messages.length - 1];
+        return {
+          id: thread.id,
+          status: thread.status,
+          createdAt: thread.createdAt.toISOString(),
+          updatedAt: thread.updatedAt.toISOString(),
+          unreadCount: countUnread(messages, 'user', thread.userLastReadAt),
+          messageCount: messages.length,
+          lastMessagePreview: last ? previewMessage(last.body, last.attachmentName) : null,
+          participants: collectParticipants(messages),
+        };
+      });
+    },
+
+    async getUserUnreadTotal(userId) {
+      const [row] = await db
+        .select({
+          unread: sql<number>`count(*) filter (where ${supportChatMessages.authorRole} <> 'user' and ${supportChatMessages.createdAt} > coalesce(${supportChatThreads.userLastReadAt}, '-infinity'::timestamptz))::int`,
+        })
+        .from(supportChatMessages)
+        .innerJoin(supportChatThreads, eq(supportChatThreads.id, supportChatMessages.threadId))
+        .where(eq(supportChatThreads.userId, userId));
+      return row?.unread ?? 0;
+    },
+
+    async getUserThreadById(userId, threadId) {
+      const [thread] = await db.select().from(supportChatThreads).where(eq(supportChatThreads.id, threadId)).limit(1);
+      if (!thread || thread.userId !== userId) return null;
       return { thread, messages: await loadMessages(db, thread.id) };
     },
 
@@ -238,7 +329,44 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
     },
 
     async markUserRead(userId) {
-      await db.update(supportChatThreads).set({ userLastReadAt: new Date() }).where(eq(supportChatThreads.userId, userId));
+      const [thread] = await db
+        .select({ id: supportChatThreads.id })
+        .from(supportChatThreads)
+        .where(eq(supportChatThreads.userId, userId))
+        .orderBy(desc(supportChatThreads.updatedAt))
+        .limit(1);
+      if (!thread) return;
+      await db.update(supportChatThreads).set({ userLastReadAt: new Date() }).where(eq(supportChatThreads.id, thread.id));
+    },
+
+    async markUserThreadRead(userId, threadId) {
+      const [thread] = await db.select().from(supportChatThreads).where(eq(supportChatThreads.id, threadId)).limit(1);
+      if (!thread || thread.userId !== userId) throw new SupportChatError('Thread not found', 404);
+      await db.update(supportChatThreads).set({ userLastReadAt: new Date() }).where(eq(supportChatThreads.id, threadId));
+    },
+
+    async createUserThread(userId, body, attachment) {
+      const now = new Date();
+      const result = await db.transaction(async tx => {
+        const [thread] = await tx
+          .insert(supportChatThreads)
+          .values({ userId, status: 'open', createdAt: now, updatedAt: now, userLastReadAt: now })
+          .returning();
+        return writeMessage(tx, thread, 'user', userId, body, attachment ?? null, now);
+      });
+      emitMessage(result.thread, result.message);
+      return result;
+    },
+
+    async sendUserThreadMessage(userId, threadId, body, attachment) {
+      const now = new Date();
+      const result = await db.transaction(async tx => {
+        const [thread] = await tx.select().from(supportChatThreads).where(eq(supportChatThreads.id, threadId)).limit(1);
+        if (!thread || thread.userId !== userId) throw new SupportChatError('Thread not found', 404);
+        return writeMessage(tx, thread, 'user', userId, body, attachment ?? null, now);
+      });
+      emitMessage(result.thread, result.message);
+      return result;
     },
 
     async listThreads() {
@@ -291,7 +419,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
           status: row.status,
           updatedAt: row.updatedAt.toISOString(),
           unreadCount: unreadByThread.get(row.id) ?? 0,
-          lastMessagePreview: last ? previewText(last.body.trim() ? last.body : (last.attachmentName ?? '')) : null,
+          lastMessagePreview: last ? previewMessage(last.body, last.attachmentName) : null,
         };
       });
     },
