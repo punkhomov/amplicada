@@ -35,6 +35,7 @@ export {
   metricsErrorSamplesQueryOptions,
   metricsErrorsQueryOptions,
   metricsEventsQueryOptions,
+  metricsHealthQueryOptions,
   metricsQueryKeys,
   metricsRoutesQueryOptions,
   metricsSeriesQueryOptions,

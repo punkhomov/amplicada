@@ -36,6 +36,7 @@ export interface DispatchStats {
 export class OutboxDispatcher {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  private lastDispatchAtValue: Date | null = null;
 
   constructor(
     private readonly deps: {
@@ -46,6 +47,10 @@ export class OutboxDispatcher {
       batchSize?: number;
     },
   ) {}
+
+  get stats(): { lastDispatchAt: Date | null } {
+    return { lastDispatchAt: this.lastDispatchAtValue };
+  }
 
   start(): void {
     if (this.timer) return;
@@ -117,6 +122,7 @@ export class OutboxDispatcher {
         }
         await this.deps.store.insertDeliveries(deliveries);
       }
+      this.lastDispatchAtValue = new Date();
       return stats;
     } catch (error) {
       this.deps.logger.error({ err: error }, 'Metrics outbox dispatch failed');

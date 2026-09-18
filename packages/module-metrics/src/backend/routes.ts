@@ -165,6 +165,8 @@ export function createMetricsRoutes(fastify: FastifyInstance, deps: MetricsRoute
 
   fastify.post('/admin/alerts/evaluate', { preHandler: requireUser }, async () => deps.service.evaluateAlerts());
 
+  fastify.get('/admin/health', { preHandler: requireUser }, async () => deps.service.health());
+
   fastify.get('/admin/sinks', { preHandler: requireUser }, async () => deps.service.listSinks());
 
   fastify.patch('/admin/sinks/:id', { preHandler: requireUser }, async (request, reply) => {

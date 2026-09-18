@@ -225,6 +225,24 @@ export interface AlertEvaluationResultDto {
   resolved: number;
 }
 
+/** Сводка здоровья модуля: объёмы, очередь, состояния и runtime-счётчики. */
+export interface MetricsHealthDto {
+  eventsByKind: { kind: string; count: number }[];
+  storage: { totalBytes: number; tables: { name: string; bytes: number }[] };
+  seriesCount: number;
+  approximateRows: { events: number; points: number };
+  outbox: { pending: number; dead: number };
+  alerts: { firing: number; pending: number };
+  ingest: { accepted: number; rejected: number; duplicates: number; rateLimited: number };
+  runtime: {
+    bufferSize: number;
+    bufferOverflow: number;
+    lastFlushAt: string | null;
+    flushErrors: number;
+    lastDispatchAt: string | null;
+  };
+}
+
 export interface SinkConfigDto {
   id: string;
   /** i18n-ключ заголовка выхода (из реестра sink'ов). */

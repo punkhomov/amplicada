@@ -13,3 +13,16 @@ export function formatPercent(value: number): string {
 export function shortHash(hash: string, length = 10): string {
   return hash.length > length ? `${hash.slice(0, length)}…` : hash;
 }
+
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[index]}`;
+}

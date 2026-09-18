@@ -12,6 +12,7 @@ import type {
   MetricsCatalogDto,
   MetricsContextDto,
   MetricsEventListDto,
+  MetricsHealthDto,
   MetricsSettingsDto,
   RoutesSummaryDto,
   SinkDeliveriesDto,
@@ -29,6 +30,7 @@ export const metricsQueryKeys = {
   catalog: ['metrics', 'catalog'] as const,
   routes: (period: MetricsPeriod) => ['metrics', 'routes', period] as const,
   sql: (period: MetricsPeriod) => ['metrics', 'sql', period] as const,
+  health: ['metrics', 'health'] as const,
   sinks: ['metrics', 'sinks'] as const,
   alertRules: ['metrics', 'alert-rules'] as const,
   alertInstances: ['metrics', 'alert-instances'] as const,
@@ -55,6 +57,14 @@ const PERIOD_MS: Record<MetricsPeriod, number> = {
 
 function periodRange(period: MetricsPeriod, now = Date.now()): { from: string; to: string } {
   return { from: new Date(now - PERIOD_MS[period]).toISOString(), to: new Date(now).toISOString() };
+}
+
+export function metricsHealthQueryOptions(api: ApiClient) {
+  return {
+    queryKey: metricsQueryKeys.health,
+    queryFn: () => api.get<MetricsHealthDto>('/metrics/admin/health'),
+    refetchInterval: 30_000,
+  };
 }
 
 export function metricsAlertRulesQueryOptions(api: ApiClient) {

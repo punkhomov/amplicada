@@ -36,6 +36,24 @@ test('буфер агрегирует окно: count/sum/min/max и гисто�
   assert.equal(buffer.size(), 0);
 });
 
+test('cap серий сворачивает лишние измерения в overflow', () => {
+  const buffer = new MeasurementBuffer(10_000, undefined, 2);
+  buffer.record(series({ route: '/a' }), 0.1, 1_000_000);
+  buffer.record(series({ route: '/b' }), 0.1, 1_000_000);
+  buffer.record(series({ route: '/c' }), 0.1, 1_000_000);
+  buffer.record(series({ route: '/d' }), 0.1, 1_000_000);
+
+  const points = buffer.drain();
+  const overflow = points.find(point => point.series.dims.__overflow === 'true');
+  assert.ok(overflow);
+  assert.equal(overflow.count, 2);
+  assert.equal(buffer.overflowCount(), 2);
+
+  // Новое окно снова даёт место обычным сериям.
+  buffer.record(series({ route: '/e' }), 0.1, 1_010_000);
+  assert.equal(buffer.drain().length, 1);
+});
+
 test('разные окна дают разные точки', () => {
   const buffer = new MeasurementBuffer(10_000);
   buffer.record(series(), 0.1, 1_000_000);

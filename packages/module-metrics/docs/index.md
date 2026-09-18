@@ -76,8 +76,10 @@ firing → resolved) и публикуют переходы в шину ядра
 | Конфиг: env, зависимости, порядок | [reference/settings.md](./reference/settings.md#переменные-окружения) |
 | Интеграции и потребители | [reference/business-metrics.md](./reference/business-metrics.md) |
 | Ошибки и Web Vitals | [reference/errors-and-vitals.md](./reference/errors-and-vitals.md) |
+| Масштаб, лимиты, эксплуатация | [explanation/scaling.md](./explanation/scaling.md) |
 | Выходы (webhook, очередь, экспорт) | [reference/outputs.md](./reference/outputs.md) |
 | Алерты | [reference/alerts.md](./reference/alerts.md) |
+| Здоровье (health, объёмы, очередь) | [explanation/scaling.md](./explanation/scaling.md#что-мониторить) |
 | Ограничения для потребителя | [explanation/architecture.md](./explanation/architecture.md#ограничения) |
 
 ## Freshness
@@ -91,4 +93,5 @@ firing → resolved) и публикуют переходы в шину ядра
   бизнес-события поддержки (`thread.opened`, `message.sent`, `status_changed`),
   определения/сводки/серии, группировка ошибок (2 issue из 3 событий, шаблон с `<n>`),
   samples со стеком, p75 Web Vitals (LCP/CLS) с рейтингами, webhook-доставка (sent),
-  DLQ на 400, CSV-экспорт, алерты (firing после evaluate и auto-resolved по интервалу).
+  DLQ на 400, CSV-экспорт, алерты (firing после evaluate и auto-resolved по интервалу),
+  health-сводка (объёмы, очередь, runtime-счётчики).

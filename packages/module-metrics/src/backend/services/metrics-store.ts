@@ -164,6 +164,64 @@ export function createPostgresMetricsStore(db: BackendDbService) {
         .limit(limit);
     },
 
+    // --- Здоровье и объёмы ---
+
+    async eventsByKindLastHour(): Promise<{ kind: string; count: number }[]> {
+      const result = await db.execute(sql`
+        select kind, count(*)::bigint as count
+        from metrics.events
+        where occurred_at >= now() - interval '1 hour'
+        group by 1
+        order by 2 desc
+      `);
+      return (result.rows as { kind: string; count: string }[]).map(row => ({ kind: row.kind, count: Number(row.count) }));
+    },
+
+    async storageStats(): Promise<{ totalBytes: number; tables: { name: string; bytes: number }[] }> {
+      const result = await db.execute(sql`
+        select c.relname as name, pg_total_relation_size(c.oid)::bigint as bytes
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'metrics' and c.relkind = 'r'
+        order by bytes desc
+        limit 20
+      `);
+      const tables = (result.rows as { name: string; bytes: string }[]).map(row => ({
+        name: row.name,
+        bytes: Number(row.bytes),
+      }));
+      return { totalBytes: tables.reduce((sum, table) => sum + table.bytes, 0), tables };
+    },
+
+    /** Приблизительные строки (reltuples): точный count(*) по партициям слишком дорог для UI. */
+    async approximateRows(): Promise<{ events: number; points: number }> {
+      const result = await db.execute(sql`
+        select
+          coalesce(sum(c.reltuples) filter (where c.relname like 'events%'), 0)::bigint as events,
+          coalesce(sum(c.reltuples) filter (where c.relname like 'points%'), 0)::bigint as points
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'metrics' and c.relkind = 'r'
+      `);
+      const row = (result.rows as { events: string; points: string }[])[0];
+      return { events: Number(row?.events ?? 0), points: Number(row?.points ?? 0) };
+    },
+
+    async countSeries(): Promise<number> {
+      const [row] = await db.select({ value: count() }).from(metricsSeries);
+      return Number(row?.value ?? 0);
+    },
+
+    async countAlertInstancesByState(): Promise<{ firing: number; pending: number }> {
+      const result = await db.execute(sql`
+        select state, count(*)::bigint as count
+        from metrics.alert_instances
+        group by 1
+      `);
+      const byState = new Map((result.rows as { state: string; count: string }[]).map(row => [row.state, Number(row.count)]));
+      return { firing: byState.get('firing') ?? 0, pending: byState.get('pending') ?? 0 };
+    },
+
     // --- Алерты: правила, состояния, история ---
 
     async listAlertRules(enabledOnly = false): Promise<AlertRuleRow[]> {

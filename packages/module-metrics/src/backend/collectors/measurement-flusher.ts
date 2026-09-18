@@ -37,8 +37,14 @@ export class MeasurementFlusher {
   private timer: ReturnType<typeof setInterval> | null = null;
   private pending: AggregatedMeasurement[] = [];
   private flushing = false;
+  private lastFlushAtValue: Date | null = null;
+  private flushErrorCount = 0;
 
   constructor(private readonly deps: MeasurementFlusherDeps) {}
+
+  get stats(): { lastFlushAt: Date | null; flushErrors: number } {
+    return { lastFlushAt: this.lastFlushAtValue, flushErrors: this.flushErrorCount };
+  }
 
   start(): void {
     if (this.timer) return;
@@ -71,8 +77,11 @@ export class MeasurementFlusher {
 
       const slowQueries = this.deps.drains?.drainSlowQueries() ?? [];
       if (slowQueries.length > 0) await this.deps.sink.insertSlowQueries(slowQueries);
+
+      this.lastFlushAtValue = new Date();
     } catch (error) {
       this.pending = points;
+      this.flushErrorCount += 1;
       this.deps.logger.error({ err: error }, 'Metrics flush failed');
     } finally {
       this.flushing = false;

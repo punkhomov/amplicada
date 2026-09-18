@@ -89,6 +89,12 @@ export const metricsModule: BackendModule = {
       sinks: sinkRegistry,
       logger,
       eventBus: context.eventBus,
+      runtimeStats: () => ({
+        bufferSize: buffer.size(),
+        bufferOverflow: buffer.overflowCount(),
+        lastFlushAt: flusher?.stats.lastFlushAt ?? null,
+        flushErrors: flusher?.stats.flushErrors ?? 0,
+      }),
     });
     metricsService = service;
     context.services.register('metrics', service);

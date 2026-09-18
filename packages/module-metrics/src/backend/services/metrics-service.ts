@@ -17,6 +17,7 @@ import type {
   MetricEventKind,
   MetricSeriesDto,
   MetricsContextDto,
+  MetricsHealthDto,
   MetricsSettingsDto,
   MetricsSettingsPatch,
   OutboxDispatchResultDto,
@@ -94,6 +95,7 @@ export interface MetricsService {
   pruneAlertEvents(before: Date): Promise<number>;
   startAlerts(): void;
   stopAlerts(): Promise<void>;
+  health(): Promise<MetricsHealthDto>;
   eventSeries(input: {
     name?: string;
     eventPrefix?: string;
@@ -199,6 +201,7 @@ export function createMetricsService({
   sinks,
   logger,
   eventBus,
+  runtimeStats,
 }: {
   db: BackendDbService;
   pseudonymizer: Pseudonymizer;
@@ -211,9 +214,17 @@ export function createMetricsService({
   /** Выходы наружу (webhook и т.п.) — опционально: без них очереди не наполняются. */
   sinks?: SinkRegistry;
   logger?: { error(obj: Record<string, unknown>, message: string): void };
+  /** Runtime-счётчики коллекторов (буфер, флашер) — их владелец setup. */
+  runtimeStats?: () => {
+    bufferSize: number;
+    bufferOverflow: number;
+    lastFlushAt: Date | null;
+    flushErrors: number;
+  };
 }): MetricsService {
   const store = createPostgresMetricsStore(db);
   const eventBuffer = new EventBuffer();
+  const healthCounters = { accepted: 0, rejected: 0, duplicates: 0, rateLimited: 0 };
   const dispatcher = sinks ? new OutboxDispatcher({ store, registry: sinks, logger: logger ?? { error: () => undefined } }) : null;
   let alertTimer: ReturnType<typeof setInterval> | null = null;
   let alertsRunning = false;
@@ -421,6 +432,9 @@ export function createMetricsService({
       });
 
       const { inserted, duplicates } = await persistEvents(rows);
+      healthCounters.accepted += inserted;
+      healthCounters.duplicates += duplicates;
+      healthCounters.rejected += batch.rejected.length;
       return { accepted: inserted, duplicates, overflow: batch.overflow, rejected: batch.rejected };
     },
 
@@ -682,6 +696,43 @@ export function createMetricsService({
       return store.pruneAlertEvents(before);
     },
 
+    async health() {
+      const [eventsByKind, storage, approximateRows, seriesCount, outbox, alerts] = await Promise.all([
+        store.eventsByKindLastHour(),
+        store.storageStats(),
+        store.approximateRows(),
+        store.countSeries(),
+        store.outboxStatsBySink(),
+        store.countAlertInstancesByState(),
+      ]);
+      const outboxTotals = [...outbox.values()].reduce(
+        (sum, entry) => ({ pending: sum.pending + entry.pending, dead: sum.dead + entry.dead }),
+        { pending: 0, dead: 0 },
+      );
+      const runtime = runtimeStats?.() ?? {
+        bufferSize: 0,
+        bufferOverflow: 0,
+        lastFlushAt: null,
+        flushErrors: 0,
+      };
+      return {
+        eventsByKind,
+        storage,
+        seriesCount,
+        approximateRows,
+        outbox: outboxTotals,
+        alerts,
+        ingest: { ...healthCounters },
+        runtime: {
+          bufferSize: runtime.bufferSize,
+          bufferOverflow: runtime.bufferOverflow,
+          lastFlushAt: runtime.lastFlushAt?.toISOString() ?? null,
+          flushErrors: runtime.flushErrors,
+          lastDispatchAt: dispatcher?.stats.lastDispatchAt?.toISOString() ?? null,
+        },
+      };
+    },
+
     startAlerts() {
       if (alertTimer) return;
       alertTimer = setInterval(() => void this.evaluateAlerts().catch(() => undefined), 60_000);
@@ -829,7 +880,9 @@ export function createMetricsService({
 
     async checkIngestRate(key, cost) {
       const settings = await settingsOrThrow();
-      return limiter.consume(key, cost, settings.ingestEventsPerMinute);
+      const decision = await limiter.consume(key, cost, settings.ingestEventsPerMinute);
+      if (!decision.allowed) healthCounters.rateLimited += 1;
+      return decision;
     },
 
     async getSettings() {

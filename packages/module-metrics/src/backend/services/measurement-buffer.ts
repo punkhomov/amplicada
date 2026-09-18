@@ -30,21 +30,42 @@ export function hashDims(dims: Record<string, string>): string {
  * In-process пред-агрегация: коллекторы копят наблюдения, флашер раз в окно забирает
  * готовые точки. В Postgres уезжает одна строка на (серию, окно), а не каждая выборка.
  */
+export const DEFAULT_MAX_SERIES_PER_WINDOW = 2000;
+
+/** Серия-переполнение: все лишние измерения сворачиваются в один бакет. */
+export const OVERFLOW_DIM = '__overflow';
+
 export class MeasurementBuffer {
   private readonly buckets = new Map<string, AggregatedMeasurement>();
+  private readonly seriesKeys = new Set<string>();
+  private overflow = 0;
 
   constructor(
     private readonly windowMs = 10_000,
     private readonly boundaries: readonly number[] = LATENCY_BOUNDARIES_SECONDS,
+    /** Cap уникальных серий за окно; сверх него измерения уходят в `__overflow`. */
+    private readonly maxSeriesPerWindow = DEFAULT_MAX_SERIES_PER_WINDOW,
   ) {}
 
   record(series: MeasurementSeries, value: number, at = Date.now()): void {
     const bucketMs = Math.floor(at / this.windowMs) * this.windowMs;
-    const key = `${series.instrument}|${hashDims(series.dims)}|${bucketMs}`;
+    let effective = series;
+    const seriesKey = `${series.instrument}|${hashDims(series.dims)}`;
+    if (!this.seriesKeys.has(seriesKey)) {
+      if (this.seriesKeys.size >= this.maxSeriesPerWindow) {
+        this.overflow += 1;
+        effective = { ...series, dims: { [OVERFLOW_DIM]: 'true' } };
+      } else {
+        this.seriesKeys.add(seriesKey);
+      }
+    }
+
+    const effectiveKey = `${effective.instrument}|${hashDims(effective.dims)}`;
+    const key = `${effectiveKey}|${bucketMs}`;
     let point = this.buckets.get(key);
     if (!point) {
       point = {
-        series,
+        series: effective,
         bucket: new Date(bucketMs),
         count: 0,
         sum: 0,
@@ -65,10 +86,16 @@ export class MeasurementBuffer {
   drain(): AggregatedMeasurement[] {
     const points = [...this.buckets.values()];
     this.buckets.clear();
+    this.seriesKeys.clear();
     return points;
   }
 
   size(): number {
     return this.buckets.size;
+  }
+
+  /** Сколько наблюдений свернуто в overflow-серию (кумулятивно с момента старта процесса). */
+  overflowCount(): number {
+    return this.overflow;
   }
 }

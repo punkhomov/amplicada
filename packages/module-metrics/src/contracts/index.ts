@@ -34,6 +34,7 @@ export type {
   MetricsCatalogDto,
   MetricsContextDto,
   MetricsEventListDto,
+  MetricsHealthDto,
   MetricsPanelsService,
   MetricsRateLimitedDto,
   MetricsSettingsDto,

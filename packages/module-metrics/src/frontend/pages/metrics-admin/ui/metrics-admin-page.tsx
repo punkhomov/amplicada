@@ -26,6 +26,7 @@ import { AlertsTab } from './alerts-tab.js';
 import { BusinessTab } from './business-tab.js';
 import { DeliveryTab } from './delivery-tab.js';
 import { ErrorsTab } from './errors-tab.js';
+import { HealthTab } from './health-tab.js';
 import { PanelsTab } from './panels-tab.js';
 import { RoutesTab } from './routes-tab.js';
 import { SqlTab } from './sql-tab.js';
@@ -112,6 +113,7 @@ export function MetricsAdminPage() {
             <TabsTrigger value="alerts">{t('tab_alerts')}</TabsTrigger>
             <TabsTrigger value="catalog">{t('tab_catalog')}</TabsTrigger>
             <TabsTrigger value="settings">{t('tab_settings')}</TabsTrigger>
+            <TabsTrigger value="health">{t('tab_health')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="events" className="flex flex-col gap-3">
@@ -254,6 +256,10 @@ export function MetricsAdminPage() {
                 </TableBody>
               </Table>
             </div>
+          </TabsContent>
+
+          <TabsContent value="health">
+            <HealthTab api={api} />
           </TabsContent>
 
           <TabsContent value="settings" className="max-w-xl">
