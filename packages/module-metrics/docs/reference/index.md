@@ -15,4 +15,5 @@ order: 30
 | [Технические метрики](./technical-metrics.md) | Роуты (RED), SQL (fingerprint, samples), задачи, коллекторы |
 | [Бизнес-метрики](./business-metrics.md) | `emit`, определения, панели модулей |
 | [Ошибки и Web Vitals](./errors-and-vitals.md) | Issues, группировка, p75 метрик |
+| [Выходы](./outputs.md) | Webhook, очередь доставки, DLQ, CSV-экспорт |
 | [Хранение и настройки](./settings.md) | Таблицы, поля настроек, задача обслуживания, env |

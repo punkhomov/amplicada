@@ -20,6 +20,9 @@ order: 30
 | `metrics.points` | Пред-агрегированные точки, партиции по месяцу | `series_id`, `bucket`, `count`, `sum`, `min`, `max`, `histogram` |
 | `metrics.sql_fingerprints` | Нормализованные тексты SQL по fingerprint | `fingerprint` (PK), `query_text`, `first_seen`, `last_seen` |
 | `metrics.slow_queries` | Samples медленных/ошибочных SQL, партиции по месяцу | `at`, `fingerprint`, `query_text`, `route`, `duration_ms`, `row_count`, `error_code`, `request_id` |
+| `metrics.sink_configs` | Конфиги выходов (webhook, yandex-metrica) | `id`, `enabled`, `settings`, `mapping` |
+| `metrics.outbox` | Durable-очередь доставки | `sink_id`, `item_id`, `payload`, `status`, `attempts`, `next_attempt_at`, уникальность `(sink_id, item_id)` |
+| `metrics.sink_deliveries` | Журнал попыток доставки | `sink_id`, `item_id`, `status`, `attempts`, `error` |
 
 Индексы `metrics.events`: btree `(name, occurred_at desc)`, частичные по `actor_hash` и
 `session_hash`, BRIN по `occurred_at`. Партиции создаются миграцией (текущий + 2 месяца) и
@@ -51,6 +54,7 @@ order: 30
 | Переменная | Обязательна | Назначение |
 |---|---|---|
 | `AMPLICADA_METRICS_PSEUDONYM_SALT` | для прода | Соль HMAC-псевдонимизации; читается core-сервисом `secrets`. Без неё — случайная процессная соль + warning |
+| `AMPLICADA_METRICS_WEBHOOK_SECRET` | нет | HMAC-секрет подписи webhook-доставки (`x-metrics-signature`); без него — без подписи |
 
 ## Точки core, на которые опирается модуль
 

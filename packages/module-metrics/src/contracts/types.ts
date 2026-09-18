@@ -146,6 +146,55 @@ export interface MetricPanel {
   aggregate?: 'count';
 }
 
+export interface SinkConfigDto {
+  id: string;
+  /** i18n-ключ заголовка выхода (из реестра sink'ов). */
+  titleKey: string;
+  enabled: boolean;
+  settings: Record<string, unknown>;
+  mapping: Record<string, unknown>;
+  updatedAt: string;
+  /** Состояние очереди доставки этого выхода. */
+  pending: number;
+  dead: number;
+}
+
+export interface SinkConfigPatch {
+  enabled?: boolean;
+  settings?: Record<string, unknown>;
+  mapping?: Record<string, unknown>;
+}
+
+export interface SinksDto {
+  sinks: SinkConfigDto[];
+}
+
+export interface SinkDeliveryDto {
+  id: number;
+  sinkId: string;
+  itemId: string;
+  status: 'sent' | 'failed' | 'dead';
+  attempts: number;
+  error: string | null;
+  at: string;
+}
+
+export interface SinkDeliveriesDto {
+  deliveries: SinkDeliveryDto[];
+}
+
+export interface SinkTestResultDto {
+  ok: boolean;
+  status?: number;
+  error?: string;
+}
+
+export interface OutboxDispatchResultDto {
+  sent: number;
+  failed: number;
+  dead: number;
+}
+
 /** Сгруппированная ошибка (issue): fingerprint + агрегаты. */
 export interface ErrorIssueDto {
   fingerprint: string;

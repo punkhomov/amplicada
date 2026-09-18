@@ -11,6 +11,8 @@ import type {
   MetricsEventListDto,
   MetricsSettingsDto,
   RoutesSummaryDto,
+  SinkDeliveriesDto,
+  SinksDto,
   SlowQueryListDto,
   SqlSummaryListDto,
   VitalsSummaryDto,
@@ -24,6 +26,8 @@ export const metricsQueryKeys = {
   catalog: ['metrics', 'catalog'] as const,
   routes: (period: MetricsPeriod) => ['metrics', 'routes', period] as const,
   sql: (period: MetricsPeriod) => ['metrics', 'sql', period] as const,
+  sinks: ['metrics', 'sinks'] as const,
+  deliveries: (sinkId: string) => ['metrics', 'deliveries', sinkId] as const,
   errors: (period: MetricsPeriod) => ['metrics', 'errors', period] as const,
   errorSamples: (fingerprint: string) => ['metrics', 'error-samples', fingerprint] as const,
   vitals: (period: MetricsPeriod) => ['metrics', 'vitals', period] as const,
@@ -45,6 +49,22 @@ const PERIOD_MS: Record<MetricsPeriod, number> = {
 
 function periodRange(period: MetricsPeriod, now = Date.now()): { from: string; to: string } {
   return { from: new Date(now - PERIOD_MS[period]).toISOString(), to: new Date(now).toISOString() };
+}
+
+export function metricsSinksQueryOptions(api: ApiClient) {
+  return {
+    queryKey: metricsQueryKeys.sinks,
+    queryFn: () => api.get<SinksDto>('/metrics/admin/sinks'),
+    refetchInterval: 30_000,
+  };
+}
+
+export function metricsDeliveriesQueryOptions(api: ApiClient, sinkId?: string) {
+  return {
+    queryKey: metricsQueryKeys.deliveries(sinkId ?? 'all'),
+    queryFn: () => api.get<SinkDeliveriesDto>(`/metrics/admin/deliveries?limit=50${sinkId ? `&sinkId=${encodeURIComponent(sinkId)}` : ''}`),
+    refetchInterval: 30_000,
+  };
 }
 
 export function metricsErrorsQueryOptions(api: ApiClient, period: MetricsPeriod) {

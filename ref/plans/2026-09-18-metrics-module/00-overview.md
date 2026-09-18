@@ -49,6 +49,13 @@ unhandledrejection и React-ошибки, нормализует сообщен�
 issues и samples. `web-vitals` (6.2.1) шлёт `web_vital.*`, сервер пишет и события, и
 гистограммы с порогами good/poor — вкладка «Web Vitals» показывает p75/p95 и рейтинги.
 Release health и воронки — осознанно отложены (notes D-014, D-015).
+
+**Обновление 2026-09-18 (этап 05, часть 1):** выходы. Контракт `MetricSink` + реестр,
+webhook-адаптер (HMAC-подпись, таймаут, классификация ответов), durable-очередь
+`metrics.outbox` с диспетчером (батчи, backoff 30 с → 1 ч, 6 попыток, DLQ), журнал
+`metrics.sink_deliveries`, API `admin/sinks|deliveries|outbox/dispatch`, CSV-экспорт событий
+и вкладка «Доставка». Все выходы выключены по умолчанию. Осталось по этапу: адаптер
+Яндекс.Метрики (Measurement Protocol + Offline Conversions) и алерты-правила.
 Рационал — `ref/notes/module-metrics.md`.
 
 Зонтичная папка по модулю метрик (`module-metrics`). Исследование возможности и направления:

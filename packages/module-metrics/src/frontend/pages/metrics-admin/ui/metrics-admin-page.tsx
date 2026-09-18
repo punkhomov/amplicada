@@ -23,6 +23,7 @@ import {
   metricsSettingsQueryOptions,
 } from '../../../lib/query-options.js';
 import { BusinessTab } from './business-tab.js';
+import { DeliveryTab } from './delivery-tab.js';
 import { ErrorsTab } from './errors-tab.js';
 import { PanelsTab } from './panels-tab.js';
 import { RoutesTab } from './routes-tab.js';
@@ -106,6 +107,7 @@ export function MetricsAdminPage() {
             <TabsTrigger value="vitals">{t('tab_vitals')}</TabsTrigger>
             <TabsTrigger value="business">{t('tab_business')}</TabsTrigger>
             <TabsTrigger value="panels">{t('tab_panels')}</TabsTrigger>
+            <TabsTrigger value="delivery">{t('tab_delivery')}</TabsTrigger>
             <TabsTrigger value="catalog">{t('tab_catalog')}</TabsTrigger>
             <TabsTrigger value="settings">{t('tab_settings')}</TabsTrigger>
           </TabsList>
@@ -131,6 +133,14 @@ export function MetricsAdminPage() {
                 placeholder={t('filter_name_placeholder')}
                 onChange={event => setName(event.target.value)}
               />
+              <a
+                href={`/api/metrics/export/events.csv?kind=${kind === 'all' ? '' : kind}&name=${encodeURIComponent(name.trim())}`}
+                download
+              >
+                <Button variant="outline" size="sm">
+                  {t('export_csv')}
+                </Button>
+              </a>
               <span className="text-sm text-muted-foreground">
                 {eventsQuery.isFetching ? t('refreshing') : t('events_count', { count: events.length })}
               </span>
@@ -193,6 +203,10 @@ export function MetricsAdminPage() {
 
           <TabsContent value="panels">
             <PanelsTab api={api} period={period} onPeriodChange={setPeriod} />
+          </TabsContent>
+
+          <TabsContent value="delivery">
+            <DeliveryTab api={api} />
           </TabsContent>
 
           <TabsContent value="catalog">

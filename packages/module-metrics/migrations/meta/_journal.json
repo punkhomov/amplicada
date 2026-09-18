@@ -29,6 +29,13 @@
       "when": 1758203000000,
       "tag": "0003_errors",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1758204000000,
+      "tag": "0004_outputs",
+      "breakpoints": true
     }
   ]
 }

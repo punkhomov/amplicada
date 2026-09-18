@@ -1,5 +1,5 @@
 import type { BackendDbService } from '@amplicada/platform-core/contracts/backend';
-import { and, count, desc, eq, gte, ilike, lt, max, min, type SQL, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, lt, max, min, type SQL, sql } from 'drizzle-orm';
 import type { MetricCatalogEntryDto, MetricEventKind } from '../../contracts/index.js';
 import {
   type ErrorIssueRow,
@@ -7,14 +7,20 @@ import {
   type MetricsSettingsRow,
   metricsErrorIssues,
   metricsEvents,
+  metricsOutbox,
   metricsPoints,
   metricsSeries,
   metricsSettings,
+  metricsSinkConfigs,
+  metricsSinkDeliveries,
   metricsSlowQueries,
   metricsSqlFingerprints,
   type NewMetricEventRow,
+  type OutboxRow,
+  type SinkConfigRow,
   type SlowQueryRow,
 } from '../schemas/index.js';
+import type { OutboxDeliveryInput } from '../sinks/outbox-dispatcher.js';
 import { createHistogram, type Histogram, histogramCount, LATENCY_BOUNDARIES_SECONDS, percentileFromHistogram } from './histogram.js';
 import { type AggregatedMeasurement, hashDims, type MeasurementSeries } from './measurement-buffer.js';
 import { VITAL_SPECS } from './web-vitals.js';
@@ -71,6 +77,19 @@ export interface VitalSummary {
   good: number;
   needsImprovement: number;
   poor: number;
+}
+
+export interface SinkConfigPatchRow {
+  enabled?: boolean;
+  settings?: Record<string, unknown>;
+  mapping?: Record<string, unknown>;
+}
+
+export interface OutboxEnqueueRow {
+  sinkId: string;
+  itemKind: string;
+  itemId: string;
+  payload: Record<string, unknown>;
 }
 
 export interface EventSeriesQuery {
@@ -131,6 +150,103 @@ export function createPostgresMetricsStore(db: BackendDbService) {
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(metricsEvents.occurredAt))
         .limit(limit);
+    },
+
+    // --- Выходы: конфиги, очередь, доставки ---
+
+    async listSinkConfigs(): Promise<SinkConfigRow[]> {
+      return db.select().from(metricsSinkConfigs).orderBy(metricsSinkConfigs.id);
+    },
+
+    async getSinkConfig(id: string): Promise<SinkConfigRow | undefined> {
+      const [row] = await db.select().from(metricsSinkConfigs).where(eq(metricsSinkConfigs.id, id)).limit(1);
+      return row;
+    },
+
+    async updateSinkConfig(id: string, patch: SinkConfigPatchRow): Promise<SinkConfigRow | undefined> {
+      const [row] = await db
+        .update(metricsSinkConfigs)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(metricsSinkConfigs.id, id))
+        .returning();
+      return row;
+    },
+
+    async enqueueOutbox(rows: OutboxEnqueueRow[]): Promise<number> {
+      if (rows.length === 0) return 0;
+      const inserted = await db.insert(metricsOutbox).values(rows).onConflictDoNothing().returning({ id: metricsOutbox.id });
+      return inserted.length;
+    },
+
+    async listDueOutbox(limit: number): Promise<OutboxRow[]> {
+      return db
+        .select()
+        .from(metricsOutbox)
+        .where(and(eq(metricsOutbox.status, 'pending'), lt(metricsOutbox.nextAttemptAt, new Date())))
+        .orderBy(metricsOutbox.id)
+        .limit(limit);
+    },
+
+    async markOutboxSent(ids: number[]): Promise<void> {
+      if (ids.length === 0) return;
+      await db.update(metricsOutbox).set({ status: 'sent' }).where(inArray(metricsOutbox.id, ids));
+    },
+
+    async markOutboxDead(id: number, error: string): Promise<void> {
+      await db.update(metricsOutbox).set({ status: 'dead', lastError: error }).where(eq(metricsOutbox.id, id));
+    },
+
+    async markOutboxRetry(id: number, attempts: number, nextAttemptAt: Date, error: string): Promise<void> {
+      await db.update(metricsOutbox).set({ attempts, nextAttemptAt, lastError: error }).where(eq(metricsOutbox.id, id));
+    },
+
+    async insertDeliveries(rows: OutboxDeliveryInput[]): Promise<void> {
+      if (rows.length === 0) return;
+      await db.insert(metricsSinkDeliveries).values(rows);
+    },
+
+    async listDeliveries(limit: number, sinkId?: string): Promise<(typeof metricsSinkDeliveries.$inferSelect)[]> {
+      const conditions = sinkId ? and(eq(metricsSinkDeliveries.sinkId, sinkId)) : undefined;
+      return db
+        .select()
+        .from(metricsSinkDeliveries)
+        .where(conditions)
+        .orderBy(desc(metricsSinkDeliveries.at))
+        .limit(Math.min(Math.max(limit, 1), 200));
+    },
+
+    async outboxStatsBySink(): Promise<Map<string, { pending: number; dead: number }>> {
+      const result = await db.execute(sql`
+        select sink_id,
+               count(*) filter (where status = 'pending')::bigint as pending,
+               count(*) filter (where status = 'dead')::bigint as dead
+        from metrics.outbox
+        group by 1
+      `);
+      return new Map(
+        (result.rows as { sink_id: string; pending: string; dead: string }[]).map(row => [
+          row.sink_id,
+          { pending: Number(row.pending), dead: Number(row.dead) },
+        ]),
+      );
+    },
+
+    async exportEvents(
+      from: Date,
+      to: Date,
+      kind: MetricEventKind | undefined,
+      name: string | undefined,
+      limit = 5000,
+    ): Promise<MetricEventRow[]> {
+      const conditions: SQL[] = [gte(metricsEvents.occurredAt, from), lt(metricsEvents.occurredAt, to)];
+      if (kind) conditions.push(eq(metricsEvents.kind, kind));
+      if (name) conditions.push(ilike(metricsEvents.name, `%${name}%`));
+      return db
+        .select()
+        .from(metricsEvents)
+        .where(and(...conditions))
+        .orderBy(desc(metricsEvents.occurredAt))
+        .limit(Math.min(Math.max(limit, 1), 20_000));
     },
 
     /** Upsert сгруппированных ошибок: счётчик растёт, рамки жизни и релизы обновляются. */

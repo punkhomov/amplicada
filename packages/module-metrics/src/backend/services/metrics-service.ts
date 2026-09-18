@@ -8,17 +8,26 @@ import type {
   MetricDefinitionSummaryDto,
   MetricEventDto,
   MetricEventInput,
+  MetricEventKind,
   MetricSeriesDto,
   MetricsContextDto,
   MetricsSettingsDto,
   MetricsSettingsPatch,
+  OutboxDispatchResultDto,
   RouteSummaryDto,
+  SinkConfigDto,
+  SinkConfigPatch,
+  SinkDeliveryDto,
+  SinksDto,
+  SinkTestResultDto,
   SlowQueryDto,
   SqlSummaryDto,
 } from '../../contracts/index.js';
 import type { CollectorConfig } from '../collectors/config.js';
 import type { SlowQueryInsert } from '../collectors/sql-collector.js';
-import type { MetricEventRow, MetricsSettingsRow, NewMetricEventRow } from '../schemas/index.js';
+import type { MetricEventRow, MetricsSettingsRow, NewMetricEventRow, SinkConfigRow } from '../schemas/index.js';
+import { OutboxDispatcher } from '../sinks/outbox-dispatcher.js';
+import type { MetricSink, SinkRegistry } from '../sinks/sink.js';
 import { errorFingerprint } from './error-fingerprint.js';
 import { EventBuffer } from './event-buffer.js';
 import type { AggregatedMeasurement, MeasurementSeries } from './measurement-buffer.js';
@@ -59,6 +68,14 @@ export interface MetricsService {
   listErrorIssues(from: Date, to: Date, limit?: number): Promise<ErrorIssueSummary[]>;
   listErrorSamples(fingerprint: string, limit?: number): Promise<MetricEventRow[]>;
   vitalsSummary(from: Date, to: Date): Promise<VitalSummary[]>;
+  listSinks(): Promise<SinksDto>;
+  updateSink(id: string, patch: SinkConfigPatch): Promise<SinkConfigDto>;
+  testSink(id: string): Promise<SinkTestResultDto>;
+  listDeliveries(limit?: number, sinkId?: string): Promise<SinkDeliveryDto[]>;
+  dispatchOutbox(): Promise<OutboxDispatchResultDto>;
+  startSinks(): void;
+  stopSinks(): Promise<void>;
+  exportEventsCsv(input: { from: Date; to: Date; kind?: MetricEventKind; name?: string; limit?: number }): Promise<string>;
   eventSeries(input: {
     name?: string;
     eventPrefix?: string;
@@ -161,6 +178,8 @@ export function createMetricsService({
   limiter,
   getDefinitions,
   recordMeasurement,
+  sinks,
+  logger,
 }: {
   db: BackendDbService;
   pseudonymizer: Pseudonymizer;
@@ -168,9 +187,64 @@ export function createMetricsService({
   getDefinitions: () => MetricDefinition[];
   /** Web Vitals дополнительно идут в измерительный конвейер (гистограммы). */
   recordMeasurement?: (series: MeasurementSeries, value: number) => void;
+  /** Выходы наружу (webhook и т.п.) — опционально: без них очереди не наполняются. */
+  sinks?: SinkRegistry;
+  logger?: { error(obj: Record<string, unknown>, message: string): void };
 }): MetricsService {
   const store = createPostgresMetricsStore(db);
   const eventBuffer = new EventBuffer();
+  const dispatcher = sinks ? new OutboxDispatcher({ store, registry: sinks, logger: logger ?? { error: () => undefined } }) : null;
+
+  function eventPayload(row: NewMetricEventRow): Record<string, unknown> {
+    return {
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      occurredAt: row.occurredAt instanceof Date ? row.occurredAt.toISOString() : row.occurredAt,
+      module: row.module ?? null,
+      actorKind: row.actorKind ?? null,
+      actorHash: row.actorHash ?? null,
+      sessionHash: row.sessionHash ?? null,
+      route: row.route ?? null,
+      release: row.release ?? null,
+      attributes: row.attributes ?? {},
+      measures: row.measures ?? {},
+      errorFingerprint: row.errorFingerprint ?? null,
+    };
+  }
+
+  async function enqueueForSinks(rows: NewMetricEventRow[]): Promise<void> {
+    if (!sinks || rows.length === 0) return;
+    const configs = (await store.listSinkConfigs()).filter(config => config.enabled);
+    if (configs.length === 0) return;
+
+    const outboxRows = [];
+    for (const config of configs) {
+      const sink = sinks.get(config.id);
+      if (!sink?.accepts.includes('event')) continue;
+      for (const row of rows) {
+        const payload = eventPayload(row);
+        if (sink.matches && !sink.matches(payload, config)) continue;
+        outboxRows.push({ sinkId: config.id, itemKind: 'event', itemId: row.id, payload });
+      }
+    }
+    if (outboxRows.length > 0) await store.enqueueOutbox(outboxRows);
+  }
+
+  async function toSinkDto(config: SinkConfigRow): Promise<SinkConfigDto> {
+    const stats = await store.outboxStatsBySink();
+    const entry = stats.get(config.id) ?? { pending: 0, dead: 0 };
+    return {
+      id: config.id,
+      titleKey: sinks?.get(config.id)?.titleKey ?? `metrics:sink_${config.id}`,
+      enabled: config.enabled,
+      settings: config.settings,
+      mapping: config.mapping,
+      updatedAt: config.updatedAt.toISOString(),
+      pending: entry.pending,
+      dead: entry.dead,
+    };
+  }
 
   function errorMetaOf(row: NewMetricEventRow): { type: string; message: string; stack: string } {
     const attributes = (row.attributes ?? {}) as Record<string, unknown>;
@@ -205,6 +279,9 @@ export function createMetricsService({
       }
     }
     if (issues.size > 0) await store.upsertErrorIssues([...issues.values()], counts);
+
+    const insertedRows = rows.filter(row => insertedIds.has(row.id));
+    await enqueueForSinks(insertedRows);
 
     return { inserted: result.inserted, duplicates: result.duplicates };
   }
@@ -334,6 +411,114 @@ export function createMetricsService({
 
     async vitalsSummary(from, to) {
       return store.vitalsSummary(from, to);
+    },
+
+    async listSinks() {
+      const configs = await store.listSinkConfigs();
+      return { sinks: await Promise.all(configs.map(toSinkDto)) };
+    },
+
+    async updateSink(id, patch) {
+      const sink = sinks?.get(id);
+      if (!sink) throw new MetricsSettingsError(`Unknown sink "${id}"`);
+      const values: { enabled?: boolean; settings?: Record<string, unknown>; mapping?: Record<string, unknown> } = {};
+      if (patch.enabled !== undefined) values.enabled = Boolean(patch.enabled);
+      if (patch.settings !== undefined) {
+        values.settings = sink.sanitizeSettings ? sink.sanitizeSettings(patch.settings) : patch.settings;
+      }
+      if (patch.mapping !== undefined) values.mapping = patch.mapping;
+      const row = await store.updateSinkConfig(id, values);
+      if (!row) throw new MetricsSettingsError(`Unknown sink "${id}"`);
+      return toSinkDto(row);
+    },
+
+    async testSink(id) {
+      const sink = sinks?.get(id);
+      const config = await store.getSinkConfig(id);
+      if (!sink || !config) throw new MetricsSettingsError(`Unknown sink "${id}"`);
+      const item = {
+        id: randomUUID(),
+        kind: 'event' as const,
+        payload: {
+          name: 'metrics.sink_test',
+          kind: 'system',
+          occurredAt: new Date().toISOString(),
+          module: 'metrics',
+          attributes: { test: true },
+        },
+      };
+      const result = await sink.send([item], config, new AbortController().signal);
+      return { ok: result.ok, error: result.error };
+    },
+
+    async listDeliveries(limit, sinkId) {
+      const rows = await store.listDeliveries(limit ?? 50, sinkId);
+      return rows.map(row => ({
+        id: row.id,
+        sinkId: row.sinkId,
+        itemId: row.itemId,
+        status: row.status as SinkDeliveryDto['status'],
+        attempts: row.attempts,
+        error: row.error,
+        at: row.at.toISOString(),
+      }));
+    },
+
+    async dispatchOutbox() {
+      if (!dispatcher) return { sent: 0, failed: 0, dead: 0 };
+      return dispatcher.dispatch();
+    },
+
+    startSinks() {
+      dispatcher?.start();
+    },
+
+    async stopSinks() {
+      await dispatcher?.stop();
+    },
+
+    async exportEventsCsv({ from, to, kind, name, limit }) {
+      const rows = await store.exportEvents(from, to, kind, name, limit);
+      const header = [
+        'occurred_at',
+        'received_at',
+        'name',
+        'kind',
+        'module',
+        'actor_kind',
+        'actor_hash',
+        'session_hash',
+        'route',
+        'release',
+        'attributes',
+        'measures',
+      ];
+      const escape = (value: unknown): string => {
+        const text = value === null || value === undefined ? '' : typeof value === 'string' ? value : JSON.stringify(value);
+        return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+      };
+      const lines = [header.join(',')];
+      for (const row of rows) {
+        lines.push(
+          [
+            row.occurredAt.toISOString(),
+            row.receivedAt.toISOString(),
+            row.name,
+            row.kind,
+            row.module,
+            row.actorKind,
+            row.actorHash,
+            row.sessionHash,
+            row.route,
+            row.release,
+            row.attributes,
+            row.measures,
+          ]
+            .map(escape)
+            .join(','),
+        );
+      }
+      return `${lines.join('\n')}\n`;
     },
 
     async writeMeasurements(points) {

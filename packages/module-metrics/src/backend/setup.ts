@@ -21,6 +21,8 @@ import { MeasurementBuffer } from './services/measurement-buffer.js';
 import { createMetricsService, type MetricsService } from './services/metrics-service.js';
 import { Pseudonymizer } from './services/pseudonym.js';
 import { IngestRateLimiter, type RateLimiterRedis } from './services/rate-limiter.js';
+import { createSinkRegistry } from './sinks/sink.js';
+import { createWebhookSink } from './sinks/webhook-sink.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -72,12 +74,18 @@ export const metricsModule: BackendModule = {
     const buffer = new MeasurementBuffer();
     const collectorConfig = { ...DEFAULT_COLLECTOR_CONFIG };
 
+    // Выходы: адаптеры регистрируются кодом, включаются по конфигу `metrics.sink_configs`.
+    const sinkRegistry = createSinkRegistry();
+    sinkRegistry.register(createWebhookSink({ getSecret: name => secrets.get(name) }));
+
     const service = createMetricsService({
       db,
       pseudonymizer: new Pseudonymizer(salt),
       limiter: new IngestRateLimiter(redis),
       getDefinitions: () => context.extensions.getAll<MetricDefinition>('metrics:definitions'),
       recordMeasurement: (series, value) => buffer.record(series, value),
+      sinks: sinkRegistry,
+      logger,
     });
     metricsService = service;
     context.services.register('metrics', service);
@@ -146,10 +154,12 @@ export const metricsModule: BackendModule = {
     sqlCollector?.attach();
     if (taskCollectorDeps) unsubscribeTasks = createTaskCollector(taskCollectorDeps);
     flusher?.start();
+    metricsService?.startSinks();
   },
 
   async stop() {
     unsubscribeTasks?.();
+    await metricsService?.stopSinks();
     await flusher?.stop();
   },
 };

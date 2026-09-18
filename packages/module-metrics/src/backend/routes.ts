@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { BackendAuthService } from '@amplicada/platform-core/contracts/backend';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { METRIC_EVENT_KINDS, type MetricEventKind, type MetricsSettingsPatch } from '../contracts/index.js';
+import { METRIC_EVENT_KINDS, type MetricEventKind, type MetricsSettingsPatch, type SinkConfigPatch } from '../contracts/index.js';
 import { type MetricsService, MetricsSettingsError, toEventDto } from './services/metrics-service.js';
 
 export interface MetricsRoutesDeps {
@@ -114,6 +114,54 @@ export function createMetricsRoutes(fastify: FastifyInstance, deps: MetricsRoute
       }),
       stepSeconds,
     };
+  });
+
+  fastify.get('/admin/sinks', { preHandler: requireUser }, async () => deps.service.listSinks());
+
+  fastify.patch('/admin/sinks/:id', { preHandler: requireUser }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      return await deps.service.updateSink(id, request.body as SinkConfigPatch);
+    } catch (error) {
+      if (error instanceof MetricsSettingsError) return reply.code(400).send({ error: error.message });
+      throw error;
+    }
+  });
+
+  fastify.post('/admin/sinks/:id/test', { preHandler: requireUser }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      return await deps.service.testSink(id);
+    } catch (error) {
+      if (error instanceof MetricsSettingsError) return reply.code(400).send({ error: error.message });
+      throw error;
+    }
+  });
+
+  fastify.get('/admin/deliveries', { preHandler: requireUser }, async request => {
+    const query = request.query as { sinkId?: string; limit?: string };
+    const limit = query.limit ? Number.parseInt(query.limit, 10) : 50;
+    return { deliveries: await deps.service.listDeliveries(limit, query.sinkId) };
+  });
+
+  fastify.post('/admin/outbox/dispatch', { preHandler: requireUser }, async () => deps.service.dispatchOutbox());
+
+  fastify.get('/export/events.csv', { preHandler: requireUser }, async (request, reply) => {
+    const query = request.query as { from?: string; to?: string; kind?: string; name?: string; limit?: string };
+    const range = parseRange(query);
+    if ('error' in range) return reply.code(400).send({ error: range.error });
+    const kind = query.kind && (METRIC_EVENT_KINDS as readonly string[]).includes(query.kind) ? (query.kind as MetricEventKind) : undefined;
+    const csv = await deps.service.exportEventsCsv({
+      from: range.from,
+      to: range.to,
+      kind,
+      name: query.name?.trim() || undefined,
+      limit: query.limit ? Number.parseInt(query.limit, 10) : undefined,
+    });
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', 'attachment; filename="metrics-events.csv"')
+      .send(csv);
   });
 
   fastify.get('/errors', { preHandler: requireUser }, async (request, reply) => {
