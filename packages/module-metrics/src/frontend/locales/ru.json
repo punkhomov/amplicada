@@ -62,5 +62,17 @@
   "slow_queries_hint": "Порог медленного запроса настраивается в «Настройках»; литералы в тексте заменены на «?», персональные данные не сохраняются.",
   "settings_retention_points_days": "Хранение измерений, дней",
   "settings_slow_sql_threshold": "Порог медленного SQL, мс",
-  "settings_sample_sql": "Доля SQL-замеров (0–1)"
+  "settings_sample_sql": "Доля SQL-замеров (0–1)",
+  "tab_business": "Бизнес",
+  "tab_panels": "Панели",
+  "business_count": "Метрик: {{count}}",
+  "business_empty": "Ни один модуль пока не объявил бизнес-метрики. Модули делают это через `metrics:definitions`.",
+  "category_product": "Продукт",
+  "category_business": "Бизнес",
+  "category_technical": "Технические",
+  "category_quality": "Качество",
+  "panels_count": "Панелей: {{count}}",
+  "panels_empty": "Модули не объявили панелей. Панель — это график по событию, зарегистрированный через `metrics:panels`.",
+  "def_page_views": "Просмотры страниц",
+  "def_ui_events": "Клики интерфейса"
 }

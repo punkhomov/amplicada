@@ -18,6 +18,13 @@ interface TimeRange {
   to: Date;
 }
 
+/** Шаг графика по умолчанию: мельче для короткого окна, крупнее для длинного. */
+function defaultStepSeconds(rangeMs: number): number {
+  if (rangeMs <= 2 * 60 * 60 * 1000) return 300;
+  if (rangeMs <= 48 * 60 * 60 * 1000) return 3600;
+  return 6 * 60 * 60;
+}
+
 /** Диапазон запроса: по умолчанию последние 24 часа; невалидный — 400. */
 function parseRange(query: { from?: string; to?: string }): TimeRange | { error: string } {
   const to = query.to ? new Date(query.to) : new Date();
@@ -66,6 +73,48 @@ export function createMetricsRoutes(fastify: FastifyInstance, deps: MetricsRoute
   });
 
   fastify.get('/catalog', { preHandler: requireUser }, async () => ({ entries: await deps.service.listCatalog() }));
+
+  fastify.get('/definitions', { preHandler: requireUser }, async () => ({ definitions: deps.service.listDefinitions() }));
+
+  fastify.get('/definitions/summary', { preHandler: requireUser }, async (request, reply) => {
+    const query = request.query as { from?: string; to?: string; step?: string };
+    const range = parseRange(query);
+    if ('error' in range) return reply.code(400).send({ error: range.error });
+    const rangeMs = range.to.getTime() - range.from.getTime();
+    const requested = query.step ? Number.parseInt(query.step, 10) : Number.NaN;
+    const stepSeconds = Number.isFinite(requested) ? Math.min(Math.max(requested, 60), 86_400) : defaultStepSeconds(rangeMs);
+    return { definitions: await deps.service.definitionsSummary(range.from, range.to, stepSeconds), stepSeconds };
+  });
+
+  fastify.get('/series', { preHandler: requireUser }, async (request, reply) => {
+    const query = request.query as {
+      name?: string;
+      eventPrefix?: string;
+      groupBy?: string;
+      measure?: string;
+      from?: string;
+      to?: string;
+      step?: string;
+    };
+    if (!query.name && !query.eventPrefix) return reply.code(400).send({ error: 'name_or_eventPrefix_required' });
+    const range = parseRange(query);
+    if ('error' in range) return reply.code(400).send({ error: range.error });
+    const rangeMs = range.to.getTime() - range.from.getTime();
+    const requested = query.step ? Number.parseInt(query.step, 10) : Number.NaN;
+    const stepSeconds = Number.isFinite(requested) ? Math.min(Math.max(requested, 60), 86_400) : defaultStepSeconds(rangeMs);
+    return {
+      series: await deps.service.eventSeries({
+        name: query.name,
+        eventPrefix: query.eventPrefix,
+        groupBy: query.groupBy,
+        measure: query.measure,
+        from: range.from,
+        to: range.to,
+        stepSeconds,
+      }),
+      stepSeconds,
+    };
+  });
 
   fastify.get('/routes', { preHandler: requireUser }, async (request, reply) => {
     const range = parseRange(request.query as { from?: string; to?: string });

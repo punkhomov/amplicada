@@ -18,9 +18,17 @@ POST /api/metrics/collect  →  валидация  MeasurementBuffer (10 с о�
    │                                        │                          │
    ▼                                        ▼                          ▼
 metrics.events (партиции)          metrics.points + series     slow_queries + fingerprints
-   │                                        │                          │
-   └──── /events, /catalog ◀── админ-приложение ──▶ /routes, /sql, /slow-queries (polling 30 с)
+   ▲                                        │                          │
+   │  metrics.emit (модули)                 │                          │
+   │  metrics:definitions — реестр          │                          │
+   └──── /events, /catalog, /definitions, /series ◀── админ-приложение ──▶ /routes, /sql, /slow-queries
+                                                          │
+                                              metrics:panels (панели модулей)
 ```
+
+Бизнес-события модулей идут тем же путём, что и клиентские: `emit` кладёт событие в буфер,
+флаш пишет его в `metrics.events`. Определения и панели — код-контрибуции: первые живут в
+core-реестре расширений, вторые — в frontend-сервисе модуля метрик.
 
 Стор — единственный источник правды: внешние выходы (Яндекс.Метрика, webhook) появятся
 позже как подписчики и не влияют на сбор. В закрытом контуре выходов просто не будет.

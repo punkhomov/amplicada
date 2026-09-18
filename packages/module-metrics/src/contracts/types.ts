@@ -27,6 +27,19 @@ export interface ClientEventInput {
   sampling?: { rate: number; reason?: string };
 }
 
+/** Вход бизнес-события от модулей (emit): id и время сервер проставит сам. */
+export interface MetricEventInput {
+  name: string;
+  kind?: MetricEventKind;
+  occurredAt?: string;
+  module?: string;
+  actor?: { kind: 'user' | 'anonymous' | 'system' | 'service'; userId?: string };
+  sessionId?: string;
+  context?: ClientEventContext;
+  attributes?: Record<string, MetricAttrValue>;
+  measures?: Record<string, number>;
+}
+
 export interface CollectRequest {
   events: ClientEventInput[];
 }
@@ -76,6 +89,69 @@ export interface MetricsSettingsPatch {
   sampleSqlRate?: number;
   storeRawUrls?: boolean;
 }
+
+export interface MetricDefinitionDimension {
+  key: string;
+  titleKey: string;
+  type: 'string' | 'number' | 'boolean' | 'datetime';
+  highCardinality?: boolean;
+}
+
+/** Определение бизнес-метрики: что означает и куда смотреть модулю-потребителю. */
+export interface MetricDefinition {
+  key: string;
+  module: string;
+  titleKey: string;
+  descriptionKey?: string;
+  category: 'product' | 'business' | 'technical' | 'quality';
+  source: { events?: string[]; eventPrefix?: string; instrument?: string };
+  unit?: string;
+  aggregation?: 'count' | 'sum' | 'avg';
+  dimensions?: MetricDefinitionDimension[];
+  docsUrl?: string;
+}
+
+export interface MetricSeriesPointDto {
+  t: string;
+  v: number;
+}
+
+export interface MetricSeriesDto {
+  key: string;
+  points: MetricSeriesPointDto[];
+}
+
+export interface MetricSeriesListDto {
+  series: MetricSeriesDto[];
+  stepSeconds: number;
+}
+
+export interface MetricDefinitionSummaryDto {
+  definition: MetricDefinition;
+  total: number;
+  points: MetricSeriesPointDto[];
+}
+
+export interface MetricDefinitionsSummaryDto {
+  definitions: MetricDefinitionSummaryDto[];
+  stepSeconds: number;
+}
+
+/** Панель дашборда, объявляемая модулем (frontend service `metrics:panels`). */
+export interface MetricPanel {
+  id: string;
+  titleKey: string;
+  kind: 'timeseries';
+  event: string;
+  aggregate?: 'count';
+}
+
+export interface MetricsPanelsService {
+  register(panel: MetricPanel): void;
+  getAll(): MetricPanel[];
+}
+
+export const METRICS_PANELS_TOKEN = 'metrics:panels';
 
 /** Ответ приёма при превышении минутного лимита событий (HTTP 429). */
 export interface MetricsRateLimitedDto {

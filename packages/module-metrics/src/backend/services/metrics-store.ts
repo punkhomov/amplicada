@@ -44,6 +44,21 @@ export interface SqlSummary {
   lastSeen: string | null;
 }
 
+export interface EventSeriesQuery {
+  name?: string;
+  eventPrefix?: string;
+  measure?: string;
+  groupBy?: string;
+  from: Date;
+  to: Date;
+  stepSeconds: number;
+}
+
+export interface EventSeriesResult {
+  key: string;
+  points: { t: Date; v: number }[];
+}
+
 export interface MeasurementWriteResult {
   series: number;
   points: number;
@@ -83,6 +98,37 @@ export function createPostgresMetricsStore(db: BackendDbService) {
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(metricsEvents.occurredAt))
         .limit(limit);
+    },
+
+    /** Серии событий по времени: count (или sum measures) с шагом и опциональной группировкой. */
+    async eventSeries(query: EventSeriesQuery): Promise<EventSeriesResult[]> {
+      const group = query.groupBy ? sql`coalesce(attributes->>${query.groupBy}, '<none>')` : sql`'total'`;
+      const value = query.measure
+        ? sql`coalesce(sum((measures->>${query.measure})::double precision), 0)`
+        : sql`count(*)::double precision`;
+      const nameFilter = query.name
+        ? sql`and name = ${query.name}`
+        : query.eventPrefix
+          ? sql`and name like ${`${query.eventPrefix}%`}`
+          : sql``;
+
+      const result = await db.execute(sql`
+        select date_bin(make_interval(secs => ${query.stepSeconds}), occurred_at, '2000-01-01') as bucket,
+               ${group} as key,
+               ${value} as value
+        from metrics.events
+        where occurred_at >= ${query.from} and occurred_at < ${query.to} ${nameFilter}
+        group by 1, 2
+        order by 1
+      `);
+
+      const byKey = new Map<string, { t: Date; v: number }[]>();
+      for (const row of result.rows as { bucket: Date; key: string; value: number }[]) {
+        const list = byKey.get(row.key) ?? [];
+        list.push({ t: new Date(row.bucket), v: Number(row.value) });
+        byKey.set(row.key, list);
+      }
+      return [...byKey.entries()].map(([key, points]) => ({ key, points }));
     },
 
     /** Запись пред-агрегированных точек: series upsert + points insert. */

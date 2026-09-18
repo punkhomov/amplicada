@@ -6,11 +6,21 @@ export type {
   CollectResponse,
   MetricAttrValue,
   MetricCatalogEntryDto,
+  MetricDefinition,
+  MetricDefinitionDimension,
+  MetricDefinitionSummaryDto,
+  MetricDefinitionsSummaryDto,
   MetricEventDto,
+  MetricEventInput,
   MetricEventKind,
+  MetricPanel,
+  MetricSeriesDto,
+  MetricSeriesListDto,
+  MetricSeriesPointDto,
   MetricsCatalogDto,
   MetricsContextDto,
   MetricsEventListDto,
+  MetricsPanelsService,
   MetricsRateLimitedDto,
   MetricsSettingsDto,
   MetricsSettingsPatch,
@@ -21,4 +31,4 @@ export type {
   SqlSummaryDto,
   SqlSummaryListDto,
 } from './types.js';
-export { METRIC_EVENT_KINDS } from './types.js';
+export { METRIC_EVENT_KINDS, METRICS_PANELS_TOKEN } from './types.js';

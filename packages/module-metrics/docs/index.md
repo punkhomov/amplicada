@@ -17,8 +17,9 @@ verified_commit: 9e0cfb80
 уважать opt-out/DNT/GPC, партиционировать журнал по месяцам, удалять старое по retention и
 показывать ленту, каталог наблюдаемых событий и настройки в админке. Отдельно собираются
 **технические метрики**: длительность HTTP-роутов (RED, p50/p95/p99), SQL-запросы
-(fingerprint, медленные samples) и фоновые задачи. Потребители (модули) смогут писать
-бизнес-события через сервис `metrics`, когда появится `emit` (этап 03 плана).
+(fingerprint, медленные samples) и фоновые задачи. Модули пишут **бизнес-события** через
+`metrics.emit`, объявляют определения в `metrics:definitions` и панели в `metrics:panels` —
+на вкладках «Бизнес» и «Панели» появляются их метрики (пилот — support-chat).
 
 Осознанно не входит на текущем этапе: измерения (HTTP/SQL/задачи), Web Vitals и ошибки,
 воронки/retention, алерты, внешние выходы (Яндекс.Метрика, webhook, CSV), экспорт.
@@ -31,6 +32,7 @@ verified_commit: 9e0cfb80
 | HTTP API | `POST /api/metrics/collect`, `GET /context`, `/events`, `/catalog`, `/routes`, `/sql`, `/slow-queries`, `GET/PATCH /admin/settings` | `src/backend/routes.ts` |
 | Схема БД | `metrics.events` (партиции по месяцам), `metrics.settings` (синглтон) | `src/backend/schemas/`, `migrations/0000_init.sql` |
 | Задачи | `metrics.maintenance` (партиции вперёд + retention), расписание — в админке | `src/backend/setup.ts` |
+| Бизнес-метрики | `metrics.emit`, extension point `metrics:definitions`, сервис `metrics:panels` | `src/backend/services/metrics-service.ts`, `src/frontend/lib/panel-registry.ts` |
 | Frontend | приложение админки `/admin/apps/metrics`, трекер на extension point `floating` | `src/frontend/setup.tsx` |
 | Технические коллекторы | `http:observer`, обёртка `pg-pool`, подписка на `TASK_EVENTS` | `src/backend/collectors/` |
 | Точки core | `http:observer`, `request-context`, `secrets` | `packages/platform-core` (`notes/platform-core.md` D-006) |
@@ -64,7 +66,7 @@ verified_commit: 9e0cfb80
 | Задачи и фоновые процессы | [reference/settings.md](./reference/settings.md) |
 | Frontend (FSD, роуты, слоты) | [reference/http-api.md](./reference/http-api.md#клиентский-трекер) — трекер и админ-приложение |
 | Конфиг: env, зависимости, порядок | [reference/settings.md](./reference/settings.md#переменные-окружения) |
-| Интеграции и потребители | [reference/events.md](./reference/events.md#для-модулей-потребителей) — эмита бизнес-событий пока нет |
+| Интеграции и потребители | [reference/business-metrics.md](./reference/business-metrics.md) |
 | Ограничения для потребителя | [explanation/architecture.md](./explanation/architecture.md#ограничения) |
 
 ## Freshness
@@ -74,4 +76,6 @@ verified_commit: 9e0cfb80
   проверены curl'ом); opt-out/DNT-ветки трекера и клики `data-metrics` в реальном браузере
   (серверная сторона и каталог проверены curl'ом).
 - Проверено вживую 2026-09-18: роуты (RED по 5 маршрутам), SQL-fingerprint'ы,
-  корреляция slow-samples с `route`/`requestId`, партиции `points`/`slow_queries`.
+  корреляция slow-samples с `route`/`requestId`, партиции `points`/`slow_queries`,
+  бизнес-события поддержки (`thread.opened`, `message.sent`, `status_changed`),
+  определения/сводки/серии.

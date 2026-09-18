@@ -1,3 +1,4 @@
+import type { NewMetricEventRow } from '../schemas/index.js';
 import type { AggregatedMeasurement, MeasurementBuffer } from '../services/measurement-buffer.js';
 import type { CollectorConfig } from './config.js';
 import type { SlowQueryInsert } from './sql-collector.js';
@@ -7,6 +8,7 @@ export interface CollectorLogger {
 }
 
 export interface MeasurementSink {
+  writeEvents(rows: NewMetricEventRow[]): Promise<void>;
   writeMeasurements(points: AggregatedMeasurement[]): Promise<void>;
   upsertSqlFingerprints(entries: { fingerprint: string; queryText: string }[]): Promise<void>;
   insertSlowQueries(rows: SlowQueryInsert[]): Promise<void>;
@@ -20,6 +22,7 @@ export interface MeasurementFlusherDeps {
   drains?: {
     drainFingerprints(): { fingerprint: string; queryText: string }[];
     drainSlowQueries(): SlowQueryInsert[];
+    drainEvents(): NewMetricEventRow[];
   };
   logger: CollectorLogger;
   intervalMs?: number;
@@ -57,6 +60,9 @@ export class MeasurementFlusher {
       Object.assign(this.deps.config, await this.deps.updateConfig());
       points = [...this.pending, ...this.deps.buffer.drain()];
       this.pending = [];
+
+      const events = this.deps.drains?.drainEvents() ?? [];
+      if (events.length > 0) await this.deps.sink.writeEvents(events);
 
       if (points.length > 0) await this.deps.sink.writeMeasurements(points);
 

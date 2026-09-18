@@ -21,6 +21,9 @@ order: 20
 | `GET` | `/api/metrics/routes` | требуется | Сводка RED по маршрутам за период (`from`, `to`) |
 | `GET` | `/api/metrics/sql` | требуется | Топ SQL-fingerprint'ов (`from`, `to`, `limit`) |
 | `GET` | `/api/metrics/slow-queries` | требуется | Samples медленных/ошибочных SQL (`from`, `to`, `limit`) |
+| `GET` | `/api/metrics/definitions` | требуется | Определения бизнес-метрик от модулей |
+| `GET` | `/api/metrics/definitions/summary` | требуется | Totals и тренды определений (`from`, `to`, `step`) |
+| `GET` | `/api/metrics/series` | требуется | Серия событий (`name` или `eventPrefix`, `groupBy`, `measure`) |
 | `GET` | `/api/metrics/admin/settings` | требуется | Настройки метрик |
 | `PATCH` | `/api/metrics/admin/settings` | требуется | Изменение настроек |
 
@@ -62,6 +65,13 @@ order: 20
 Параметры `from`/`to` — ISO 8601; по умолчанию последние 24 часа; невалидный диапазон — 400
 `{ "error": "invalid_range" }`. Формат ответов — `RouteSummaryDto[]`, `SqlSummaryDto[]`,
 `SlowQueryDto[]` (`src/contracts/types.ts`). Тексты SQL нормализованы (литералы → `?`).
+
+### `GET /definitions`, `/definitions/summary`, `/series`
+
+- `/definitions` → `{ definitions: MetricDefinition[] }`;
+- `/definitions/summary` → `{ definitions: MetricDefinitionSummaryDto[], stepSeconds }`;
+- `/series` → `{ series: MetricSeriesDto[], stepSeconds }`; нужен `name` или `eventPrefix`,
+  иначе 400 `name_or_eventPrefix_required`. Подробности — [business-metrics.md](./business-metrics.md).
 
 ### `GET /catalog`
 

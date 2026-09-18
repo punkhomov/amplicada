@@ -22,6 +22,8 @@ import {
   metricsQueryKeys,
   metricsSettingsQueryOptions,
 } from '../../../lib/query-options.js';
+import { BusinessTab } from './business-tab.js';
+import { PanelsTab } from './panels-tab.js';
 import { RoutesTab } from './routes-tab.js';
 import { SqlTab } from './sql-tab.js';
 
@@ -98,6 +100,8 @@ export function MetricsAdminPage() {
             <TabsTrigger value="events">{t('tab_events')}</TabsTrigger>
             <TabsTrigger value="routes">{t('tab_routes')}</TabsTrigger>
             <TabsTrigger value="sql">{t('tab_sql')}</TabsTrigger>
+            <TabsTrigger value="business">{t('tab_business')}</TabsTrigger>
+            <TabsTrigger value="panels">{t('tab_panels')}</TabsTrigger>
             <TabsTrigger value="catalog">{t('tab_catalog')}</TabsTrigger>
             <TabsTrigger value="settings">{t('tab_settings')}</TabsTrigger>
           </TabsList>
@@ -169,6 +173,14 @@ export function MetricsAdminPage() {
 
           <TabsContent value="sql">
             <SqlTab api={api} period={period} onPeriodChange={setPeriod} />
+          </TabsContent>
+
+          <TabsContent value="business">
+            <BusinessTab api={api} period={period} onPeriodChange={setPeriod} />
+          </TabsContent>
+
+          <TabsContent value="panels">
+            <PanelsTab api={api} period={period} onPeriodChange={setPeriod} />
           </TabsContent>
 
           <TabsContent value="catalog">

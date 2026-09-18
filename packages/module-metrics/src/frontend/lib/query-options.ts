@@ -1,6 +1,9 @@
 import type { ApiClient } from '@amplicada/platform-core/frontend';
 import type {
+  MetricDefinition,
+  MetricDefinitionsSummaryDto,
   MetricEventKind,
+  MetricSeriesListDto,
   MetricsCatalogDto,
   MetricsContextDto,
   MetricsEventListDto,
@@ -18,6 +21,9 @@ export const metricsQueryKeys = {
   catalog: ['metrics', 'catalog'] as const,
   routes: (period: MetricsPeriod) => ['metrics', 'routes', period] as const,
   sql: (period: MetricsPeriod) => ['metrics', 'sql', period] as const,
+  definitions: ['metrics', 'definitions'] as const,
+  definitionsSummary: (period: MetricsPeriod) => ['metrics', 'definitions-summary', period] as const,
+  series: (event: string, period: MetricsPeriod) => ['metrics', 'series', event, period] as const,
   slowQueries: (period: MetricsPeriod) => ['metrics', 'slow-queries', period] as const,
   settings: ['metrics', 'settings'] as const,
 };
@@ -33,6 +39,38 @@ const PERIOD_MS: Record<MetricsPeriod, number> = {
 
 function periodRange(period: MetricsPeriod, now = Date.now()): { from: string; to: string } {
   return { from: new Date(now - PERIOD_MS[period]).toISOString(), to: new Date(now).toISOString() };
+}
+
+export function metricsDefinitionsQueryOptions(api: ApiClient) {
+  return {
+    queryKey: metricsQueryKeys.definitions,
+    queryFn: () => api.get<{ definitions: MetricDefinition[] }>('/metrics/definitions'),
+    staleTime: 5 * 60_000,
+  };
+}
+
+/** Сводка по определениям: всего и тренд по периодам. */
+export function metricsDefinitionsSummaryQueryOptions(api: ApiClient, period: MetricsPeriod) {
+  return {
+    queryKey: metricsQueryKeys.definitionsSummary(period),
+    queryFn: () => {
+      const { from, to } = periodRange(period);
+      return api.get<MetricDefinitionsSummaryDto>(`/metrics/definitions/summary?from=${from}&to=${to}`);
+    },
+    refetchInterval: 60_000,
+  };
+}
+
+/** Серия событий для панели модуля. */
+export function metricsSeriesQueryOptions(api: ApiClient, event: string, period: MetricsPeriod) {
+  return {
+    queryKey: metricsQueryKeys.series(event, period),
+    queryFn: () => {
+      const { from, to } = periodRange(period);
+      return api.get<MetricSeriesListDto>(`/metrics/series?name=${encodeURIComponent(event)}&from=${from}&to=${to}`);
+    },
+    refetchInterval: 60_000,
+  };
 }
 
 /** Сводка по роутам за выбранный период (RED). */

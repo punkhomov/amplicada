@@ -1,9 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import type { BackendDbService } from '@amplicada/platform-core/contracts/backend';
 import type {
   ClientEventInput,
   CollectResponse,
   MetricCatalogEntryDto,
+  MetricDefinition,
+  MetricDefinitionSummaryDto,
   MetricEventDto,
+  MetricEventInput,
+  MetricSeriesDto,
   MetricsContextDto,
   MetricsSettingsDto,
   MetricsSettingsPatch,
@@ -13,13 +18,14 @@ import type {
 } from '../../contracts/index.js';
 import type { CollectorConfig } from '../collectors/config.js';
 import type { SlowQueryInsert } from '../collectors/sql-collector.js';
-import type { MetricEventRow, MetricsSettingsRow } from '../schemas/index.js';
+import type { MetricEventRow, MetricsSettingsRow, NewMetricEventRow } from '../schemas/index.js';
+import { EventBuffer } from './event-buffer.js';
 import type { AggregatedMeasurement } from './measurement-buffer.js';
 import { createPostgresMetricsStore, type EventListFilter } from './metrics-store.js';
 import { dropExpiredPartitions, ensurePartitions } from './partitions.js';
 import type { Pseudonymizer } from './pseudonym.js';
 import type { IngestRateLimiter, RateLimitDecision } from './rate-limiter.js';
-import { DEFAULT_EVENT_LIMITS, validateBatch } from './validation.js';
+import { DEFAULT_EVENT_LIMITS, validateBatch, validateClientEvent } from './validation.js';
 
 const SLOW_QUERIES_RETENTION_DAYS = 7;
 
@@ -36,10 +42,26 @@ export interface MetricsService {
   routesSummary(from: Date, to: Date): Promise<RouteSummaryDto[]>;
   sqlSummary(from: Date, to: Date, limit?: number): Promise<SqlSummaryDto[]>;
   slowQueries(from: Date, to: Date, limit?: number): Promise<SlowQueryDto[]>;
+  writeEvents(rows: NewMetricEventRow[]): Promise<void>;
   writeMeasurements(points: AggregatedMeasurement[]): Promise<void>;
   upsertSqlFingerprints(entries: { fingerprint: string; queryText: string }[]): Promise<void>;
   insertSlowQueries(rows: SlowQueryInsert[]): Promise<void>;
   getCollectorConfig(): Promise<CollectorConfig>;
+  /** Бизнес-событие модуля: id/время/актор проставятся сервисом, запись — буфером до флаша. */
+  emit(input: MetricEventInput): void;
+  emitBatch(inputs: MetricEventInput[]): void;
+  drainEmittedEvents(): NewMetricEventRow[];
+  listDefinitions(): MetricDefinition[];
+  definitionsSummary(from: Date, to: Date, stepSeconds: number): Promise<MetricDefinitionSummaryDto[]>;
+  eventSeries(input: {
+    name?: string;
+    eventPrefix?: string;
+    groupBy?: string;
+    measure?: string;
+    from: Date;
+    to: Date;
+    stepSeconds: number;
+  }): Promise<MetricSeriesDto[]>;
   /** Минутный лимит приёма по ключу (хеш сессии/пользователя/IP) — вызывается до `collect`. */
   checkIngestRate(key: string, cost: number): Promise<RateLimitDecision>;
   getSettings(): Promise<MetricsSettingsDto>;
@@ -92,16 +114,54 @@ function clampRate(value: number, field: string): number {
   return value;
 }
 
+function buildEmittedRow(input: MetricEventInput, pseudonymizer: Pseudonymizer): NewMetricEventRow | null {
+  const validation = validateClientEvent({
+    id: randomUUID(),
+    name: input.name,
+    kind: input.kind ?? 'business',
+    occurredAt: input.occurredAt ?? new Date().toISOString(),
+    sessionId: input.sessionId,
+    context: input.context,
+    attributes: input.attributes,
+    measures: input.measures,
+  });
+  if (!validation.ok) return null;
+
+  const event = validation.value.event;
+  return {
+    id: event.id,
+    occurredAt: new Date(event.occurredAt),
+    name: event.name,
+    kind: event.kind,
+    module: input.module ?? null,
+    actorKind: input.actor?.kind ?? 'system',
+    actorHash: input.actor?.userId ? pseudonymizer.forUser(input.actor.userId) : null,
+    sessionHash: event.sessionId ? pseudonymizer.forSession(event.sessionId) : null,
+    route: event.context?.route ?? null,
+    url: event.context?.url ?? null,
+    referrer: event.context?.referrer ?? null,
+    release: null,
+    instance: null,
+    attributes: event.attributes ?? {},
+    measures: event.measures ?? {},
+    samplingRate: null,
+    schemaVersion: 1,
+  };
+}
+
 export function createMetricsService({
   db,
   pseudonymizer,
   limiter,
+  getDefinitions,
 }: {
   db: BackendDbService;
   pseudonymizer: Pseudonymizer;
   limiter: IngestRateLimiter;
+  getDefinitions: () => MetricDefinition[];
 }): MetricsService {
   const store = createPostgresMetricsStore(db);
+  const eventBuffer = new EventBuffer();
 
   async function settingsOrThrow(): Promise<MetricsSettingsRow> {
     const row = await store.getSettingsRow();
@@ -175,6 +235,10 @@ export function createMetricsService({
       }));
     },
 
+    async writeEvents(rows) {
+      if (rows.length > 0) await store.insertEvents(rows);
+    },
+
     async writeMeasurements(points) {
       await store.writeMeasurements(points);
     },
@@ -194,6 +258,62 @@ export function createMetricsService({
         sampleSqlRate: settings.sampleSqlRate,
         slowSqlThresholdMs: settings.slowSqlThresholdMs,
       };
+    },
+
+    emit(input) {
+      const row = buildEmittedRow(input, pseudonymizer);
+      if (row) eventBuffer.push(row);
+    },
+
+    emitBatch(inputs) {
+      for (const input of inputs) this.emit(input);
+    },
+
+    drainEmittedEvents() {
+      return eventBuffer.drain();
+    },
+
+    listDefinitions() {
+      return getDefinitions();
+    },
+
+    async definitionsSummary(from, to, stepSeconds) {
+      const summaries: MetricDefinitionSummaryDto[] = [];
+      for (const definition of getDefinitions()) {
+        const byBucket = new Map<number, number>();
+        const merge = (series: { points: { t: Date; v: number }[] }[]) => {
+          for (const item of series) {
+            for (const point of item.points) {
+              byBucket.set(point.t.getTime(), (byBucket.get(point.t.getTime()) ?? 0) + point.v);
+            }
+          }
+        };
+
+        for (const name of definition.source.events ?? []) {
+          merge(await store.eventSeries({ name, from, to, stepSeconds }));
+        }
+        if (definition.source.eventPrefix) {
+          merge(await store.eventSeries({ eventPrefix: definition.source.eventPrefix, from, to, stepSeconds }));
+        }
+
+        const points = [...byBucket.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([time, value]) => ({ t: new Date(time).toISOString(), v: value }));
+        summaries.push({
+          definition,
+          total: points.reduce((sum, point) => sum + point.v, 0),
+          points,
+        });
+      }
+      return summaries;
+    },
+
+    async eventSeries(input) {
+      const series = await store.eventSeries(input);
+      return series.map(item => ({
+        key: item.key,
+        points: item.points.map(point => ({ t: point.t.toISOString(), v: point.v })),
+      }));
     },
 
     async checkIngestRate(key, cost) {

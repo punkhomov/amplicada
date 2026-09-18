@@ -32,6 +32,15 @@ fingerprint, slow/error samples в `metrics.slow_queries`), метрики за�
 endpoints `/routes`, `/sql`, `/slow-queries`, вкладки «Роуты» (RED, p50/p95/p99) и «SQL»
 в админке, retention измерений и samples. `pg_stat_statements` и графики — не делались
 (осознанно).
+
+**Обновление 2026-09-18 (этап 03):** бизнес-метрики модулей. `metrics.emit`/`emitBatch`
+(валидация, псевдонимизация актора, буфер до флаша), extension point `metrics:definitions`
+и эндпоинты `/definitions`, `/definitions/summary`, `/series` (тренды count по времени с
+группировкой), frontend-сервис `metrics:panels` и вкладки «Бизнес» и «Панели» (графики на
+`ui/chart` + recharts). Пилот — support-chat: `support.thread.opened`,
+`support.message.sent`, `support.thread.status_changed`, три определения, две панели;
+интеграция опциональная (ленивый resolve + type-only импорты). Воронки/retention —
+осознанно отложены (см. notes D-013).
 Рационал — `ref/notes/module-metrics.md`.
 
 Зонтичная папка по модулю метрик (`module-metrics`). Исследование возможности и направления:

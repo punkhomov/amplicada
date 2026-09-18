@@ -9,6 +9,7 @@ import type {
   BackendRequestContextService,
   BackendSecretsService,
 } from '@amplicada/platform-core/contracts/backend';
+import type { MetricDefinition } from '../contracts/index.js';
 import { moduleManifest } from '../contracts/manifest.js';
 import { DEFAULT_COLLECTOR_CONFIG } from './collectors/config.js';
 import { createHttpObserver } from './collectors/http-observer.js';
@@ -25,6 +26,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const MAINTENANCE_TASK_ID = 'metrics.maintenance';
+
+/** Встроенные определения: события, которые модуль собирает сам. */
+const BUILT_IN_DEFINITIONS: MetricDefinition[] = [
+  {
+    key: 'metrics.page_views',
+    module: 'metrics',
+    titleKey: 'metrics:def_page_views',
+    category: 'product',
+    source: { events: ['page.view'] },
+  },
+  {
+    key: 'metrics.ui_events',
+    module: 'metrics',
+    titleKey: 'metrics:def_ui_events',
+    category: 'product',
+    source: { eventPrefix: 'ui.' },
+  },
+];
 
 let metricsService: MetricsService | undefined;
 let sqlCollector: SqlCollector | undefined;
@@ -53,6 +72,7 @@ export const metricsModule: BackendModule = {
       db,
       pseudonymizer: new Pseudonymizer(salt),
       limiter: new IngestRateLimiter(redis),
+      getDefinitions: () => context.extensions.getAll<MetricDefinition>('metrics:definitions'),
     });
     metricsService = service;
     context.services.register('metrics', service);
@@ -61,6 +81,9 @@ export const metricsModule: BackendModule = {
     const buffer = new MeasurementBuffer();
     const collectorConfig = { ...DEFAULT_COLLECTOR_CONFIG };
     context.extensions.contribute('http:observer', createHttpObserver({ buffer }));
+    for (const definition of BUILT_IN_DEFINITIONS) {
+      context.extensions.contribute('metrics:definitions', definition);
+    }
 
     if (app) {
       const pool = context.services.resolve<PgPoolLike>('pg-pool');
@@ -70,6 +93,7 @@ export const metricsModule: BackendModule = {
         buffer,
         config: collectorConfig,
         sink: {
+          writeEvents: rows => service.writeEvents(rows),
           writeMeasurements: points => service.writeMeasurements(points),
           upsertSqlFingerprints: entries => service.upsertSqlFingerprints(entries),
           insertSlowQueries: rows => service.insertSlowQueries(rows),
@@ -78,6 +102,7 @@ export const metricsModule: BackendModule = {
         drains: {
           drainFingerprints: () => sqlCollector?.drainFingerprints() ?? [],
           drainSlowQueries: () => sqlCollector?.drainSlowQueries() ?? [],
+          drainEvents: () => service.drainEmittedEvents(),
         },
         logger,
       });
