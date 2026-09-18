@@ -43,6 +43,7 @@ import { AuthLogServiceImpl } from './services/auth-log-service.js';
 import { AuthNodeServiceImpl } from './services/auth-node-service.js';
 import { AuthServiceImpl } from './services/auth-service.js';
 import { DocumentRuntime } from './services/document-runtime.js';
+import { EnvSecretsService } from './services/secrets-service.js';
 import { ensureBucket, StorageServiceImpl } from './services/storage-service.js';
 import { TaskEventBridge } from './services/task-event-bridge.js';
 import { TaskReconciler } from './services/task-reconciler.js';
@@ -123,6 +124,7 @@ export async function createApp(): Promise<App> {
   const authService = new AuthServiceImpl(authLog);
   services.register('auth-service', authService);
   services.register('auth-node', new AuthNodeServiceImpl());
+  services.register('secrets', new EnvSecretsService());
 
   const documentRuntime = new DocumentRuntime(db, documents);
   services.register('document-runtime', documentRuntime);

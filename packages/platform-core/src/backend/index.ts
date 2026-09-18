@@ -56,6 +56,7 @@ export {
   withDbErrors,
 } from './services/db-errors.js';
 export { DocumentRuntime, DocumentRuntimeError } from './services/document-runtime.js';
+export { EnvSecretsService, secretEnvName } from './services/secrets-service.js';
 export { ensureBucket, StorageServiceImpl } from './services/storage-service.js';
 export type { TaskEventBridgeDeps } from './services/task-event-bridge.js';
 export { TaskEventBridge } from './services/task-event-bridge.js';
