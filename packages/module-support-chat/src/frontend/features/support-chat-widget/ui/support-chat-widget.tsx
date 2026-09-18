@@ -73,19 +73,21 @@ export function SupportChatWidget() {
       {!open && (
         <Button
           size="icon-lg"
-          className="fixed bottom-4 right-4 z-50 rounded-full shadow-lg"
+          className="fixed bottom-4 right-4 z-50 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95"
           aria-label={t('widget_open')}
           onClick={() => handleOpenChange(true)}
         >
           <LifeBuoyIcon />
           {unreadTotal > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-5 min-w-5 justify-center px-1 text-xs tabular-nums">{unreadTotal}</Badge>
+            <Badge className="absolute -top-1 -right-1 h-5 min-w-5 justify-center px-1 text-xs tabular-nums ring-2 ring-background">
+              {unreadTotal}
+            </Badge>
           )}
         </Button>
       )}
 
       {open && (
-        <Card className="fixed bottom-20 right-4 z-50 flex h-[min(32rem,calc(100dvh-6rem))] w-[min(24rem,calc(100vw-2rem))] flex-col gap-0 overflow-hidden py-0 shadow-xl">
+        <Card className="fixed right-4 bottom-20 z-50 flex h-[min(32rem,calc(100dvh-6rem))] w-[min(24rem,calc(100vw-2rem))] animate-in flex-col gap-0 overflow-hidden py-0 shadow-2xl duration-200 fade-in-0 slide-in-from-bottom-2 zoom-in-95">
           <CardHeader className="flex flex-row items-center justify-between gap-2 border-b px-4 py-3">
             <div className="min-w-0">
               <CardTitle className="text-base">{t('widget_title')}</CardTitle>

@@ -1,4 +1,6 @@
 import { cn, useApiClient, useMutation, useQuery, useQueryClient, useTranslation } from '@amplicada/platform-core/frontend';
+import { useIsMobile } from '@amplicada/platform-core/frontend/hooks/use-mobile';
+import { Avatar, AvatarFallback } from '@amplicada/platform-core/frontend/ui/avatar';
 import { Badge } from '@amplicada/platform-core/frontend/ui/badge';
 import { Button } from '@amplicada/platform-core/frontend/ui/button';
 import {
@@ -28,8 +30,8 @@ import {
 } from '@amplicada/platform-core/frontend/ui/message-scroller';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@amplicada/platform-core/frontend/ui/select';
 import { Textarea } from '@amplicada/platform-core/frontend/ui/textarea';
-import { AlertTriangleIcon, BellIcon, ChevronDownIcon, Link2OffIcon, SparklesIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { AlertTriangleIcon, ArrowLeftIcon, BellIcon, ChevronDownIcon, Link2OffIcon, SparklesIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   SupportAdminThreadDto,
   SupportCloseReason,
@@ -52,10 +54,9 @@ function formatTime(value: string): string {
   return new Date(value).toLocaleString();
 }
 
-function filterLabel(filter: StatusFilter, t: (key: string) => string): string {
-  if (filter === 'all') return t('admin_filter_all');
-  if (filter === 'active') return t('admin_filter_active');
-  return t(`status_${filter}`);
+function filterLabel(filter: StatusFilter, t: (key: string) => string, count: number): string {
+  const label = filter === 'all' ? t('admin_filter_all') : filter === 'active' ? t('admin_filter_active') : t(`status_${filter}`);
+  return count > 0 ? `${label} · ${count}` : label;
 }
 
 export function SupportChatAdminPage() {
@@ -68,6 +69,7 @@ export function SupportChatAdminPage() {
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastText, setBroadcastText] = useState('');
   const markedReadRef = useRef<string | null>(null);
+  const isMobile = useIsMobile();
 
   useSupportChatEvents('admin');
 
@@ -122,11 +124,26 @@ export function SupportChatAdminPage() {
   const incidents = threads.filter(item => item.kind === 'incident' && item.id !== activeId);
   const linkedIncident = thread?.incidentThreadId ? threads.find(item => item.id === thread.incidentThreadId) : undefined;
 
+  const filterCounts = useMemo<Record<StatusFilter, number>>(() => {
+    const byStatus = (status: SupportThreadStatus) => threads.filter(item => item.status === status).length;
+    return {
+      all: threads.length,
+      active: threads.filter(item => isActiveStatus(item.status)).length,
+      open: byStatus('open'),
+      pending: byStatus('pending'),
+      solved: byStatus('solved'),
+      closed: byStatus('closed'),
+    };
+  }, [threads]);
+
   const visibleThreads = threads.filter(item => {
     if (statusFilter === 'all') return true;
     if (statusFilter === 'active') return isActiveStatus(item.status);
     return item.status === statusFilter;
   });
+
+  // На узких экранах показываем либо список, либо переписку — с кнопкой «назад».
+  const showDetail = !isMobile || selectedId !== null;
 
   const selectThread = (id: string) => {
     setSelectedId(id);
@@ -137,7 +154,7 @@ export function SupportChatAdminPage() {
 
   return (
     <div className="h-full min-h-0 flex">
-      <aside className="w-80 shrink-0 border-r overflow-y-auto">
+      <aside className={cn('shrink-0 overflow-y-auto border-r', isMobile ? 'w-full' : 'w-80', showDetail && isMobile && 'hidden')}>
         <div className="sticky top-0 bg-background border-b px-4 py-3 flex flex-col gap-2">
           <h2 className="font-semibold">{t('admin_threads_title')}</h2>
           <Select value={statusFilter} onValueChange={value => setStatusFilter(value as StatusFilter)}>
@@ -147,7 +164,7 @@ export function SupportChatAdminPage() {
             <SelectContent>
               {STATUS_FILTERS.map(filter => (
                 <SelectItem key={filter} value={filter}>
-                  {filterLabel(filter, t)}
+                  {filterLabel(filter, t, filterCounts[filter])}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -163,7 +180,7 @@ export function SupportChatAdminPage() {
         )}
       </aside>
 
-      <section className="flex-1 min-h-0 flex flex-col">
+      <section className={cn('min-h-0 flex-1 flex-col', showDetail ? 'flex' : 'hidden')}>
         {!thread || !activeId ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">{t('admin_no_selection')}</div>
         ) : (
@@ -171,6 +188,11 @@ export function SupportChatAdminPage() {
             <div className="shrink-0 border-b px-4 py-3 flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
+                  {isMobile ? (
+                    <Button variant="ghost" size="icon-sm" aria-label={t('portal_back')} onClick={() => setSelectedId(null)}>
+                      <ArrowLeftIcon />
+                    </Button>
+                  ) : null}
                   <span className="font-semibold truncate">{userLogin}</span>
                   <Badge variant={statusBadgeVariant(thread.status)}>{t(`status_${thread.status}`)}</Badge>
                   {thread.kind === 'incident' ? (
@@ -383,20 +405,28 @@ function ThreadListItem({ item, active, onSelect }: { item: SupportAdminThreadDt
     <button
       type="button"
       onClick={onSelect}
-      className={cn('w-full text-left px-4 py-3 border-b cursor-pointer transition-colors hover:bg-muted/50', active && 'bg-muted')}
+      className={cn(
+        'flex w-full cursor-pointer gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/50',
+        active && 'bg-muted',
+      )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium truncate">{item.userLogin}</span>
-        <span className="text-xs text-muted-foreground shrink-0">{formatTime(item.updatedAt)}</span>
+      <Avatar size="sm" className="mt-0.5">
+        <AvatarFallback>{item.userLogin.slice(0, 1).toUpperCase()}</AvatarFallback>
+      </Avatar>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate font-medium">{item.userLogin}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{formatTime(item.updatedAt)}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Badge variant={statusBadgeVariant(item.status)}>{t(`status_${item.status}`)}</Badge>
+          {item.kind === 'incident' ? (
+            <Badge variant="destructive">{item.severity ? t(`severity_${item.severity}`) : t('kind_incident')}</Badge>
+          ) : null}
+          {item.unreadCount > 0 ? <Badge className="shrink-0 tabular-nums">{item.unreadCount}</Badge> : null}
+        </div>
+        <div className="truncate text-sm text-muted-foreground">{item.lastMessagePreview ?? ''}</div>
       </div>
-      <div className="mt-1 flex items-center gap-1.5">
-        <Badge variant={statusBadgeVariant(item.status)}>{t(`status_${item.status}`)}</Badge>
-        {item.kind === 'incident' ? (
-          <Badge variant="destructive">{item.severity ? t(`severity_${item.severity}`) : t('kind_incident')}</Badge>
-        ) : null}
-        {item.unreadCount > 0 ? <Badge className="shrink-0 tabular-nums">{item.unreadCount}</Badge> : null}
-      </div>
-      <div className="mt-1 truncate text-sm text-muted-foreground">{item.lastMessagePreview ?? ''}</div>
     </button>
   );
 }

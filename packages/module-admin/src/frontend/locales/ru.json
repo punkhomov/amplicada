@@ -4,15 +4,12 @@
   "admin_tab_apps": "Приложения",
   "admin_toggle_theme": "Переключить тему",
   "admin_logout": "Выйти",
-
   "admin_breadcrumb_root": "Админ",
-
   "admin_apps_empty": "Пока нет ни одного приложения",
+  "admin_apps_back": "К приложениям",
   "admin_apps_empty_hint": "Приложения регистрируются модулями через сервис admin:apps.",
   "admin_apps_not_found": "Приложение не найдено",
-
   "admin_modules_title": "Модули",
-
   "admin_storage_title": "Хранилище",
   "admin_storage_upload": "Загрузить",
   "admin_storage_col_key": "Ключ",
@@ -24,7 +21,6 @@
   "admin_storage_empty_title": "Нет файлов",
   "admin_storage_empty_description": "В хранилище пока нет ни одного объекта",
   "admin_storage_upload_error": "Не удалось загрузить файл",
-
   "admin_task_breadcrumb_tasks": "Фоновые задачи",
   "admin_task_history": "История запусков",
   "admin_task_stale": "Устарела",
@@ -43,13 +39,11 @@
   "admin_task_logs_run_title": "Логи — запуск от {{date}}",
   "admin_task_select_run": "Выберите запуск в таблице",
   "admin_task_no_logs": "Логов нет",
-
   "admin_table_refresh": "Обновить",
   "admin_table_summary": "{{total}} записей | {{selected}} выбрано",
   "admin_table_prev": "Назад",
   "admin_table_next": "Вперёд",
   "admin_table_all_loaded": "Все загружено",
-
   "admin_toolbar_create": "Создать",
   "admin_toolbar_create_disabled": "Для этого типа документа создание новых записей запрещено",
   "admin_toolbar_delete_disabled": "Для этого типа документа удаление запрещено",
@@ -68,7 +62,6 @@
   "admin_toolbar_mode_pages": "Страницы",
   "admin_toolbar_import": "Импорт",
   "admin_toolbar_import_disabled": "Для этого типа документа импорт запрещён",
-
   "admin_import_success": "Импорт завершён. Создано: {{created}}, Обновлено: {{updated}}",
   "admin_import_errors_suffix": ", Ошибок: {{count}}",
   "admin_import_invalid_format": "Неверный формат файла: отсутствует массив items",
@@ -78,7 +71,6 @@
   "admin_import_more": "...и ещё {{count}} записей",
   "admin_import_pending": "Импорт...",
   "admin_import_confirm": "Импортировать",
-
   "admin_filter_op_eq": "равно",
   "admin_filter_op_ne": "не равно",
   "admin_filter_op_contains": "содержит",
@@ -110,13 +102,11 @@
   "admin_filter_value_remove": "Удалить значение",
   "admin_filter_flattened_warning": "Фильтр создан вне интерфейса и будет упрощён при сохранении",
   "admin_export_failed": "Не удалось выгрузить данные",
-
   "admin_column_pin_left": "Закрепить слева",
   "admin_column_pin_right": "Закрепить справа",
   "admin_column_unpin": "Открепить",
   "admin_column_pinned_left": "Закреплены слева",
   "admin_column_pinned_right": "Закреплены справа",
-
   "admin_auth_log_action_login": "Вход",
   "admin_auth_log_action_logout": "Выход",
   "admin_auth_log_empty_title": "Нет событий",
@@ -129,12 +119,10 @@
   "admin_auth_log_col_user_agent": "User-Agent",
   "admin_auth_log_success": "Успех",
   "admin_auth_log_failure": "Ошибка",
-
   "admin_members_empty_title": "Нет участников",
   "admin_members_empty_description": "В этой группе пока нет участников",
   "admin_members_col_login": "Логин",
   "admin_members_col_id": "ID",
-
   "admin_schedule_freq_never": "Никогда",
   "admin_schedule_freq_periodic": "Периодично",
   "admin_schedule_freq_daily": "Ежедневно",
@@ -171,7 +159,6 @@
   "admin_schedule_quarter_0": "Янв / Апр / Июл / Окт",
   "admin_schedule_quarter_1": "Фев / Май / Авг / Ноя",
   "admin_schedule_quarter_2": "Мар / Июн / Сен / Дек",
-
   "admin_task_field_stale": "Устарела",
   "admin_task_field_stale_description": "Задачи больше нет в коде, но история запусков сохранена. Она не выполняется.",
   "admin_task_field_id": "ID",
@@ -180,7 +167,6 @@
   "admin_task_field_timeout": "Таймаут (мс)",
   "admin_task_field_timeout_help": "0 — без ограничения",
   "admin_task_field_alert": "Алерт на падение",
-
   "admin_doc_title_create": "Создание",
   "admin_doc_save": "Сохранить",
   "admin_doc_save_pending": "Сохранение...",
@@ -193,7 +179,6 @@
   "admin_doc_unsaved_description": "У вас есть несохранённые изменения. Если вы покинете страницу, все несохранённые данные будут потеряны.",
   "admin_doc_stay": "Остаться",
   "admin_doc_leave": "Покинуть страницу",
-
   "admin_list_confirm_delete_one": "Удалить запись?",
   "admin_list_confirm_delete_many": "Удалить {{count}} записей?",
   "admin_list_select_all": "Выбрать все",

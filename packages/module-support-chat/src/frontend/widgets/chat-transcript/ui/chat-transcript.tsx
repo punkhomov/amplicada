@@ -37,6 +37,17 @@ export interface ChatTranscriptRoleTag {
   variant?: 'default' | 'secondary' | 'outline';
 }
 
+/** Системная строка в ленте: «Обращение закрыто · пользователем · Вопрос решён». */
+export function ChatTranscriptMarker({ children }: { children: ReactNode }) {
+  return (
+    <MessageScrollerItem className="mt-4">
+      <Marker variant="separator">
+        <MarkerContent>{children}</MarkerContent>
+      </Marker>
+    </MessageScrollerItem>
+  );
+}
+
 interface ChatTranscriptProps {
   messages: SupportMessageDto[];
   /** Роль читателя: её сообщения уходят вправо, остальные — влево. */

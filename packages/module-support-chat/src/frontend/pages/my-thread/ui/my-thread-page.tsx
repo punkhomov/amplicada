@@ -10,16 +10,16 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from '@amplicada/platform-core/frontend/ui/message-scroller';
-import { Spinner } from '@amplicada/platform-core/frontend/ui/spinner';
+import { Skeleton } from '@amplicada/platform-core/frontend/ui/skeleton';
 import { ArrowLeftIcon, LifeBuoyIcon, SparklesIcon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SupportThreadDto } from '../../../../contracts/index.js';
 import { supportChatMyThreadQueryOptions } from '../../../lib/query-options.js';
-import { statusBadgeVariant } from '../../../lib/status.js';
+import { lifecycleNote, statusBadgeVariant } from '../../../lib/status.js';
 import { useSupportChatEvents } from '../../../lib/use-support-chat-events.js';
 import { ChatComposer, type ChatComposerInput } from '../../../widgets/chat-composer/index.js';
-import { ChatTranscript } from '../../../widgets/chat-transcript/index.js';
+import { ChatTranscript, ChatTranscriptMarker } from '../../../widgets/chat-transcript/index.js';
 
 /** Страница обращения: `/support/:id` — история и продолжение, `/support/new` — новое обращение. */
 export function MyThreadPage() {
@@ -84,15 +84,7 @@ export function MyThreadPage() {
         ),
       ]
     : [];
-  const closedNote = thread
-    ? [
-        thread.status === 'closed' ? t('portal_closed_note') : thread.status === 'solved' ? t('portal_resolved_note') : null,
-        thread.resolvedBy ? t(`resolved_by_${thread.resolvedBy}`) : null,
-        thread.closeReason ? t(`close_reason_${thread.closeReason}`) : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : '';
+  const closedNote = thread ? lifecycleNote(thread, t) : '';
   const hint = !thread
     ? ''
     : thread.status === 'closed'
@@ -121,31 +113,32 @@ export function MyThreadPage() {
         </div>
 
         {thread ? (
-          <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
-            <span>{`${t('portal_created')}: ${new Date(thread.createdAt).toLocaleString()}`}</span>
-            {participants.length > 0 ? (
-              <span className="max-w-56 truncate text-right">{`${t('portal_participants')}: ${participants.join(', ')}`}</span>
-            ) : null}
-            {closedNote ? <span className="text-right">{closedNote}</span> : null}
-            {thread.status === 'closed' ? (
-              <Button size="sm" variant="outline" disabled={setStatus.isPending} onClick={() => setStatus.mutate('open')}>
-                {t('portal_reopen')}
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" disabled={setStatus.isPending} onClick={() => setStatus.mutate('closed')}>
-                {t('portal_close')}
-              </Button>
-            )}
-          </div>
+          <Button
+            size="sm"
+            variant={thread.status === 'closed' ? 'outline' : 'secondary'}
+            disabled={setStatus.isPending}
+            onClick={() => setStatus.mutate(thread.status === 'closed' ? 'open' : 'closed')}
+          >
+            {thread.status === 'closed' ? t('portal_reopen') : t('portal_close')}
+          </Button>
         ) : null}
       </div>
+
+      {thread ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>{`${t('portal_created')}: ${new Date(thread.createdAt).toLocaleString()}`}</span>
+          {participants.length > 0 ? <span>{`${t('portal_participants')}: ${participants.join(', ')}`}</span> : null}
+        </div>
+      ) : null}
 
       <Card className="flex h-[min(40rem,calc(100dvh-13rem))] flex-col gap-0 overflow-hidden py-0">
         <MessageScrollerProvider key={id ?? 'new'} autoScroll defaultScrollPosition="end">
           <div className="flex-1 min-h-0 flex flex-col">
             {!isNew && isLoading ? (
-              <div className="flex flex-1 items-center justify-center">
-                <Spinner className="size-6 text-muted-foreground" />
+              <div className="flex flex-1 flex-col gap-3 p-4">
+                <Skeleton className="h-9 w-2/3" />
+                <Skeleton className="ml-auto h-9 w-1/2" />
+                <Skeleton className="h-9 w-3/5" />
               </div>
             ) : !isNew && isError ? (
               <div className="flex flex-1 items-center justify-center p-4">
@@ -181,6 +174,7 @@ export function MyThreadPage() {
                       }
                       attachmentHrefFor={message => `${api.baseUrl}/support-chat/attachments/${message.id}`}
                     />
+                    {closedNote ? <ChatTranscriptMarker>{closedNote}</ChatTranscriptMarker> : null}
                   </MessageScrollerContent>
                 </MessageScrollerViewport>
                 <MessageScrollerButton />
