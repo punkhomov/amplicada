@@ -16,11 +16,14 @@ import {
   type MetricsSettingsPatch,
 } from '../../../../contracts/index.js';
 import {
+  type MetricsPeriod,
   metricsCatalogQueryOptions,
   metricsEventsQueryOptions,
   metricsQueryKeys,
   metricsSettingsQueryOptions,
 } from '../../../lib/query-options.js';
+import { RoutesTab } from './routes-tab.js';
+import { SqlTab } from './sql-tab.js';
 
 const KIND_VARIANT: Record<MetricEventKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   page: 'secondary',
@@ -59,6 +62,7 @@ export function MetricsAdminPage() {
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<MetricEventKind | 'all'>('all');
   const [name, setName] = useState('');
+  const [period, setPeriod] = useState<MetricsPeriod>('24h');
   const [draft, setDraft] = useState<MetricsSettingsDto | null>(null);
 
   const eventsQuery = useQuery(
@@ -92,6 +96,8 @@ export function MetricsAdminPage() {
         <Tabs defaultValue="events" className="gap-4">
           <TabsList>
             <TabsTrigger value="events">{t('tab_events')}</TabsTrigger>
+            <TabsTrigger value="routes">{t('tab_routes')}</TabsTrigger>
+            <TabsTrigger value="sql">{t('tab_sql')}</TabsTrigger>
             <TabsTrigger value="catalog">{t('tab_catalog')}</TabsTrigger>
             <TabsTrigger value="settings">{t('tab_settings')}</TabsTrigger>
           </TabsList>
@@ -155,6 +161,14 @@ export function MetricsAdminPage() {
                 </TableBody>
               </Table>
             </div>
+          </TabsContent>
+
+          <TabsContent value="routes">
+            <RoutesTab api={api} period={period} onPeriodChange={setPeriod} />
+          </TabsContent>
+
+          <TabsContent value="sql">
+            <SqlTab api={api} period={period} onPeriodChange={setPeriod} />
           </TabsContent>
 
           <TabsContent value="catalog">
@@ -255,6 +269,46 @@ export function MetricsAdminPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm">{t('settings_retention_points_days')}</span>
+                  <Input
+                    className="w-28"
+                    type="number"
+                    min={1}
+                    max={3650}
+                    aria-label={t('settings_retention_points_days')}
+                    value={draft.retentionPointsDays}
+                    onChange={event => patchDraft({ retentionPointsDays: Number(event.target.value) })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm">{t('settings_slow_sql_threshold')}</span>
+                  <Input
+                    className="w-28"
+                    type="number"
+                    min={1}
+                    max={600000}
+                    aria-label={t('settings_slow_sql_threshold')}
+                    value={draft.slowSqlThresholdMs}
+                    onChange={event => patchDraft({ slowSqlThresholdMs: Number(event.target.value) })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm">{t('settings_sample_sql')}</span>
+                  <Input
+                    className="w-28"
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    aria-label={t('settings_sample_sql')}
+                    value={draft.sampleSqlRate}
+                    onChange={event => patchDraft({ sampleSqlRate: Number(event.target.value) })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
                   <span className="text-sm">{t('settings_ingest_rate')}</span>
                   <Input
                     className="w-28"
@@ -286,9 +340,12 @@ export function MetricsAdminPage() {
                       saveSettings.mutate({
                         enabled: draft.enabled,
                         retentionEventsDays: draft.retentionEventsDays,
+                        retentionPointsDays: draft.retentionPointsDays,
                         samplePageviewRate: draft.samplePageviewRate,
                         sampleClickRate: draft.sampleClickRate,
                         ingestEventsPerMinute: draft.ingestEventsPerMinute,
+                        slowSqlThresholdMs: draft.slowSqlThresholdMs,
+                        sampleSqlRate: draft.sampleSqlRate,
                         storeRawUrls: draft.storeRawUrls,
                       })
                     }

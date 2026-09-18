@@ -15,6 +15,13 @@
       "when": 1758201000000,
       "tag": "0001_rate_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1758202000000,
+      "tag": "0002_measurements",
+      "breakpoints": true
     }
   ]
 }

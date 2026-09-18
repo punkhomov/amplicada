@@ -14,5 +14,11 @@ export type {
   MetricsRateLimitedDto,
   MetricsSettingsDto,
   MetricsSettingsPatch,
+  RouteSummaryDto,
+  RoutesSummaryDto,
+  SlowQueryDto,
+  SlowQueryListDto,
+  SqlSummaryDto,
+  SqlSummaryListDto,
 } from './types.js';
 export { METRIC_EVENT_KINDS } from './types.js';

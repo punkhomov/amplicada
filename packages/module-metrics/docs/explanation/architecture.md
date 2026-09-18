@@ -11,15 +11,15 @@ order: 10
 ## Конвейер
 
 ```
-клиентский трекер (floating)
-   │  page.view пачками (10 с / hidden)
-   ▼
-POST /api/metrics/collect  →  валидация и лимиты  →  псевдонимизация
-   │                                                        │
-   │                                                        ▼
-   │                                          metrics.events (партиции по месяцам)
-   │                                                        │
-   └────────── GET /api/metrics/events ◀──── админ-приложение (polling 15 с)
+клиентский трекер (floating)        http:observer (core)      обёртка pg-pool
+   │  page.view / ui.* пачками            │ роуты RED             │ SQL fingerprint
+   ▼                                      ▼                       ▼
+POST /api/metrics/collect  →  валидация  MeasurementBuffer (10 с окна пред-агрегации)
+   │                                        │                          │
+   ▼                                        ▼                          ▼
+metrics.events (партиции)          metrics.points + series     slow_queries + fingerprints
+   │                                        │                          │
+   └──── /events, /catalog ◀── админ-приложение ──▶ /routes, /sql, /slow-queries (polling 30 с)
 ```
 
 Стор — единственный источник правды: внешние выходы (Яндекс.Метрика, webhook) появятся
@@ -45,7 +45,7 @@ POST /api/metrics/collect  →  валидация и лимиты  →  псе�
 
 ## Ограничения
 
-- Нет rate-limit приёма (Redis) — защита пока на лимитах батча и события.
-- Нет opt-out/DNT на клиенте; есть серверный kill-switch (`enabled`).
-- Анонимный приём разрешён: на публичных страницах пользователя может не быть.
+- Нет графиков/трендов: вкладки «Роуты» и «SQL» — таблицы за период.
+- SQL вне HTTP-запроса не привязан к роуту (`<unattributed>`).
 - Алертов и внешних доставок нет до этапов 04–05 плана.
+- `pg_stat_statements` как доп. источник SQL-метрик не подключён.

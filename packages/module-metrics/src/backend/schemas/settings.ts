@@ -9,6 +9,9 @@ export const metricsSettings = metricsSchema.table('settings', {
   samplePageviewRate: real('sample_pageview_rate').notNull().default(1),
   sampleClickRate: real('sample_click_rate').notNull().default(0.1),
   ingestEventsPerMinute: integer('ingest_events_per_minute').notNull().default(600),
+  retentionPointsDays: integer('retention_points_days').notNull().default(30),
+  slowSqlThresholdMs: integer('slow_sql_threshold_ms').notNull().default(1000),
+  sampleSqlRate: real('sample_sql_rate').notNull().default(1),
   storeRawUrls: boolean('store_raw_urls').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

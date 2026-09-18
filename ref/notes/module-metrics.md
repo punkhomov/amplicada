@@ -11,7 +11,7 @@ date: 2026-09-18
 > План и контракты: `ref/plans/2026-09-18-metrics-module/` (00-overview, 01-contracts,
 > 02-offline-stack). Реализованы этапы 00 и 01 (журнал событий, трекер pageview+клики,
 > rate-limit, opt-out/DNT, лента/каталог/настройки в админке).
-> Стоп-лист (D-001…D-009):
+> Стоп-лист (D-001…D-012):
 > - Не хранить события в Document System — D-001 (rejected).
 > - Не позволять произвольный id события (и не менять тип колонки на text) — D-002 (rejected).
 > - Не хешировать актора голым SHA-256 и не хранить соль в БД — D-003 (rejected).
@@ -21,6 +21,9 @@ date: 2026-09-18
 > - Не разводить реалтайм (SSE) для дашбордов метрик — D-007 (rejected, polling).
 > - Не ставить token bucket/Lua и не считать лимит по IP при известной сессии — D-008 (rejected).
 > - Не собирать клики autocapture'ом всего DOM и не строить клиентскую страницу opt-out — D-009 (rejected).
+> - Не строить HTTP-метрики модульным `onRoute`/async-ALS — только core-точки — D-010 (rejected).
+> - Не считать перцентили точными (`percentile_cont`) по всей истории и не брать t-digest — D-011 (rejected).
+> - Не хранить сырой SQL с литералами и не инструментировать запросы самого модуля — D-012 (rejected).
 
 ## D-001. События — партиционированные таблицы модуля, не документы — accepted (2026-09-18)
 
@@ -226,10 +229,86 @@ maintenance-механизм.
 **Код.** `src/frontend/lib/clicks.ts`, `src/frontend/lib/optout.ts`,
 `src/frontend/features/metrics-tracker/ui/metrics-tracker.tsx`.
 
+## D-010. Технические метрики через core-точки `http:observer` + `request-context` — accepted (2026-09-18)
+
+**Контекст.** Нужны метрики всех HTTP-роутов и корреляция SQL с роутом. Модуль не может
+навесить root-хук, который покрыл бы роуты ранних модулей (Fastify инкапсулирует hooks по
+порядку регистрации), а ALS из async-`onRequest` не доживает до хендлера.
+
+**Решение.** Core даёт `http:observer` (root-хуки в `createApp` до всех setup) и
+`request-context` (ALS, callback-хук `run(context, done)`). Модуль контрибует наблюдателя
+и читает `current()` из SQL-обёртки. Подробности и отвергнутые варианты — `notes/platform-core.md` D-006.
+
+**Почему именно так.** Единственный способ гарантировать полное покрытие роутов и живую ALS.
+
+**Грабли.** SQL фоновых задач — `<unattributed>`; unmatched HTTP — `route='<unmatched>'`.
+
+**Код.** `src/backend/collectors/{http-observer,sql-collector}.ts`, `src/backend/setup.ts`.
+
+## D-011. Перцентили — из гистограмм, агрегация — в Postgres, merge — в JS — accepted (2026-09-18)
+
+**Контекст.** Нужны p50/p95/p99 по роутам и SQL на периоде до 7 дней. Точный
+`percentile_cont` по сырым наблюдениям дорог и требует хранения каждой выборки; t-digest —
+расширение (в закрытом контуре нежелательно).
+
+**Решение.** Коллекторы копят гистограммы в памяти и сбрасывают раз в 10 с
+(`MeasurementBuffer` + `MeasurementFlusher`); точки хранятся в `metrics.points`. Запросы
+`/routes` и `/sql` суммируют count/sum в Postgres, а `bucketCounts` разворачивают
+`cross join lateral jsonb_array_elements_text(...) with ordinality` и сливают в JS,
+перцентиль считается линейной интерполяцией (`percentileFromHistogram`).
+
+**Почему именно так.** Одна строка на (серию, окно) вместо каждого наблюдения; merge
+бакетов — десятки строк на запрос; границы OTel-дефолтные, точность достаточна для
+RED-панелей.
+
+**Отвергнуто.** Точные `percentile_cont` по сырым точкам всей истории (rejected): цена
+сортировки. t-digest/расширения (rejected): зависимость в закрытом контуре. Хранить каждое
+наблюдение отдельной строкой (rejected): объём ×100.
+
+**Что изменит решение.** Требование точных p99 на больших окнах или SLA-отчёты — t-digest
+в роллапах или отдельное хранилище за `MetricsStore`.
+
+**Грабли.** Перцентиль «насыщается» на верхней границе (+Inf-бакет): для задержек > 10 с
+интерполяция даёт ~10 с — для RED достаточно, точные значения видны в slow_queries.
+
+**Код.** `src/backend/services/{histogram,measurement-buffer}.ts`,
+`src/backend/services/metrics-store.ts` (`routesSummary`, `sqlSummary`),
+`src/backend/collectors/measurement-flusher.ts`.
+
+## D-012. SQL-коллектор — обёртка пула, нормализация литералов, tail-samples — accepted (2026-09-18)
+
+**Контекст.** Нужны тексты запросов (какие SQL гоняются), их длительность и корреляция с
+роутом; `pg_stat_statements` требует настройки сервера и в закрытых контурах доступен не всегда.
+
+**Решение.** Обёртка `pool.query` и клиентов из `pool.connect` (`SqlCollector`): wall-clock
+замер, нормализация литералов (`normalizeSql`: строки/числа → `?`, `IN` сворачивается,
+`$n` сохраняются), fingerprint = sha256 нормализованного текста. В измерения идёт
+гистограмма по `(fingerprint, route)`, в `metrics.slow_queries` — samples всех медленных
+(> `slowSqlThresholdMs`) и ошибочных; тексты fingerprint'ов — в `metrics.sql_fingerprints`.
+Запросы самого модуля (`metrics.`) пропускаются, чтобы не было обратной связи.
+
+**Почему именно так.** Работает без прав DBA и без расширений; нормализованный текст не
+несёт PII; samples ограничены (≤50 за окно), поэтому объём под контролем.
+
+**Отвергнуто.** Сырой SQL с литералами в метриках (rejected): PII и кардинальность.
+Обязательный `pg_stat_statements` (rejected): не всегда доступен; остаётся опцией на будущее.
+Инструментирование только медленных (rejected): теряется rate/распределение.
+
+**Что изменит решение.** Разрешение DBA на `pg_stat_statements` — добавить снимок дельт как
+дополнительный источник (план, этап 02, опциональная часть); появление `libpg_query` в
+зависимостях — заменить regex-нормализацию на парсер.
+
+**Грабли.** Callback-стиль pg не инструментируется (drizzle на промисах). `queryTextOf`
+обрабатывает и строку, и `{ text }`. У `rowCount` тип `number | null`.
+
+**Код.** `src/backend/collectors/sql-collector.ts`, `src/backend/services/sql-normalize.ts`,
+`src/backend/services/metrics-store.ts` (`writeMeasurements`, `upsertSqlFingerprints`, `insertSlowQueries`).
+
 ## Пробелы
 
-- Событийные источники: pageview и `data-metrics`-клики; Web Vitals, ошибки, HTTP/SQL/задач-
-  коллекторы — этапы 02–04 плана.
+- Web Vitals и клиентские ошибки — этап 04 плана; эмит бизнес-событий — этап 03.
+- `pg_stat_statements` как дополнительный источник SQL-метрик не подключён (опция этапа 02).
+- Графиков/трендов на вкладках «Роуты»/«SQL» нет — таблицы за период; дашборды-панели — этап 03.
 - Opt-out — ручной флаг/браузерный сигнал; отдельной страницы «отключить аналитику» нет.
 - Нет UI для партиций/размера журнала; task `metrics.maintenance` активна только после
   настройки расписания в админке.

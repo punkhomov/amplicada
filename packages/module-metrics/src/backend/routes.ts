@@ -13,6 +13,21 @@ function shortHash(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
 
+interface TimeRange {
+  from: Date;
+  to: Date;
+}
+
+/** Диапазон запроса: по умолчанию последние 24 часа; невалидный — 400. */
+function parseRange(query: { from?: string; to?: string }): TimeRange | { error: string } {
+  const to = query.to ? new Date(query.to) : new Date();
+  const from = query.from ? new Date(query.from) : new Date(to.getTime() - 24 * 60 * 60 * 1000);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from.getTime() >= to.getTime()) {
+    return { error: 'invalid_range' };
+  }
+  return { from, to };
+}
+
 export function createMetricsRoutes(fastify: FastifyInstance, deps: MetricsRoutesDeps): void {
   const requireUser = async (request: FastifyRequest, reply: FastifyReply) => {
     const user = deps.authService.getCurrentUser(request);
@@ -51,6 +66,28 @@ export function createMetricsRoutes(fastify: FastifyInstance, deps: MetricsRoute
   });
 
   fastify.get('/catalog', { preHandler: requireUser }, async () => ({ entries: await deps.service.listCatalog() }));
+
+  fastify.get('/routes', { preHandler: requireUser }, async (request, reply) => {
+    const range = parseRange(request.query as { from?: string; to?: string });
+    if ('error' in range) return reply.code(400).send({ error: range.error });
+    return { routes: await deps.service.routesSummary(range.from, range.to) };
+  });
+
+  fastify.get('/sql', { preHandler: requireUser }, async (request, reply) => {
+    const query = request.query as { from?: string; to?: string; limit?: string };
+    const range = parseRange(query);
+    if ('error' in range) return reply.code(400).send({ error: range.error });
+    const limit = query.limit ? Number.parseInt(query.limit, 10) : 50;
+    return { queries: await deps.service.sqlSummary(range.from, range.to, limit) };
+  });
+
+  fastify.get('/slow-queries', { preHandler: requireUser }, async (request, reply) => {
+    const query = request.query as { from?: string; to?: string; limit?: string };
+    const range = parseRange(query);
+    if ('error' in range) return reply.code(400).send({ error: range.error });
+    const limit = query.limit ? Number.parseInt(query.limit, 10) : 50;
+    return { samples: await deps.service.slowQueries(range.from, range.to, limit) };
+  });
 
   fastify.get('/admin/settings', { preHandler: requireUser }, async () => deps.service.getSettings());
 

@@ -15,8 +15,10 @@ verified_commit: 9e0cfb80
 клиентских событий (`page.view` на смену маршрута и `ui.*` по кликам на `data-metrics`),
 дедуплицировать их, псевдонимизировать актора и сессию, ограничивать приём (429 с `Retry-After`),
 уважать opt-out/DNT/GPC, партиционировать журнал по месяцам, удалять старое по retention и
-показывать ленту, каталог наблюдаемых событий и настройки в админке. Потребители (модули) смогут
-писать бизнес-события через сервис `metrics`, когда появится `emit` (этап 03 плана).
+показывать ленту, каталог наблюдаемых событий и настройки в админке. Отдельно собираются
+**технические метрики**: длительность HTTP-роутов (RED, p50/p95/p99), SQL-запросы
+(fingerprint, медленные samples) и фоновые задачи. Потребители (модули) смогут писать
+бизнес-события через сервис `metrics`, когда появится `emit` (этап 03 плана).
 
 Осознанно не входит на текущем этапе: измерения (HTTP/SQL/задачи), Web Vitals и ошибки,
 воронки/retention, алерты, внешние выходы (Яндекс.Метрика, webhook, CSV), экспорт.
@@ -26,10 +28,12 @@ verified_commit: 9e0cfb80
 | Что | Как | Где в коде |
 |---|---|---|
 | Backend-сервис | `context.services.resolve<MetricsService>('metrics')` | `src/backend/services/metrics-service.ts` |
-| HTTP API | `POST /api/metrics/collect`, `GET /api/metrics/context`, `/events`, `/catalog`, `GET/PATCH /api/metrics/admin/settings` | `src/backend/routes.ts` |
+| HTTP API | `POST /api/metrics/collect`, `GET /context`, `/events`, `/catalog`, `/routes`, `/sql`, `/slow-queries`, `GET/PATCH /admin/settings` | `src/backend/routes.ts` |
 | Схема БД | `metrics.events` (партиции по месяцам), `metrics.settings` (синглтон) | `src/backend/schemas/`, `migrations/0000_init.sql` |
 | Задачи | `metrics.maintenance` (партиции вперёд + retention), расписание — в админке | `src/backend/setup.ts` |
 | Frontend | приложение админки `/admin/apps/metrics`, трекер на extension point `floating` | `src/frontend/setup.tsx` |
+| Технические коллекторы | `http:observer`, обёртка `pg-pool`, подписка на `TASK_EVENTS` | `src/backend/collectors/` |
+| Точки core | `http:observer`, `request-context`, `secrets` | `packages/platform-core` (`notes/platform-core.md` D-006) |
 | Псевдонимизация | `Pseudonymizer` (HMAC-SHA256), соль — `AMPLICADA_METRICS_PSEUDONYM_SALT` | `src/backend/services/pseudonym.ts` |
 
 ## Зависимости и порядок загрузки
@@ -55,6 +59,7 @@ verified_commit: 9e0cfb80
 | Точки расширения (сервисы/токены) | [reference/settings.md](./reference/settings.md) — сервис `metrics`, задача `metrics.maintenance` |
 | HTTP API | [reference/http-api.md](./reference/http-api.md) |
 | Схема БД и миграции | [reference/settings.md](./reference/settings.md) |
+| Технические метрики | [reference/technical-metrics.md](./reference/technical-metrics.md) |
 | Документы, списки, дашборд | — нет: события не документы (см. notes) |
 | Задачи и фоновые процессы | [reference/settings.md](./reference/settings.md) |
 | Frontend (FSD, роуты, слоты) | [reference/http-api.md](./reference/http-api.md#клиентский-трекер) — трекер и админ-приложение |
@@ -65,6 +70,8 @@ verified_commit: 9e0cfb80
 ## Freshness
 
 - Сверено с кодом: 2026-09-18, коммит `9e0cfb80`.
-- Не проверено вживую: отображение админ-приложения в браузере (API и приём проверены
-  curl'ом); opt-out/DNT-ветки трекера и клики `data-metrics` в реальном браузере
+- Не проверено вживую: отображение админ-приложения в браузере (API, приём и сводки
+  проверены curl'ом); opt-out/DNT-ветки трекера и клики `data-metrics` в реальном браузере
   (серверная сторона и каталог проверены curl'ом).
+- Проверено вживую 2026-09-18: роуты (RED по 5 маршрутам), SQL-fingerprint'ы,
+  корреляция slow-samples с `route`/`requestId`, партиции `points`/`slow_queries`.

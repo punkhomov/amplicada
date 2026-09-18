@@ -7,13 +7,21 @@ import type {
   MetricsContextDto,
   MetricsSettingsDto,
   MetricsSettingsPatch,
+  RouteSummaryDto,
+  SlowQueryDto,
+  SqlSummaryDto,
 } from '../../contracts/index.js';
+import type { CollectorConfig } from '../collectors/config.js';
+import type { SlowQueryInsert } from '../collectors/sql-collector.js';
 import type { MetricEventRow, MetricsSettingsRow } from '../schemas/index.js';
+import type { AggregatedMeasurement } from './measurement-buffer.js';
 import { createPostgresMetricsStore, type EventListFilter } from './metrics-store.js';
-import { dropExpiredEventPartitions, ensureEventPartitions } from './partitions.js';
+import { dropExpiredPartitions, ensurePartitions } from './partitions.js';
 import type { Pseudonymizer } from './pseudonym.js';
 import type { IngestRateLimiter, RateLimitDecision } from './rate-limiter.js';
 import { DEFAULT_EVENT_LIMITS, validateBatch } from './validation.js';
+
+const SLOW_QUERIES_RETENTION_DAYS = 7;
 
 export class MetricsSettingsError extends Error {}
 
@@ -25,6 +33,13 @@ export interface MetricsService {
   collect(rawBody: unknown, actor?: MetricsActor): Promise<CollectResponse>;
   listEvents(filter?: EventListFilter): Promise<MetricEventDto[]>;
   listCatalog(): Promise<MetricCatalogEntryDto[]>;
+  routesSummary(from: Date, to: Date): Promise<RouteSummaryDto[]>;
+  sqlSummary(from: Date, to: Date, limit?: number): Promise<SqlSummaryDto[]>;
+  slowQueries(from: Date, to: Date, limit?: number): Promise<SlowQueryDto[]>;
+  writeMeasurements(points: AggregatedMeasurement[]): Promise<void>;
+  upsertSqlFingerprints(entries: { fingerprint: string; queryText: string }[]): Promise<void>;
+  insertSlowQueries(rows: SlowQueryInsert[]): Promise<void>;
+  getCollectorConfig(): Promise<CollectorConfig>;
   /** Минутный лимит приёма по ключу (хеш сессии/пользователя/IP) — вызывается до `collect`. */
   checkIngestRate(key: string, cost: number): Promise<RateLimitDecision>;
   getSettings(): Promise<MetricsSettingsDto>;
@@ -41,6 +56,9 @@ function toSettingsDto(row: MetricsSettingsRow): MetricsSettingsDto {
     samplePageviewRate: row.samplePageviewRate,
     sampleClickRate: row.sampleClickRate,
     ingestEventsPerMinute: row.ingestEventsPerMinute,
+    retentionPointsDays: row.retentionPointsDays,
+    slowSqlThresholdMs: row.slowSqlThresholdMs,
+    sampleSqlRate: row.sampleSqlRate,
     storeRawUrls: row.storeRawUrls,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -135,6 +153,49 @@ export function createMetricsService({
       return store.catalog();
     },
 
+    async routesSummary(from, to) {
+      return store.routesSummary(from, to);
+    },
+
+    async sqlSummary(from, to, limit) {
+      return store.sqlSummary(from, to, limit);
+    },
+
+    async slowQueries(from, to, limit) {
+      const rows = await store.listSlowQueries(from, to, limit);
+      return rows.map(row => ({
+        at: row.at.toISOString(),
+        fingerprint: row.fingerprint,
+        queryText: row.queryText,
+        route: row.route,
+        durationMs: row.durationMs,
+        rowCount: row.rowCount,
+        errorCode: row.errorCode,
+        requestId: row.requestId,
+      }));
+    },
+
+    async writeMeasurements(points) {
+      await store.writeMeasurements(points);
+    },
+
+    async upsertSqlFingerprints(entries) {
+      await store.upsertSqlFingerprints(entries);
+    },
+
+    async insertSlowQueries(rows) {
+      await store.insertSlowQueries(rows);
+    },
+
+    async getCollectorConfig() {
+      const settings = await settingsOrThrow();
+      return {
+        enabled: settings.enabled,
+        sampleSqlRate: settings.sampleSqlRate,
+        slowSqlThresholdMs: settings.slowSqlThresholdMs,
+      };
+    },
+
     async checkIngestRate(key, cost) {
       const settings = await settingsOrThrow();
       return limiter.consume(key, cost, settings.ingestEventsPerMinute);
@@ -153,6 +214,19 @@ export function createMetricsService({
         }
         values.retentionEventsDays = patch.retentionEventsDays;
       }
+      if (patch.retentionPointsDays !== undefined) {
+        if (!Number.isInteger(patch.retentionPointsDays) || patch.retentionPointsDays < 1 || patch.retentionPointsDays > 3650) {
+          throw new MetricsSettingsError('retentionPointsDays must be an integer between 1 and 3650');
+        }
+        values.retentionPointsDays = patch.retentionPointsDays;
+      }
+      if (patch.slowSqlThresholdMs !== undefined) {
+        if (!Number.isInteger(patch.slowSqlThresholdMs) || patch.slowSqlThresholdMs < 1 || patch.slowSqlThresholdMs > 600_000) {
+          throw new MetricsSettingsError('slowSqlThresholdMs must be an integer between 1 and 600000');
+        }
+        values.slowSqlThresholdMs = patch.slowSqlThresholdMs;
+      }
+      if (patch.sampleSqlRate !== undefined) values.sampleSqlRate = clampRate(patch.sampleSqlRate, 'sampleSqlRate');
       if (patch.samplePageviewRate !== undefined) values.samplePageviewRate = clampRate(patch.samplePageviewRate, 'samplePageviewRate');
       if (patch.sampleClickRate !== undefined) values.sampleClickRate = clampRate(patch.sampleClickRate, 'sampleClickRate');
       if (patch.ingestEventsPerMinute !== undefined) {
@@ -183,12 +257,20 @@ export function createMetricsService({
     },
 
     async ensurePartitions() {
-      return ensureEventPartitions(db);
+      return [
+        ...(await ensurePartitions(db, 'events')),
+        ...(await ensurePartitions(db, 'points')),
+        ...(await ensurePartitions(db, 'slow_queries')),
+      ];
     },
 
     async prune() {
       const settings = await settingsOrThrow();
-      return dropExpiredEventPartitions(db, settings.retentionEventsDays);
+      return [
+        ...(await dropExpiredPartitions(db, 'events', settings.retentionEventsDays)),
+        ...(await dropExpiredPartitions(db, 'points', settings.retentionPointsDays)),
+        ...(await dropExpiredPartitions(db, 'slow_queries', SLOW_QUERIES_RETENTION_DAYS)),
+      ];
     },
   };
 }

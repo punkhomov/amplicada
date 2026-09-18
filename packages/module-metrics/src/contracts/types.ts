@@ -55,9 +55,12 @@ export interface MetricsContextDto {
 export interface MetricsSettingsDto {
   enabled: boolean;
   retentionEventsDays: number;
+  retentionPointsDays: number;
   samplePageviewRate: number;
   sampleClickRate: number;
   ingestEventsPerMinute: number;
+  slowSqlThresholdMs: number;
+  sampleSqlRate: number;
   storeRawUrls: boolean;
   updatedAt: string;
 }
@@ -65,9 +68,12 @@ export interface MetricsSettingsDto {
 export interface MetricsSettingsPatch {
   enabled?: boolean;
   retentionEventsDays?: number;
+  retentionPointsDays?: number;
   samplePageviewRate?: number;
   sampleClickRate?: number;
   ingestEventsPerMinute?: number;
+  slowSqlThresholdMs?: number;
+  sampleSqlRate?: number;
   storeRawUrls?: boolean;
 }
 
@@ -87,6 +93,53 @@ export interface MetricCatalogEntryDto {
 
 export interface MetricsCatalogDto {
   entries: MetricCatalogEntryDto[];
+}
+
+/** Сводка по роутам: rate/errors/duration (RED). */
+export interface RouteSummaryDto {
+  route: string;
+  calls: number;
+  errors: number;
+  errorRate: number;
+  avgMs: number;
+  p50Ms: number;
+  p95Ms: number;
+  p99Ms: number;
+  maxMs: number;
+}
+
+export interface RoutesSummaryDto {
+  routes: RouteSummaryDto[];
+}
+
+/** Топ SQL по суммарному времени. */
+export interface SqlSummaryDto {
+  fingerprint: string;
+  queryText: string;
+  calls: number;
+  avgMs: number;
+  p95Ms: number;
+  maxMs: number;
+  lastSeen: string | null;
+}
+
+export interface SqlSummaryListDto {
+  queries: SqlSummaryDto[];
+}
+
+export interface SlowQueryDto {
+  at: string;
+  fingerprint: string;
+  queryText: string;
+  route: string | null;
+  durationMs: number;
+  rowCount: number | null;
+  errorCode: string | null;
+  requestId: string | null;
+}
+
+export interface SlowQueryListDto {
+  samples: SlowQueryDto[];
 }
 
 export interface MetricEventDto {

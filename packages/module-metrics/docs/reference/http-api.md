@@ -18,6 +18,9 @@ order: 20
 | `GET` | `/api/metrics/context` | нет | Bootstrap-конфиг трекера |
 | `GET` | `/api/metrics/events` | требуется | Лента событий (админка) |
 | `GET` | `/api/metrics/catalog` | требуется | Каталог наблюдаемых имён событий с объёмом и first/last seen |
+| `GET` | `/api/metrics/routes` | требуется | Сводка RED по маршрутам за период (`from`, `to`) |
+| `GET` | `/api/metrics/sql` | требуется | Топ SQL-fingerprint'ов (`from`, `to`, `limit`) |
+| `GET` | `/api/metrics/slow-queries` | требуется | Samples медленных/ошибочных SQL (`from`, `to`, `limit`) |
 | `GET` | `/api/metrics/admin/settings` | требуется | Настройки метрик |
 | `PATCH` | `/api/metrics/admin/settings` | требуется | Изменение настроек |
 
@@ -53,6 +56,12 @@ order: 20
   "limits": { "maxBatchEvents": 500, "maxEventBytes": 8192, "maxAttributes": 32, "maxStringLength": 256 }
 }
 ```
+
+### `GET /routes`, `/sql`, `/slow-queries`
+
+Параметры `from`/`to` — ISO 8601; по умолчанию последние 24 часа; невалидный диапазон — 400
+`{ "error": "invalid_range" }`. Формат ответов — `RouteSummaryDto[]`, `SqlSummaryDto[]`,
+`SlowQueryDto[]` (`src/contracts/types.ts`). Тексты SQL нормализованы (литералы → `?`).
 
 ### `GET /catalog`
 

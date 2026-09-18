@@ -22,6 +22,16 @@ opt-out/DNT/GPC в трекере, минутный rate-limit приёма в R
 настройка `ingest_events_per_minute`), каталог наблюдаемых событий (`GET /catalog` и вкладка
 в админке). Реестр определений (`metrics:definitions`) и `emit` бизнес-событий отложены до
 этапа 03 — каталог агрегирует по журналу.
+
+**Обновление 2026-09-18 (этап 02):** технические метрики. Core получил точки
+`http:observer` (root-хуки) и `request-context` (ALS для корреляции SQL с роутом) —
+`ref/notes/platform-core.md` D-006. В модуле: `metrics.series`/`metrics.points` с
+in-process пред-агрегацией и флашем раз в 10 с, HTTP-коллектор (route/method/status,
+гистограмма длительности), SQL-коллектор (обёртка `pg-pool`, нормализация литералов,
+fingerprint, slow/error samples в `metrics.slow_queries`), метрики задач из шины,
+endpoints `/routes`, `/sql`, `/slow-queries`, вкладки «Роуты» (RED, p50/p95/p99) и «SQL»
+в админке, retention измерений и samples. `pg_stat_statements` и графики — не делались
+(осознанно).
 Рационал — `ref/notes/module-metrics.md`.
 
 Зонтичная папка по модулю метрик (`module-metrics`). Исследование возможности и направления:

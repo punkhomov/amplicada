@@ -8,13 +8,14 @@ date: 2026-09-17
 
 # platform-core — заметки
 
-> Стоп-лист (D-001…D-005):
+> Стоп-лист (D-001…D-006):
 > - Не вносить локальные правки в `src/frontend/ui/**` — перезапишет синк (D-001).
 > - Не заводить alias-импорты (`@/ui/...`) внутри вендоренных файлов — ломает `dist` (D-001).
 > - Не возвращать `clsx`/`tailwind-merge` и не описывать `cn` заново локально — D-002.
 > - Не позволять `shadcn add` ставить зависимости самому — D-003 (rejected).
 > - Не поднимать `minimumReleaseAge` обратно без нового факта — D-004.
 > - Не «выравнивать» `recharts` по реестру (3.8.0) — D-005 (rejected).
+> - Не давать модулям читать `process.env` и не строить HTTP-метрики модульным `onRoute` — D-006.
 
 ## D-001. UI-кит вендорится в platform-core и синхронизируется скриптом — accepted (2026-09-17)
 
@@ -150,3 +151,37 @@ no-downgrade`, `ignoreScripts`, `blockExoticSubdeps`) не менялись.
 - `cn@0.2.6` — временный пин; после 2026-09-19 доступен `0.3.x`.
 - Новые `message-scroller` и `questionnaire` (runtime-примитивы `@shadcn/react`) не
   прогонялись в браузере.
+
+## D-006. Точки core для метрик: `secrets`, `http:observer`, `request-context` — accepted (2026-09-18)
+
+**Контекст.** `module-metrics` нужны три вещи, которых не было в платформе: секрет для соли
+псевдонимизации (модулям запрещено читать env), метрики всех HTTP-роутов (включая роуты
+модулей, зарегистрированные в их setup) и корреляция SQL-запросов с роутом.
+
+**Решение.** Три маленьких добавления в core:
+1. сервис `secrets` (`EnvSecretsService`) — модуль просит неймспейсное имя
+   (`metrics.pseudonym_salt` → `AMPLICADA_METRICS_PSEUDONYM_SALT`);
+2. extension point `http:observer` + root-хуки `onRequest`/`onResponse` в `createApp()` до
+   регистрации любых роутов — наблюдатель модуля видит все роуты независимо от порядка setup;
+3. сервис `request-context` (ALS) с callback-хуком `onRequest`: `run(context, done)`
+   синхронно входит в контекст, и Fastify продолжает lifecycle внутри него — поэтому SQL-обёртка
+   в любой глубине видит `route`/`requestId`.
+
+**Почему именно так.** Модульные `app.addHook('onRoute')` зависят от порядка setup (hooks в
+Fastify инкапсулированы и применяются к роутам, зарегистрированным после) — ранние модули не
+покрывались. ALS из async-хука не доживает до хендлера; callback-форма с `done()` — рабочий
+паттерн (`@fastify/request-context`). Секреты через core — конвенция «env читает только core».
+
+**Отвергнуто.** Чтение env модулем (rejected): ломает конвенцию и прячет конфиг.
+`fastify-plugin` для root-хуков модуля (rejected): не решает порядок. Передача route в SQL
+через параметры запросов (rejected): пришлось бы менять все вызовы.
+
+**Что изменит решение.** Появление полноценного config/secret-store — соль и токены уедут туда,
+`EnvSecretsService` останется адаптером. Performance-проблемы ALS (не наблюдались) — замер и,
+при необходимости, отказ от корреляции ради метрики.
+
+**Грабли.** У наблюдателей исключения ловятся и логируются — сломанный наблюдатель не должен
+ронять запрос. SQL фоновых задач (task-scheduler) остаётся `<unattributed>` — это ожидаемо.
+
+**Код.** `src/contracts/backend/{secrets,http-observer,request-context}.ts`,
+`src/backend/services/{secrets-service,request-context-service}.ts`, `src/backend/app.ts`.

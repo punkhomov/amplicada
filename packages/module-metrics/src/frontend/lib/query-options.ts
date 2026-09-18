@@ -5,6 +5,9 @@ import type {
   MetricsContextDto,
   MetricsEventListDto,
   MetricsSettingsDto,
+  RoutesSummaryDto,
+  SlowQueryListDto,
+  SqlSummaryListDto,
 } from '../../contracts/index.js';
 
 export const METRICS_REFETCH_INTERVAL_MS = 15_000;
@@ -13,8 +16,60 @@ export const metricsQueryKeys = {
   context: ['metrics', 'context'] as const,
   events: (kind: string, name: string) => ['metrics', 'events', kind, name] as const,
   catalog: ['metrics', 'catalog'] as const,
+  routes: (period: MetricsPeriod) => ['metrics', 'routes', period] as const,
+  sql: (period: MetricsPeriod) => ['metrics', 'sql', period] as const,
+  slowQueries: (period: MetricsPeriod) => ['metrics', 'slow-queries', period] as const,
   settings: ['metrics', 'settings'] as const,
 };
+
+export type MetricsPeriod = '1h' | '24h' | '7d';
+export const METRICS_PERIODS: MetricsPeriod[] = ['1h', '24h', '7d'];
+
+const PERIOD_MS: Record<MetricsPeriod, number> = {
+  '1h': 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+};
+
+function periodRange(period: MetricsPeriod, now = Date.now()): { from: string; to: string } {
+  return { from: new Date(now - PERIOD_MS[period]).toISOString(), to: new Date(now).toISOString() };
+}
+
+/** Сводка по роутам за выбранный период (RED). */
+export function metricsRoutesQueryOptions(api: ApiClient, period: MetricsPeriod) {
+  return {
+    queryKey: metricsQueryKeys.routes(period),
+    queryFn: () => {
+      const { from, to } = periodRange(period);
+      return api.get<RoutesSummaryDto>(`/metrics/routes?from=${from}&to=${to}`);
+    },
+    refetchInterval: 30_000,
+  };
+}
+
+/** Топ SQL по суммарному времени. */
+export function metricsSqlQueryOptions(api: ApiClient, period: MetricsPeriod) {
+  return {
+    queryKey: metricsQueryKeys.sql(period),
+    queryFn: () => {
+      const { from, to } = periodRange(period);
+      return api.get<SqlSummaryListDto>(`/metrics/sql?from=${from}&to=${to}&limit=50`);
+    },
+    refetchInterval: 30_000,
+  };
+}
+
+/** Выборочные медленные/ошибочные запросы. */
+export function metricsSlowQueriesQueryOptions(api: ApiClient, period: MetricsPeriod) {
+  return {
+    queryKey: metricsQueryKeys.slowQueries(period),
+    queryFn: () => {
+      const { from, to } = periodRange(period);
+      return api.get<SlowQueryListDto>(`/metrics/slow-queries?from=${from}&to=${to}&limit=50`);
+    },
+    refetchInterval: 30_000,
+  };
+}
 
 /** Bootstrap-конфиг трекера: меняется редко, повторные запросы не нужны. */
 export function metricsContextQueryOptions(api: ApiClient) {
