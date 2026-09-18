@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   SUPPORT_CHAT_EVENTS,
   type SupportAdminThreadDto,
+  type SupportAdminThreadPatch,
   type SupportAttachmentUploadDto,
   type SupportAuthorRole,
   type SupportChatBackendService,
@@ -11,12 +12,21 @@ import {
   type SupportMessageDto,
   type SupportThreadDto,
   type SupportThreadStatus,
+  type SupportUserStatusPatch,
   type SupportUserThreadSummaryDto,
 } from '../../contracts/index.js';
 import { type SupportChatMessageRow, supportChatMessages } from '../schemas/messages.js';
 import { type SupportChatThreadRow, supportChatThreads } from '../schemas/threads.js';
 import { isAttachmentKeyAllowed, userAttachmentPrefix } from './attachments.js';
-import { collectParticipants, countUnread, previewMessage, statusAfterUserMessage } from './helpers.js';
+import {
+  canUserSetStatus,
+  collectParticipants,
+  countUnread,
+  lifecyclePatch,
+  previewMessage,
+  statusAfterAdminMessage,
+  statusAfterUserMessage,
+} from './helpers.js';
 
 export class SupportChatError extends Error {
   constructor(
@@ -35,6 +45,13 @@ export interface SupportThreadWithMessages {
 
 /** Строка сообщения вместе с логином автора: имя показывается в подписи группы в UI. */
 export type SupportChatMessageWithAuthor = SupportChatMessageRow & { authorLogin: string | null };
+
+/** Обращение, привязанное к инциденту: поддержка видит, кого затронул инцидент. */
+export interface SupportLinkedThread {
+  id: string;
+  userLogin: string;
+  status: SupportThreadStatus;
+}
 
 export interface SupportChatService extends SupportChatBackendService {
   /** Активное обращение пользователя — свежее по updatedAt; его показывает плавающий виджет. */
@@ -67,7 +84,7 @@ export interface SupportChatService extends SupportChatBackendService {
   /** Отметка прочтения активного обращения (виджет). */
   markUserRead(userId: string): Promise<void>;
   listThreads(): Promise<SupportAdminThreadDto[]>;
-  getThread(threadId: string): Promise<SupportThreadWithMessages & { userLogin: string }>;
+  getThread(threadId: string): Promise<SupportThreadWithMessages & { userLogin: string; linkedThreads: SupportLinkedThread[] }>;
   sendAdminMessage(
     threadId: string,
     adminId: string,
@@ -75,7 +92,12 @@ export interface SupportChatService extends SupportChatBackendService {
     attachment?: SupportAttachmentUploadDto | null,
   ): Promise<SupportThreadWithMessages & { message: SupportChatMessageWithAuthor }>;
   markAdminRead(threadId: string): Promise<void>;
-  setStatus(threadId: string, status: SupportThreadStatus): Promise<SupportThreadWithMessages>;
+  /** Смена жизненного цикла и атрибутов обращения поддержкой. */
+  updateThread(threadId: string, patch: SupportAdminThreadPatch): Promise<SupportThreadWithMessages>;
+  /** Закрытие/переоткрытие обращения самим пользователем. */
+  setUserThreadStatus(userId: string, threadId: string, patch: SupportUserStatusPatch): Promise<SupportThreadWithMessages>;
+  /** Рассылка сообщения поддержки по обращениям, привязанным к инциденту; возвращает число получателей. */
+  broadcastToLinked(threadId: string, adminId: string, body: string): Promise<number>;
   /** Вложение сообщения для скачивания; `null` — сообщения нет или файла в нём нет. */
   getMessageAttachment(messageId: string): Promise<{ threadUserId: string; key: string; name: string; mime: string } | null>;
 }
@@ -129,6 +151,13 @@ export function toThreadDto(
   return {
     id: thread.id,
     status: thread.status,
+    kind: thread.kind,
+    severity: thread.severity,
+    incidentThreadId: thread.incidentThreadId,
+    resolvedBy: thread.resolvedBy,
+    closeReason: thread.closeReason,
+    resolvedAt: thread.resolvedAt?.toISOString() ?? null,
+    closedAt: thread.closedAt?.toISOString() ?? null,
     createdAt: thread.createdAt.toISOString(),
     updatedAt: thread.updatedAt.toISOString(),
     unreadCount: countUnread(messages, readerRole, lastReadAt),
@@ -168,6 +197,19 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
       grouped.set(message.threadId, list);
     }
     return grouped;
+  }
+
+  /** Привязка к инциденту: цель существует, сама является инцидентом и это не сам тред. */
+  async function resolveIncidentLink(incidentThreadId: string | null, threadId: string): Promise<string | null> {
+    if (!incidentThreadId) return null;
+    if (incidentThreadId === threadId) throw new SupportChatError('Thread cannot be linked to itself', 400);
+    const [incident] = await db
+      .select({ id: supportChatThreads.id, kind: supportChatThreads.kind })
+      .from(supportChatThreads)
+      .where(eq(supportChatThreads.id, incidentThreadId))
+      .limit(1);
+    if (incident?.kind !== 'incident') throw new SupportChatError('Incident thread not found', 404);
+    return incident.id;
   }
 
   async function loadThreadOrThrow(threadId: string) {
@@ -220,9 +262,12 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
     const patch: Partial<SupportChatThreadRow> = { updatedAt: now };
     if (authorRole === 'user') {
       patch.userLastReadAt = now;
-      patch.status = statusAfterUserMessage(thread.status);
+      Object.assign(patch, lifecyclePatch(thread, statusAfterUserMessage(thread.status), 'user', null, now));
     }
-    if (authorRole === 'admin') patch.adminLastReadAt = now;
+    if (authorRole === 'admin') {
+      patch.adminLastReadAt = now;
+      Object.assign(patch, lifecyclePatch(thread, statusAfterAdminMessage(thread.status), 'admin', null, now));
+    }
 
     const [updated] = await tx.update(supportChatThreads).set(patch).where(eq(supportChatThreads.id, thread.id)).returning();
 
@@ -282,6 +327,9 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
         return {
           id: thread.id,
           status: thread.status,
+          kind: thread.kind,
+          severity: thread.severity,
+          incidentThreadId: thread.incidentThreadId,
           createdAt: thread.createdAt.toISOString(),
           updatedAt: thread.updatedAt.toISOString(),
           unreadCount: countUnread(messages, 'user', thread.userLastReadAt),
@@ -312,7 +360,12 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
     async sendUserMessage(userId, body, attachment) {
       const now = new Date();
       const result = await db.transaction(async tx => {
-        const [existing] = await tx.select().from(supportChatThreads).where(eq(supportChatThreads.userId, userId)).limit(1);
+        const [existing] = await tx
+          .select()
+          .from(supportChatThreads)
+          .where(eq(supportChatThreads.userId, userId))
+          .orderBy(desc(supportChatThreads.updatedAt))
+          .limit(1);
 
         let thread = existing;
         if (!thread) {
@@ -376,6 +429,9 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
           userId: supportChatThreads.userId,
           userLogin: identityUser.login,
           status: supportChatThreads.status,
+          kind: supportChatThreads.kind,
+          severity: supportChatThreads.severity,
+          incidentThreadId: supportChatThreads.incidentThreadId,
           updatedAt: supportChatThreads.updatedAt,
           adminLastReadAt: supportChatThreads.adminLastReadAt,
         })
@@ -417,6 +473,9 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
           userId: row.userId,
           userLogin: row.userLogin,
           status: row.status,
+          kind: row.kind,
+          severity: row.severity,
+          incidentThreadId: row.incidentThreadId,
           updatedAt: row.updatedAt.toISOString(),
           unreadCount: unreadByThread.get(row.id) ?? 0,
           lastMessagePreview: last ? previewMessage(last.body, last.attachmentName) : null,
@@ -427,7 +486,18 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
     async getThread(threadId) {
       const thread = await loadThreadOrThrow(threadId);
       const [user] = await db.select({ login: identityUser.login }).from(identityUser).where(eq(identityUser.id, thread.userId)).limit(1);
-      return { thread, messages: await loadMessages(db, thread.id), userLogin: user?.login ?? '' };
+      const linked = await db
+        .select({ id: supportChatThreads.id, userLogin: identityUser.login, status: supportChatThreads.status })
+        .from(supportChatThreads)
+        .innerJoin(identityUser, eq(identityUser.id, supportChatThreads.userId))
+        .where(eq(supportChatThreads.incidentThreadId, thread.id))
+        .orderBy(desc(supportChatThreads.updatedAt));
+      return {
+        thread,
+        messages: await loadMessages(db, thread.id),
+        userLogin: user?.login ?? '',
+        linkedThreads: linked.map(item => ({ id: item.id, userLogin: item.userLogin, status: item.status })),
+      };
     },
 
     async sendAdminMessage(threadId, adminId, body, attachment) {
@@ -468,21 +538,85 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
       };
     },
 
-    async setStatus(threadId, status) {
-      await loadThreadOrThrow(threadId);
+    async updateThread(threadId, patch) {
+      const current = await loadThreadOrThrow(threadId);
+      const now = new Date();
+      const next: Partial<SupportChatThreadRow> = { updatedAt: now };
+
+      if (patch.status && patch.status !== current.status) {
+        Object.assign(next, lifecyclePatch(current, patch.status, 'admin', patch.closeReason ?? null, now));
+      }
+
+      if (patch.kind !== undefined) {
+        if (patch.kind === 'incident') {
+          const severity = patch.severity ?? current.severity;
+          if (!severity) throw new SupportChatError('Incident requires severity', 400);
+          next.kind = 'incident';
+          next.severity = severity;
+          // Инцидент не может быть привязан к другому инциденту.
+          next.incidentThreadId = null;
+        } else {
+          next.kind = 'question';
+          next.severity = null;
+        }
+      } else if (patch.severity !== undefined) {
+        if (current.kind !== 'incident') throw new SupportChatError('Severity is only for incidents', 400);
+        next.severity = patch.severity;
+      }
+
+      if (patch.incidentThreadId !== undefined) {
+        next.incidentThreadId = await resolveIncidentLink(patch.incidentThreadId, threadId);
+      }
+
+      const [thread] = await db.update(supportChatThreads).set(next).where(eq(supportChatThreads.id, threadId)).returning();
+      const messages = await loadMessages(db, thread.id);
+
+      if (patch.status && patch.status !== current.status) {
+        publish?.(SUPPORT_CHAT_EVENTS.THREAD_UPDATED, {
+          threadId: thread.id,
+          userId: thread.userId,
+          authorRole: 'admin',
+          status: thread.status,
+        });
+      }
+      return { thread, messages };
+    },
+
+    async setUserThreadStatus(userId, threadId, patch) {
+      const current = await loadThreadOrThrow(threadId);
+      if (current.userId !== userId) throw new SupportChatError('Thread not found', 404);
+      if (!canUserSetStatus(current.status, patch.status)) {
+        throw new SupportChatError(`Cannot change status from ${current.status} to ${patch.status}`, 400);
+      }
+
+      const now = new Date();
       const [thread] = await db
         .update(supportChatThreads)
-        .set({ status, updatedAt: new Date() })
+        .set({ updatedAt: now, ...lifecyclePatch(current, patch.status, 'user', patch.closeReason ?? null, now) })
         .where(eq(supportChatThreads.id, threadId))
         .returning();
-      const messages = await loadMessages(db, threadId);
+      const messages = await loadMessages(db, thread.id);
       publish?.(SUPPORT_CHAT_EVENTS.THREAD_UPDATED, {
         threadId: thread.id,
         userId: thread.userId,
-        authorRole: 'admin',
+        authorRole: 'user',
         status: thread.status,
       });
       return { thread, messages };
+    },
+
+    async broadcastToLinked(threadId, adminId, body) {
+      const incident = await loadThreadOrThrow(threadId);
+      if (incident.kind !== 'incident') throw new SupportChatError('Thread is not an incident', 400);
+
+      const linked = await db
+        .select({ id: supportChatThreads.id })
+        .from(supportChatThreads)
+        .where(eq(supportChatThreads.incidentThreadId, threadId));
+      for (const item of linked) {
+        await appendMessage({ threadId: item.id, authorRole: 'admin', authorId: adminId, body });
+      }
+      return linked.length;
     },
   };
 }

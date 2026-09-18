@@ -16,6 +16,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SupportThreadDto } from '../../../../contracts/index.js';
 import { supportChatMyThreadQueryOptions } from '../../../lib/query-options.js';
+import { statusBadgeVariant } from '../../../lib/status.js';
 import { useSupportChatEvents } from '../../../lib/use-support-chat-events.js';
 import { ChatComposer, type ChatComposerInput } from '../../../widgets/chat-composer/index.js';
 import { ChatTranscript } from '../../../widgets/chat-transcript/index.js';
@@ -59,6 +60,15 @@ export function MyThreadPage() {
     onSuccess: invalidate,
   });
 
+  const setStatus = useMutation({
+    mutationFn: (next: 'open' | 'closed') =>
+      api.patch<{ thread: SupportThreadDto }>(`/support-chat/threads/${id}`, {
+        status: next,
+        closeReason: next === 'closed' ? 'resolved' : undefined,
+      }),
+    onSuccess: invalidate,
+  });
+
   useEffect(() => {
     if (!id || unreadCount === 0 || markedReadRef.current === id) return;
     markedReadRef.current = id;
@@ -74,6 +84,24 @@ export function MyThreadPage() {
         ),
       ]
     : [];
+  const closedNote = thread
+    ? [
+        thread.status === 'closed' ? t('portal_closed_note') : thread.status === 'solved' ? t('portal_resolved_note') : null,
+        thread.resolvedBy ? t(`resolved_by_${thread.resolvedBy}`) : null,
+        thread.closeReason ? t(`close_reason_${thread.closeReason}`) : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+  const hint = !thread
+    ? ''
+    : thread.status === 'closed'
+      ? t('thread_hint_closed')
+      : thread.status === 'solved'
+        ? t('thread_hint_solved')
+        : thread.status === 'pending'
+          ? t('thread_hint_pending')
+          : '';
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col gap-4 px-6 py-6">
@@ -83,19 +111,31 @@ export function MyThreadPage() {
             <ArrowLeftIcon />
           </Button>
           <h1 className="truncate text-xl font-bold">{isNew ? t('portal_new') : t('portal_thread_title')}</h1>
-          {thread ? (
-            <Badge variant={thread.status === 'open' ? 'default' : 'secondary'}>
-              {thread.status === 'open' ? t('admin_status_open') : t('admin_status_closed')}
+          {thread ? <Badge variant={statusBadgeVariant(thread.status)}>{t(`status_${thread.status}`)}</Badge> : null}
+          {thread && (thread.kind === 'incident' || thread.incidentThreadId) ? (
+            <Badge variant="destructive">
+              {t('kind_incident')}
+              {thread.severity ? ` · ${t(`severity_${thread.severity}`)}` : ''}
             </Badge>
           ) : null}
         </div>
 
         {thread ? (
-          <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground">
+          <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
             <span>{`${t('portal_created')}: ${new Date(thread.createdAt).toLocaleString()}`}</span>
             {participants.length > 0 ? (
               <span className="max-w-56 truncate text-right">{`${t('portal_participants')}: ${participants.join(', ')}`}</span>
             ) : null}
+            {closedNote ? <span className="text-right">{closedNote}</span> : null}
+            {thread.status === 'closed' ? (
+              <Button size="sm" variant="outline" disabled={setStatus.isPending} onClick={() => setStatus.mutate('open')}>
+                {t('portal_reopen')}
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" disabled={setStatus.isPending} onClick={() => setStatus.mutate('closed')}>
+                {t('portal_close')}
+              </Button>
+            )}
           </div>
         ) : null}
       </div>
@@ -149,7 +189,7 @@ export function MyThreadPage() {
 
             <ChatComposer
               placeholder={t('widget_placeholder')}
-              hint={thread?.status === 'closed' ? t('widget_closed') : ''}
+              hint={hint}
               pending={send.isPending}
               onSubmit={input => send.mutateAsync(input).then(() => undefined)}
             />

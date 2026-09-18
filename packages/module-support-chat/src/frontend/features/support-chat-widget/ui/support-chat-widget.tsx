@@ -11,7 +11,7 @@ import {
   MessageScrollerViewport,
 } from '@amplicada/platform-core/frontend/ui/message-scroller';
 import { Spinner } from '@amplicada/platform-core/frontend/ui/spinner';
-import { LifeBuoyIcon, MessagesSquareIcon, SparklesIcon, XIcon } from 'lucide-react';
+import { CircleCheckIcon, LifeBuoyIcon, MessagesSquareIcon, RotateCcwIcon, SparklesIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { SupportThreadDto } from '../../../../contracts/index.js';
@@ -50,6 +50,17 @@ export function SupportChatWidget() {
     onSuccess: invalidate,
   });
 
+  const setStatus = useMutation({
+    mutationFn: (next: 'open' | 'closed') => {
+      if (!thread) throw new Error('No active thread');
+      return api.patch(`/support-chat/threads/${thread.id}`, {
+        status: next,
+        closeReason: next === 'closed' ? 'resolved' : undefined,
+      });
+    },
+    onSuccess: invalidate,
+  });
+
   if (loading || !user) return null;
 
   const handleOpenChange = (next: boolean) => {
@@ -81,6 +92,27 @@ export function SupportChatWidget() {
               <CardDescription className="truncate text-xs">{t('widget_subtitle')}</CardDescription>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
+              {thread && thread.status !== 'closed' ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('widget_close_thread')}
+                  disabled={setStatus.isPending}
+                  onClick={() => setStatus.mutate('closed')}
+                >
+                  <CircleCheckIcon />
+                </Button>
+              ) : thread ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('portal_reopen')}
+                  disabled={setStatus.isPending}
+                  onClick={() => setStatus.mutate('open')}
+                >
+                  <RotateCcwIcon />
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -142,7 +174,15 @@ export function SupportChatWidget() {
 
               <ChatComposer
                 placeholder={t('widget_placeholder')}
-                hint={thread?.status === 'closed' ? t('widget_closed') : ''}
+                hint={
+                  thread?.status === 'closed'
+                    ? t('thread_hint_closed')
+                    : thread?.status === 'solved'
+                      ? t('thread_hint_solved')
+                      : thread?.status === 'pending'
+                        ? t('thread_hint_pending')
+                        : ''
+                }
                 pending={send.isPending}
                 onSubmit={input => send.mutateAsync(input).then(() => undefined)}
               />

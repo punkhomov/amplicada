@@ -12,11 +12,17 @@ export {
 export type {
   SupportAdminThreadDetailDto,
   SupportAdminThreadDto,
+  SupportAdminThreadPatch,
   SupportAttachmentDto,
   SupportAttachmentUploadDto,
   SupportAuthorRole,
+  SupportCloseReason,
+  SupportIncidentSeverity,
   SupportMessageDto,
+  SupportResolvedBy,
   SupportThreadDto,
+  SupportThreadKind,
   SupportThreadStatus,
+  SupportUserStatusPatch,
   SupportUserThreadSummaryDto,
 } from './types.js';

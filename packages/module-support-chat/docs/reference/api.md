@@ -15,13 +15,39 @@ verified_commit: 5767b800
 
 | Таблица | Ключевые поля | Примечания |
 |---|---|---|
-| `support_chat.threads` | `id`, `user_id`, `status` (`open`/`closed`), `created_at`, `updated_at`, `user_last_read_at`, `admin_last_read_at` | обращений у пользователя может быть несколько (unique снят в `0003`), FK на `core.identity_user`, индекс `(user_id, updated_at DESC)` |
+| `support_chat.threads` | `id`, `user_id`, `status` (`open`/`pending`/`solved`/`closed`), `kind` (`question`/`incident`), `severity`, `incident_thread_id`, `resolved_by`, `close_reason`, `resolved_at`, `closed_at`, `created_at`, `updated_at`, `user_last_read_at`, `admin_last_read_at` | обращений у пользователя может быть несколько (unique снят в `0003`), FK на `core.identity_user`, индекс `(user_id, updated_at DESC)` |
 | `support_chat.messages` | `id`, `thread_id`, `author_id` (nullable), `author_role` (`user`/`admin`/`ai`), `body`, `attachment_key`, `attachment_name`, `attachment_mime`, `attachment_size`, `created_at` | FK на тред с `ON DELETE CASCADE`; у роли `ai` автора-пользователя нет; вложение опционально, `body` при нём может быть пустым |
 
-Миграции — `migrations/0000_init.sql`, `migrations/0001_ai_author.sql` (роль `ai`,
-nullable `author_id`), `migrations/0002_attachments.sql` (метаданные вложения) и
-`migrations/0003_multi_threads.sql` (снят unique по `user_id`), применяются
-bootstrap'ом под именем `support-chat`.
+Миграции — `0000_init.sql`, `0001_ai_author.sql` (роль `ai`), `0002_attachments.sql`
+(вложения), `0003_multi_threads.sql` (несколько обращений) и `0004_lifecycle_and_incidents.sql`
+(статусы «чей ход», атрибуты закрытия, инциденты), применяются bootstrap'ом под
+именем `support-chat`.
+
+### Жизненный цикл
+
+Статус отвечает на вопрос «чей ход»:
+
+| Статус | Кто действует | Как попадают |
+|---|---|---|
+| `open` | поддержка | создание, сообщение пользователя, возврат в работу |
+| `pending` | пользователь | поддержка отметила «ждём ответа» |
+| `solved` | пользователь подтверждает | поддержка пометила «решено» |
+| `closed` | никто | пользователь закрыл сам или поддержка (решение/дубликат) |
+
+Сообщение пользователя переоткрывает любое состояние (`→ open`), ответ поддержки
+переоткрывает `solved`/`closed`. Пользователь сам закрывает и переоткрывает своё
+обращение (`canUserSetStatus`). При закрытии фиксируются `resolved_by`, `close_reason`
+(`resolved`/`not_relevant`/`duplicate`), `resolved_at`, `closed_at`; возврат в работу
+их очищает. Автозакрытие `solved` по таймеру пока не реализовано (см. пробелы в notes).
+
+### Инциденты
+
+`kind = incident` — отдельный вид записи с `severity` (`low`…`critical`); обычные
+обращения могут быть привязаны к инциденту через `incident_thread_id` (дубли).
+Поддержка меняет вид/серьёзность/привязку через `PATCH /admin/threads/:id` и рассылает
+обновление всем привязанным обращениям через `POST /admin/threads/:id/broadcast`
+(сообщение от роли `admin` в каждый тред). Полноценный ITSM (problem/known error) — вне
+текущего объёма.
 Таблицы не участвуют в Document System: это обычные таблицы модуля.
 
 Непрочитанные считаются по отметкам `user_last_read_at` / `admin_last_read_at`
@@ -59,6 +85,7 @@ bootstrap'ом под именем `support-chat`.
 | `GET /api/support-chat/threads/:id` | — | `{ thread }`; чужое обращение — 404 |
 | `POST /api/support-chat/threads/:id/messages` | `{ body, attachment? }` | `{ thread }` |
 | `POST /api/support-chat/threads/:id/read` | — | `{ ok: true }` |
+| `PATCH /api/support-chat/threads/:id` | `{ status: 'open' \| 'closed', closeReason? }` | `{ thread }` — пользователь закрывает/переоткрывает сам |
 | `POST /api/support-chat/attachments` | multipart-часть `file` | `SupportAttachmentUploadDto` — токен для отправки сообщения |
 | `GET /api/support-chat/attachments/:messageId` | — | файл (inline для картинок и PDF, иначе `Content-Disposition: attachment`) |
 
@@ -70,7 +97,8 @@ bootstrap'ом под именем `support-chat`.
 | `GET /api/support-chat/admin/threads/:id` | — | `SupportAdminThreadDetailDto` |
 | `POST /api/support-chat/admin/threads/:id/messages` | `{ body, attachment? }` | `{ thread }` |
 | `POST /api/support-chat/admin/threads/:id/read` | — | `{ ok: true }` |
-| `PATCH /api/support-chat/admin/threads/:id` | `{ status: 'open' \| 'closed' }` | `{ thread }` |
+| `PATCH /api/support-chat/admin/threads/:id` | `{ status?, closeReason?, kind?, severity?, incidentThreadId? }` | `{ thread }` |
+| `POST /api/support-chat/admin/threads/:id/broadcast` | `{ body }` | `{ recipients }` — сообщение во все привязанные к инциденту обращения |
 
 Ограничения: до 4000 символов текста (`SUPPORT_CHAT_MESSAGE_MAX_LENGTH`) — 400 при превышении;
 сообщение без текста допустимо, если есть вложение, и наоборот; неизвестный тред — 404;
@@ -123,10 +151,16 @@ bootstrap'ом под именем `support-chat`.
 (свежее) обращение.
 
 Портальные страницы: `pages/my-threads` на `/support` — список обращений (статус,
-превью последнего сообщения, непрочитанное, кто отвечал, число сообщений) и
-`pages/my-thread` на `/support/:id` и `/support/new` — история переписки с
-продолжением в композере; при открытии обращение помечается прочитанным. Пункт
+вид/серьёзность инцидента, превью последнего сообщения, непрочитанное, кто отвечал,
+число сообщений) и `pages/my-thread` на `/support/:id` и `/support/new` — история
+переписки с продолжением в композере, кнопками «Закрыть обращение»/«Переоткрыть» и
+строкой «кто решил и почему»; при открытии обращение помечается прочитанным. Пункт
 навигации «Мои обращения» регистрируется модулем.
+
+Админка: фильтр списка по статусу, действия по статусу (вернуть в работу, ждём ответа,
+решено, закрыть, закрыть как дубликат), управление инцидентом (сделать инцидентом с
+серьёзностью, понизить, привязать/отвязать обращение), список связанных обращений и
+рассылка обновления по инциденту.
 
 Админ-страница (`pages/support-chat-admin`) регистрируется как приложение
 `admin:apps` с id `support-chat`.

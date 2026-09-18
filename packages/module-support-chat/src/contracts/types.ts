@@ -1,4 +1,8 @@
-export type SupportThreadStatus = 'open' | 'closed';
+export type SupportThreadStatus = 'open' | 'pending' | 'solved' | 'closed';
+export type SupportThreadKind = 'question' | 'incident';
+export type SupportIncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type SupportResolvedBy = 'user' | 'admin' | 'ai';
+export type SupportCloseReason = 'resolved' | 'not_relevant' | 'duplicate';
 export type SupportAuthorRole = 'user' | 'admin' | 'ai';
 
 export interface SupportAttachmentDto {
@@ -27,6 +31,14 @@ export interface SupportMessageDto {
 export interface SupportThreadDto {
   id: string;
   status: SupportThreadStatus;
+  kind: SupportThreadKind;
+  severity: SupportIncidentSeverity | null;
+  /** Связанный инцидент для обращений-дублей. */
+  incidentThreadId: string | null;
+  resolvedBy: SupportResolvedBy | null;
+  closeReason: SupportCloseReason | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
   createdAt: string;
   updatedAt: string;
   unreadCount: number;
@@ -37,6 +49,9 @@ export interface SupportThreadDto {
 export interface SupportUserThreadSummaryDto {
   id: string;
   status: SupportThreadStatus;
+  kind: SupportThreadKind;
+  severity: SupportIncidentSeverity | null;
+  incidentThreadId: string | null;
   createdAt: string;
   updatedAt: string;
   unreadCount: number;
@@ -51,6 +66,9 @@ export interface SupportAdminThreadDto {
   userId: string;
   userLogin: string;
   status: SupportThreadStatus;
+  kind: SupportThreadKind;
+  severity: SupportIncidentSeverity | null;
+  incidentThreadId: string | null;
   updatedAt: string;
   unreadCount: number;
   lastMessagePreview: string | null;
@@ -60,4 +78,21 @@ export interface SupportAdminThreadDetailDto {
   thread: SupportThreadDto;
   userId: string;
   userLogin: string;
+  /** Обращения, привязанные к этому инциденту. */
+  linkedThreads: Array<{ id: string; userLogin: string; status: SupportThreadStatus }>;
+}
+
+/** Действия пользователя над своим обращением: закрыть или переоткрыть. */
+export interface SupportUserStatusPatch {
+  status: 'open' | 'closed';
+  closeReason?: SupportCloseReason;
+}
+
+/** Что поддержка может менять в обращении: статус, вид и привязку к инциденту. */
+export interface SupportAdminThreadPatch {
+  status?: SupportThreadStatus;
+  closeReason?: SupportCloseReason;
+  kind?: SupportThreadKind;
+  severity?: SupportIncidentSeverity | null;
+  incidentThreadId?: string | null;
 }

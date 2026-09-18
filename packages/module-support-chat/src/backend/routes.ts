@@ -5,9 +5,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   SUPPORT_CHAT_EVENTS,
   SUPPORT_CHAT_MESSAGE_MAX_LENGTH,
+  type SupportAdminThreadPatch,
   type SupportAttachmentUploadDto,
   type SupportChatEventPayload,
-  type SupportThreadStatus,
 } from '../contracts/index.js';
 import {
   buildAttachmentKey,
@@ -20,6 +20,15 @@ import { type SupportChatService, toThreadDto } from './services/support-chat-se
 
 const SSE_KEEPALIVE_MS = 20_000;
 const SSE_EVENT_TYPES = [SUPPORT_CHAT_EVENTS.MESSAGE_CREATED, SUPPORT_CHAT_EVENTS.THREAD_UPDATED];
+
+const THREAD_STATUSES = ['open', 'pending', 'solved', 'closed'] as const;
+const THREAD_KINDS = ['question', 'incident'] as const;
+const INCIDENT_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+const CLOSE_REASONS = ['resolved', 'not_relevant', 'duplicate'] as const;
+
+function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value);
+}
 
 interface CurrentUser {
   id: string;
@@ -168,6 +177,26 @@ export function createSupportChatRoutes(fastify: FastifyInstance, context: Backe
     return { ok: true };
   });
 
+  // Пользователь сам закрывает обращение или переоткрывает его.
+  fastify.patch('/threads/:id', async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const { status, closeReason } = (request.body ?? {}) as { status?: unknown; closeReason?: unknown };
+
+    if (status !== 'open' && status !== 'closed') {
+      return reply.code(400).send({ error: "Status must be 'open' or 'closed'" });
+    }
+    if (closeReason !== undefined && !isOneOf(closeReason, CLOSE_REASONS)) {
+      return reply.code(400).send({ error: 'Unknown close reason' });
+    }
+
+    const result = await service.setUserThreadStatus(user.id, id, {
+      status,
+      closeReason: closeReason as (typeof CLOSE_REASONS)[number] | undefined,
+    });
+    return { thread: toThreadDto(result.thread, result.messages, 'user') };
+  });
+
   fastify.get('/events', (request, reply) => {
     const user = currentUser(request);
     streamEvents(request, reply, payload => payload.userId === user.id);
@@ -223,6 +252,7 @@ export function createSupportChatRoutes(fastify: FastifyInstance, context: Backe
       thread: toThreadDto(result.thread, result.messages, 'admin'),
       userId: result.thread.userId,
       userLogin: result.userLogin,
+      linkedThreads: result.linkedThreads,
     };
   });
 
@@ -242,15 +272,56 @@ export function createSupportChatRoutes(fastify: FastifyInstance, context: Backe
     return { ok: true };
   });
 
+  // Жизненный цикл и атрибуты обращения глазами поддержки: статус, вид (инцидент),
+  // серьёзность и привязка обращений-дублей к инциденту.
   fastify.patch('/admin/threads/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { status } = request.body as { status?: string };
-    if (status !== 'open' && status !== 'closed') {
-      return reply.code(400).send({ error: "Status must be 'open' or 'closed'" });
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const patch: SupportAdminThreadPatch = {};
+
+    if (body.status !== undefined) {
+      if (!isOneOf(body.status, THREAD_STATUSES)) return reply.code(400).send({ error: 'Unknown status' });
+      patch.status = body.status;
+    }
+    if (body.closeReason !== undefined) {
+      if (!isOneOf(body.closeReason, CLOSE_REASONS)) return reply.code(400).send({ error: 'Unknown close reason' });
+      patch.closeReason = body.closeReason;
+    }
+    if (body.kind !== undefined) {
+      if (!isOneOf(body.kind, THREAD_KINDS)) return reply.code(400).send({ error: 'Unknown thread kind' });
+      patch.kind = body.kind;
+    }
+    if (body.severity !== undefined) {
+      if (body.severity !== null && !isOneOf(body.severity, INCIDENT_SEVERITIES)) {
+        return reply.code(400).send({ error: 'Unknown severity' });
+      }
+      patch.severity = body.severity as SupportAdminThreadPatch['severity'];
+    }
+    if (body.incidentThreadId !== undefined) {
+      if (body.incidentThreadId !== null && typeof body.incidentThreadId !== 'string') {
+        return reply.code(400).send({ error: 'Invalid incident thread id' });
+      }
+      patch.incidentThreadId = body.incidentThreadId as string | null;
+    }
+    if (Object.keys(patch).length === 0) return reply.code(400).send({ error: 'Nothing to update' });
+
+    const result = await service.updateThread(id, patch);
+    return { thread: toThreadDto(result.thread, result.messages, 'admin') };
+  });
+
+  // Рассылка обновления по обращениям, привязанным к инциденту.
+  fastify.post('/admin/threads/:id/broadcast', async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const raw = (request.body as { body?: unknown } | undefined)?.body;
+    const body = typeof raw === 'string' ? raw.trim() : '';
+    if (!body) return reply.code(400).send({ error: 'Message body is required' });
+    if (body.length > SUPPORT_CHAT_MESSAGE_MAX_LENGTH) {
+      return reply.code(400).send({ error: `Message is too long (max ${SUPPORT_CHAT_MESSAGE_MAX_LENGTH} characters)` });
     }
 
-    const result = await service.setStatus(id, status as SupportThreadStatus);
-    return { thread: toThreadDto(result.thread, result.messages, 'admin') };
+    const recipients = await service.broadcastToLinked(id, user.id, body);
+    return { recipients };
   });
 
   fastify.get('/admin/events', (request, reply) => {

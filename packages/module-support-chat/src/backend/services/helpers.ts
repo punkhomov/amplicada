@@ -1,4 +1,4 @@
-import type { SupportAuthorRole, SupportThreadStatus } from '../../contracts/index.js';
+import type { SupportAuthorRole, SupportCloseReason, SupportResolvedBy, SupportThreadStatus } from '../../contracts/index.js';
 
 export interface SupportMessageLike {
   authorRole: SupportAuthorRole;
@@ -14,8 +14,59 @@ export function countUnread(messages: SupportMessageLike[], readerRole: SupportA
   }).length;
 }
 
-export function statusAfterUserMessage(status: SupportThreadStatus): SupportThreadStatus {
-  return status === 'closed' ? 'open' : status;
+/** Сообщение пользователя возвращает обращение в работу из любого «закрытого» состояния. */
+export function statusAfterUserMessage(_status: SupportThreadStatus): SupportThreadStatus {
+  return 'open';
+}
+
+/** Ответ поддержки переоткрывает решённое/закрытое обращение; pending остаётся ожиданием пользователя. */
+export function statusAfterAdminMessage(status: SupportThreadStatus): SupportThreadStatus {
+  return status === 'solved' || status === 'closed' ? 'open' : status;
+}
+
+/** Пользователь сам закрывает своё обращение (кроме уже закрытого) и переоткрывает закрытое/решённое. */
+export function canUserSetStatus(current: SupportThreadStatus, next: 'open' | 'closed'): boolean {
+  if (current === next) return false;
+  return current !== 'closed' || next === 'open';
+}
+
+export interface LifecycleState {
+  status: SupportThreadStatus;
+  resolvedAt: Date | null;
+}
+
+export interface LifecyclePatch {
+  status: SupportThreadStatus;
+  resolvedBy: SupportResolvedBy | null;
+  closeReason: SupportCloseReason | null;
+  resolvedAt: Date | null;
+  closedAt: Date | null;
+}
+
+/**
+ * Поля жизненного цикла при смене статуса: закрытие фиксирует кто/почему, решение — момент,
+ * возврат в работу очищает атрибуты закрытия (метрики потом читают историю сообщений, не только статус).
+ */
+export function lifecyclePatch(
+  current: LifecycleState,
+  next: SupportThreadStatus,
+  actor: SupportResolvedBy,
+  reason: SupportCloseReason | null,
+  now: Date,
+): LifecyclePatch {
+  if (next === 'open' || next === 'pending') {
+    return { status: next, resolvedBy: null, closeReason: null, resolvedAt: null, closedAt: null };
+  }
+  if (next === 'solved') {
+    return { status: next, resolvedBy: actor, closeReason: null, resolvedAt: now, closedAt: null };
+  }
+  return {
+    status: next,
+    resolvedBy: actor,
+    closeReason: reason ?? 'resolved',
+    resolvedAt: current.resolvedAt ?? now,
+    closedAt: now,
+  };
 }
 
 export function previewText(body: string, limit = 120): string {

@@ -7,6 +7,7 @@ import { LifeBuoyIcon, MessagesSquareIcon, PlusIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { SupportUserThreadSummaryDto } from '../../../../contracts/index.js';
 import { supportChatMyThreadsQueryOptions } from '../../../lib/query-options.js';
+import { statusBadgeVariant } from '../../../lib/status.js';
 
 function ThreadRow({ thread }: { thread: SupportUserThreadSummaryDto }) {
   const { t } = useTranslation('support-chat');
@@ -20,9 +21,13 @@ function ThreadRow({ thread }: { thread: SupportUserThreadSummaryDto }) {
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <Badge variant={thread.status === 'open' ? 'default' : 'secondary'}>
-            {thread.status === 'open' ? t('admin_status_open') : t('admin_status_closed')}
-          </Badge>
+          <Badge variant={statusBadgeVariant(thread.status)}>{t(`status_${thread.status}`)}</Badge>
+          {thread.kind === 'incident' || thread.incidentThreadId ? (
+            <Badge variant="destructive">
+              {t('kind_incident')}
+              {thread.severity ? ` · ${t(`severity_${thread.severity}`)}` : ''}
+            </Badge>
+          ) : null}
           {thread.unreadCount > 0 && (
             <Badge className="tabular-nums" aria-label={t('portal_unread')}>
               {thread.unreadCount}
