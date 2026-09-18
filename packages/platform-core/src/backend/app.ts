@@ -17,7 +17,9 @@ import {
   type BackendDbService,
   type BackendDocumentRuntime,
   type BackendModule,
+  type BackendRequestContextService,
   type BackendSetupContext,
+  type HttpObserver,
   TASK_EVENTS,
   type TaskAlertEvent,
 } from '../contracts/backend/index.js';
@@ -43,6 +45,8 @@ import { AuthLogServiceImpl } from './services/auth-log-service.js';
 import { AuthNodeServiceImpl } from './services/auth-node-service.js';
 import { AuthServiceImpl } from './services/auth-service.js';
 import { DocumentRuntime } from './services/document-runtime.js';
+import { RequestContextService } from './services/request-context-service.js';
+import { EnvSecretsService } from './services/secrets-service.js';
 import { ensureBucket, StorageServiceImpl } from './services/storage-service.js';
 import { TaskEventBridge } from './services/task-event-bridge.js';
 import { TaskReconciler } from './services/task-reconciler.js';
@@ -123,6 +127,34 @@ export async function createApp(): Promise<App> {
   const authService = new AuthServiceImpl(authLog);
   services.register('auth-service', authService);
   services.register('auth-node', new AuthNodeServiceImpl());
+  services.register('secrets', new EnvSecretsService());
+
+  // Контекст запроса (ALS) и наблюдатели HTTP: root-хуки ставятся до регистрации любых роутов,
+  // поэтому покрывают и core, и модульные плагины независимо от порядка setup.
+  const requestContext = new RequestContextService();
+  services.register('request-context', requestContext satisfies BackendRequestContextService);
+
+  app.addHook('onRequest', (request, _reply, done) => {
+    requestContext.run({ requestId: request.id, method: request.method, route: request.routeOptions?.url ?? null }, done);
+  });
+  app.addHook('onRequest', async request => {
+    for (const observer of extensions.getAll<HttpObserver>('http:observer')) {
+      try {
+        observer.onRequest?.(request);
+      } catch (error) {
+        logger.warn({ err: error }, 'http:observer onRequest failed');
+      }
+    }
+  });
+  app.addHook('onResponse', async (request, reply) => {
+    for (const observer of extensions.getAll<HttpObserver>('http:observer')) {
+      try {
+        observer.onResponse?.(request, reply);
+      } catch (error) {
+        logger.warn({ err: error }, 'http:observer onResponse failed');
+      }
+    }
+  });
 
   const documentRuntime = new DocumentRuntime(db, documents);
   services.register('document-runtime', documentRuntime);

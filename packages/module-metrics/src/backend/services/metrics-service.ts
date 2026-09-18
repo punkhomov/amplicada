@@ -1,0 +1,962 @@
+import { randomUUID } from 'node:crypto';
+import type { BackendDbService } from '@amplicada/platform-core/contracts/backend';
+import type {
+  AlertEvaluationResultDto,
+  AlertEventDto,
+  AlertInstanceDto,
+  AlertRuleDto,
+  AlertRuleInput,
+  AlertTarget,
+  ClientEventInput,
+  CollectResponse,
+  MetricCatalogEntryDto,
+  MetricDefinition,
+  MetricDefinitionSummaryDto,
+  MetricEventDto,
+  MetricEventInput,
+  MetricEventKind,
+  MetricSeriesDto,
+  MetricsContextDto,
+  MetricsHealthDto,
+  MetricsSettingsDto,
+  MetricsSettingsPatch,
+  OutboxDispatchResultDto,
+  RouteSummaryDto,
+  SinkConfigDto,
+  SinkConfigPatch,
+  SinkDeliveryDto,
+  SinksDto,
+  SinkTestResultDto,
+  SlowQueryDto,
+  SqlSummaryDto,
+} from '../../contracts/index.js';
+import { decideAlertState, isBreaching } from '../alerts/alert-evaluator.js';
+import type { CollectorConfig } from '../collectors/config.js';
+import type { SlowQueryInsert } from '../collectors/sql-collector.js';
+import type { AlertRuleRow, MetricEventRow, MetricsSettingsRow, NewMetricEventRow, SinkConfigRow } from '../schemas/index.js';
+import { OutboxDispatcher } from '../sinks/outbox-dispatcher.js';
+import type { SinkRegistry } from '../sinks/sink.js';
+import { errorFingerprint } from './error-fingerprint.js';
+import { EventBuffer } from './event-buffer.js';
+import type { AggregatedMeasurement, MeasurementSeries } from './measurement-buffer.js';
+import type { ErrorIssueInput, ErrorIssueSummary, VitalSummary } from './metrics-store.js';
+import { createPostgresMetricsStore, type EventListFilter } from './metrics-store.js';
+import { dropExpiredPartitions, ensurePartitions } from './partitions.js';
+import type { Pseudonymizer } from './pseudonym.js';
+import type { IngestRateLimiter, RateLimitDecision } from './rate-limiter.js';
+import { DEFAULT_EVENT_LIMITS, validateBatch, validateClientEvent } from './validation.js';
+import { vitalSpecForEvent } from './web-vitals.js';
+
+const SLOW_QUERIES_RETENTION_DAYS = 7;
+
+export class MetricsSettingsError extends Error {}
+
+export interface MetricsActor {
+  userId?: string;
+}
+
+export interface MetricsService {
+  collect(rawBody: unknown, actor?: MetricsActor): Promise<CollectResponse>;
+  listEvents(filter?: EventListFilter): Promise<MetricEventDto[]>;
+  listCatalog(): Promise<MetricCatalogEntryDto[]>;
+  routesSummary(from: Date, to: Date): Promise<RouteSummaryDto[]>;
+  sqlSummary(from: Date, to: Date, limit?: number): Promise<SqlSummaryDto[]>;
+  slowQueries(from: Date, to: Date, limit?: number): Promise<SlowQueryDto[]>;
+  writeEvents(rows: NewMetricEventRow[]): Promise<void>;
+  writeMeasurements(points: AggregatedMeasurement[]): Promise<void>;
+  upsertSqlFingerprints(entries: { fingerprint: string; queryText: string }[]): Promise<void>;
+  insertSlowQueries(rows: SlowQueryInsert[]): Promise<void>;
+  getCollectorConfig(): Promise<CollectorConfig>;
+  /** Бизнес-событие модуля: id/время/актор проставятся сервисом, запись — буфером до флаша. */
+  emit(input: MetricEventInput): void;
+  emitBatch(inputs: MetricEventInput[]): void;
+  drainEmittedEvents(): NewMetricEventRow[];
+  listDefinitions(): MetricDefinition[];
+  definitionsSummary(from: Date, to: Date, stepSeconds: number): Promise<MetricDefinitionSummaryDto[]>;
+  listErrorIssues(from: Date, to: Date, limit?: number): Promise<ErrorIssueSummary[]>;
+  listErrorSamples(fingerprint: string, limit?: number): Promise<MetricEventRow[]>;
+  vitalsSummary(from: Date, to: Date): Promise<VitalSummary[]>;
+  listSinks(): Promise<SinksDto>;
+  updateSink(id: string, patch: SinkConfigPatch): Promise<SinkConfigDto>;
+  testSink(id: string): Promise<SinkTestResultDto>;
+  listDeliveries(limit?: number, sinkId?: string): Promise<SinkDeliveryDto[]>;
+  dispatchOutbox(): Promise<OutboxDispatchResultDto>;
+  startSinks(): void;
+  stopSinks(): Promise<void>;
+  exportEventsCsv(input: { from: Date; to: Date; kind?: MetricEventKind; name?: string; limit?: number }): Promise<string>;
+  listAlertRules(): Promise<AlertRuleDto[]>;
+  createAlertRule(input: AlertRuleInput): Promise<AlertRuleDto>;
+  updateAlertRule(id: string, input: AlertRuleInput): Promise<AlertRuleDto>;
+  deleteAlertRule(id: string): Promise<boolean>;
+  listAlertInstances(): Promise<AlertInstanceDto[]>;
+  listAlertEvents(limit?: number): Promise<AlertEventDto[]>;
+  evaluateAlerts(now?: Date): Promise<AlertEvaluationResultDto>;
+  /** Удаление старых событий алертов (retention 30 дней). */
+  pruneAlertEvents(before: Date): Promise<number>;
+  startAlerts(): void;
+  stopAlerts(): Promise<void>;
+  health(): Promise<MetricsHealthDto>;
+  eventSeries(input: {
+    name?: string;
+    eventPrefix?: string;
+    groupBy?: string;
+    measure?: string;
+    from: Date;
+    to: Date;
+    stepSeconds: number;
+  }): Promise<MetricSeriesDto[]>;
+  /** Минутный лимит приёма по ключу (хеш сессии/пользователя/IP) — вызывается до `collect`. */
+  checkIngestRate(key: string, cost: number): Promise<RateLimitDecision>;
+  getSettings(): Promise<MetricsSettingsDto>;
+  updateSettings(patch: MetricsSettingsPatch): Promise<MetricsSettingsDto>;
+  getContext(): Promise<MetricsContextDto>;
+  ensurePartitions(): Promise<string[]>;
+  prune(): Promise<string[]>;
+}
+
+function toSettingsDto(row: MetricsSettingsRow): MetricsSettingsDto {
+  return {
+    enabled: row.enabled,
+    retentionEventsDays: row.retentionEventsDays,
+    samplePageviewRate: row.samplePageviewRate,
+    sampleClickRate: row.sampleClickRate,
+    ingestEventsPerMinute: row.ingestEventsPerMinute,
+    retentionPointsDays: row.retentionPointsDays,
+    slowSqlThresholdMs: row.slowSqlThresholdMs,
+    sampleSqlRate: row.sampleSqlRate,
+    storeRawUrls: row.storeRawUrls,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export function toEventDto(row: MetricEventRow): MetricEventDto {
+  return {
+    id: row.id,
+    occurredAt: row.occurredAt.toISOString(),
+    receivedAt: row.receivedAt.toISOString(),
+    name: row.name,
+    kind: row.kind,
+    module: row.module,
+    actorKind: row.actorKind,
+    actorHash: row.actorHash,
+    sessionHash: row.sessionHash,
+    route: row.route,
+    url: row.url,
+    referrer: row.referrer,
+    release: row.release,
+    attributes: row.attributes,
+    measures: row.measures,
+    samplingRate: row.samplingRate,
+  };
+}
+
+function clampRate(value: number, field: string): number {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new MetricsSettingsError(`${field} must be between 0 and 1`);
+  }
+  return value;
+}
+
+function buildEmittedRow(input: MetricEventInput, pseudonymizer: Pseudonymizer): NewMetricEventRow | null {
+  const validation = validateClientEvent({
+    id: randomUUID(),
+    name: input.name,
+    kind: input.kind ?? 'business',
+    occurredAt: input.occurredAt ?? new Date().toISOString(),
+    sessionId: input.sessionId,
+    context: input.context,
+    attributes: input.attributes,
+    measures: input.measures,
+  });
+  if (!validation.ok) return null;
+
+  const event = validation.value.event;
+  return {
+    id: event.id,
+    occurredAt: new Date(event.occurredAt),
+    name: event.name,
+    kind: event.kind,
+    module: input.module ?? null,
+    actorKind: input.actor?.kind ?? 'system',
+    actorHash: input.actor?.userId ? pseudonymizer.forUser(input.actor.userId) : null,
+    sessionHash: event.sessionId ? pseudonymizer.forSession(event.sessionId) : null,
+    route: event.context?.route ?? null,
+    url: event.context?.url ?? null,
+    referrer: event.context?.referrer ?? null,
+    release: null,
+    instance: null,
+    attributes: event.attributes ?? {},
+    measures: event.measures ?? {},
+    samplingRate: null,
+    schemaVersion: 1,
+  };
+}
+
+export function createMetricsService({
+  db,
+  pseudonymizer,
+  limiter,
+  getDefinitions,
+  recordMeasurement,
+  sinks,
+  logger,
+  eventBus,
+  runtimeStats,
+}: {
+  db: BackendDbService;
+  pseudonymizer: Pseudonymizer;
+  limiter: IngestRateLimiter;
+  getDefinitions: () => MetricDefinition[];
+  /** Шина ядра: события алертов (`metrics.alert`) для будущих уведомлений. */
+  eventBus?: { emit(type: string, payload: unknown): void };
+  /** Web Vitals дополнительно идут в измерительный конвейер (гистограммы). */
+  recordMeasurement?: (series: MeasurementSeries, value: number) => void;
+  /** Выходы наружу (webhook и т.п.) — опционально: без них очереди не наполняются. */
+  sinks?: SinkRegistry;
+  logger?: { error(obj: Record<string, unknown>, message: string): void };
+  /** Runtime-счётчики коллекторов (буфер, флашер) — их владелец setup. */
+  runtimeStats?: () => {
+    bufferSize: number;
+    bufferOverflow: number;
+    lastFlushAt: Date | null;
+    flushErrors: number;
+  };
+}): MetricsService {
+  const store = createPostgresMetricsStore(db);
+  const eventBuffer = new EventBuffer();
+  const healthCounters = { accepted: 0, rejected: 0, duplicates: 0, rateLimited: 0 };
+  const dispatcher = sinks ? new OutboxDispatcher({ store, registry: sinks, logger: logger ?? { error: () => undefined } }) : null;
+  let alertTimer: ReturnType<typeof setInterval> | null = null;
+  let alertsRunning = false;
+
+  function toAlertRuleDto(row: AlertRuleRow): AlertRuleDto {
+    return {
+      id: row.id,
+      name: row.name,
+      enabled: row.enabled,
+      severity: row.severity,
+      target: row.target,
+      windowMs: row.windowMs,
+      condition: row.condition,
+      delivery: row.delivery,
+      labels: row.labels,
+      annotations: row.annotations,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  function validateAlertRule(input: AlertRuleInput): void {
+    if (typeof input.name !== 'string' || input.name.trim().length === 0) {
+      throw new MetricsSettingsError('name is required');
+    }
+    if (!input.target || typeof input.target.key !== 'string' || input.target.key.length === 0) {
+      throw new MetricsSettingsError('target.key is required');
+    }
+    if (input.target.kind !== 'event' && input.target.kind !== 'measurement') {
+      throw new MetricsSettingsError('target.kind must be event or measurement');
+    }
+    if (!Number.isInteger(input.windowMs) || input.windowMs < 60_000 || input.windowMs > 24 * 60 * 60 * 1000) {
+      throw new MetricsSettingsError('windowMs must be between 60000 and 86400000');
+    }
+    if (input.condition.kind === 'threshold' && !Number.isFinite(input.condition.value)) {
+      throw new MetricsSettingsError('condition.value must be a finite number');
+    }
+    if (input.severity && !['info', 'warning', 'critical'].includes(input.severity)) {
+      throw new MetricsSettingsError('severity must be info, warning or critical');
+    }
+  }
+
+  async function targetValue(target: AlertTarget, from: Date, to: Date): Promise<number> {
+    if (target.kind === 'event') return store.eventCount(target, from, to);
+    const summary = await store.measurementSummary(target, from, to);
+    if (target.metric === 'avg') return summary.avgMs;
+    if (target.metric === 'p95') return summary.p95Ms;
+    return summary.calls;
+  }
+
+  function eventPayload(row: NewMetricEventRow): Record<string, unknown> {
+    return {
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      occurredAt: row.occurredAt instanceof Date ? row.occurredAt.toISOString() : row.occurredAt,
+      module: row.module ?? null,
+      actorKind: row.actorKind ?? null,
+      actorHash: row.actorHash ?? null,
+      sessionHash: row.sessionHash ?? null,
+      route: row.route ?? null,
+      release: row.release ?? null,
+      attributes: row.attributes ?? {},
+      measures: row.measures ?? {},
+      errorFingerprint: row.errorFingerprint ?? null,
+    };
+  }
+
+  async function enqueueForSinks(rows: NewMetricEventRow[]): Promise<void> {
+    if (!sinks || rows.length === 0) return;
+    const configs = (await store.listSinkConfigs()).filter(config => config.enabled);
+    if (configs.length === 0) return;
+
+    const outboxRows = [];
+    for (const config of configs) {
+      const sink = sinks.get(config.id);
+      if (!sink?.accepts.includes('event')) continue;
+      for (const row of rows) {
+        const payload = eventPayload(row);
+        if (sink.matches && !sink.matches(payload, config)) continue;
+        outboxRows.push({ sinkId: config.id, itemKind: 'event', itemId: row.id, payload });
+      }
+    }
+    if (outboxRows.length > 0) await store.enqueueOutbox(outboxRows);
+  }
+
+  async function toSinkDto(config: SinkConfigRow): Promise<SinkConfigDto> {
+    const stats = await store.outboxStatsBySink();
+    const entry = stats.get(config.id) ?? { pending: 0, dead: 0 };
+    return {
+      id: config.id,
+      titleKey: sinks?.get(config.id)?.titleKey ?? `metrics:sink_${config.id}`,
+      enabled: config.enabled,
+      settings: config.settings,
+      mapping: config.mapping,
+      updatedAt: config.updatedAt.toISOString(),
+      pending: entry.pending,
+      dead: entry.dead,
+    };
+  }
+
+  function errorMetaOf(row: NewMetricEventRow): { type: string; message: string; stack: string } {
+    const attributes = (row.attributes ?? {}) as Record<string, unknown>;
+    return {
+      type: typeof attributes['error.type'] === 'string' ? (attributes['error.type'] as string) : 'Error',
+      message: typeof attributes['error.message'] === 'string' ? (attributes['error.message'] as string) : '',
+      stack: typeof attributes['error.stack'] === 'string' ? (attributes['error.stack'] as string) : '',
+    };
+  }
+
+  /** Записывает события и синхронно обновляет группировку ошибок (только по реально вставленным). */
+  async function persistEvents(rows: NewMetricEventRow[]): Promise<{ inserted: number; duplicates: number }> {
+    if (rows.length === 0) return { inserted: 0, duplicates: 0 };
+    const result = await store.insertEvents(rows);
+    const insertedIds = new Set(result.insertedIds);
+
+    const issues = new Map<string, ErrorIssueInput>();
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      if (!insertedIds.has(row.id) || !row.errorFingerprint) continue;
+      counts.set(row.errorFingerprint, (counts.get(row.errorFingerprint) ?? 0) + 1);
+      if (!issues.has(row.errorFingerprint)) {
+        const meta = errorMetaOf(row);
+        const basis = errorFingerprint({ type: meta.type, message: meta.message, stack: meta.stack, route: row.route });
+        issues.set(row.errorFingerprint, {
+          fingerprint: row.errorFingerprint,
+          errorType: meta.type,
+          messageTemplate: basis.messageTemplate,
+          route: row.route ?? null,
+          release: row.release ?? null,
+        });
+      }
+    }
+    if (issues.size > 0) await store.upsertErrorIssues([...issues.values()], counts);
+
+    const insertedRows = rows.filter(row => insertedIds.has(row.id));
+    await enqueueForSinks(insertedRows);
+
+    return { inserted: result.inserted, duplicates: result.duplicates };
+  }
+
+  async function settingsOrThrow(): Promise<MetricsSettingsRow> {
+    const row = await store.getSettingsRow();
+    if (!row) throw new MetricsSettingsError('Metrics settings row is missing — migrations not applied?');
+    return row;
+  }
+
+  return {
+    async collect(rawBody, actor) {
+      const batch = validateBatch(rawBody, DEFAULT_EVENT_LIMITS);
+      const settings = await settingsOrThrow();
+      if (!settings.enabled) {
+        return { accepted: 0, duplicates: 0, overflow: batch.overflow, rejected: batch.rejected, disabled: true };
+      }
+
+      const rows = batch.accepted.map(event => {
+        const occurredAt = new Date(event.occurredAt);
+        const attributes = event.attributes ?? {};
+        const errorType = typeof attributes['error.type'] === 'string' ? (attributes['error.type'] as string) : undefined;
+        const errorMessage = typeof attributes['error.message'] === 'string' ? (attributes['error.message'] as string) : undefined;
+        const errorStack = typeof attributes['error.stack'] === 'string' ? (attributes['error.stack'] as string) : undefined;
+        const route = event.context?.route ?? null;
+
+        if (event.kind === 'web_vital') {
+          const spec = vitalSpecForEvent(event.name);
+          const value = event.measures?.value;
+          if (spec && typeof value === 'number' && Number.isFinite(value)) {
+            recordMeasurement?.(
+              {
+                instrument: spec.instrument,
+                kind: 'histogram',
+                unit: spec.unit,
+                boundaries: spec.boundaries,
+                dims: { route: route ?? '<unattached>', rating: String(attributes.rating ?? 'unknown') },
+              },
+              value,
+            );
+          }
+        }
+
+        return {
+          id: event.id,
+          occurredAt,
+          receivedAt: new Date(),
+          name: event.name,
+          kind: event.kind,
+          module: null,
+          actorKind: actor?.userId ? 'user' : 'anonymous',
+          actorHash: actor?.userId ? pseudonymizer.forUser(actor.userId) : null,
+          sessionHash: event.sessionId ? pseudonymizer.forSession(event.sessionId) : null,
+          route,
+          url: event.context?.url ?? null,
+          referrer: event.context?.referrer ?? null,
+          release: null,
+          instance: null,
+          attributes,
+          measures: event.measures ?? {},
+          samplingRate: event.sampling?.rate ?? null,
+          schemaVersion: 1,
+          errorFingerprint:
+            event.kind === 'error'
+              ? errorFingerprint({ type: errorType, message: errorMessage, stack: errorStack, route }).fingerprint
+              : null,
+        };
+      });
+
+      const { inserted, duplicates } = await persistEvents(rows);
+      healthCounters.accepted += inserted;
+      healthCounters.duplicates += duplicates;
+      healthCounters.rejected += batch.rejected.length;
+      return { accepted: inserted, duplicates, overflow: batch.overflow, rejected: batch.rejected };
+    },
+
+    async listEvents(filter = {}) {
+      const rows = await store.listEvents(filter);
+      return rows.map(toEventDto);
+    },
+
+    async listCatalog() {
+      return store.catalog();
+    },
+
+    async routesSummary(from, to) {
+      return store.routesSummary(from, to);
+    },
+
+    async sqlSummary(from, to, limit) {
+      return store.sqlSummary(from, to, limit);
+    },
+
+    async slowQueries(from, to, limit) {
+      const rows = await store.listSlowQueries(from, to, limit);
+      return rows.map(row => ({
+        at: row.at.toISOString(),
+        fingerprint: row.fingerprint,
+        queryText: row.queryText,
+        route: row.route,
+        durationMs: row.durationMs,
+        rowCount: row.rowCount,
+        errorCode: row.errorCode,
+        requestId: row.requestId,
+      }));
+    },
+
+    async writeEvents(rows) {
+      for (const row of rows) {
+        if (row.kind === 'error' && !row.errorFingerprint) {
+          const meta = errorMetaOf(row);
+          row.errorFingerprint = errorFingerprint({
+            type: meta.type,
+            message: meta.message,
+            stack: meta.stack,
+            route: row.route,
+          }).fingerprint;
+        }
+      }
+      await persistEvents(rows);
+    },
+
+    async listErrorIssues(from, to, limit) {
+      return store.listErrorIssues(from, to, limit);
+    },
+
+    async listErrorSamples(fingerprint, limit) {
+      return store.listErrorSamples(fingerprint, limit);
+    },
+
+    async vitalsSummary(from, to) {
+      return store.vitalsSummary(from, to);
+    },
+
+    async listSinks() {
+      const configs = await store.listSinkConfigs();
+      return { sinks: await Promise.all(configs.map(toSinkDto)) };
+    },
+
+    async updateSink(id, patch) {
+      const sink = sinks?.get(id);
+      if (!sink) throw new MetricsSettingsError(`Unknown sink "${id}"`);
+      const values: { enabled?: boolean; settings?: Record<string, unknown>; mapping?: Record<string, unknown> } = {};
+      if (patch.enabled !== undefined) values.enabled = Boolean(patch.enabled);
+      if (patch.settings !== undefined) {
+        values.settings = sink.sanitizeSettings ? sink.sanitizeSettings(patch.settings) : patch.settings;
+      }
+      if (patch.mapping !== undefined) values.mapping = patch.mapping;
+      const row = await store.updateSinkConfig(id, values);
+      if (!row) throw new MetricsSettingsError(`Unknown sink "${id}"`);
+      return toSinkDto(row);
+    },
+
+    async testSink(id) {
+      const sink = sinks?.get(id);
+      const config = await store.getSinkConfig(id);
+      if (!sink || !config) throw new MetricsSettingsError(`Unknown sink "${id}"`);
+      const item = {
+        id: randomUUID(),
+        kind: 'event' as const,
+        payload: {
+          name: 'metrics.sink_test',
+          kind: 'system',
+          occurredAt: new Date().toISOString(),
+          module: 'metrics',
+          attributes: { test: true },
+        },
+      };
+      const result = await sink.send([item], config, new AbortController().signal);
+      return { ok: result.ok, error: result.error };
+    },
+
+    async listDeliveries(limit, sinkId) {
+      const rows = await store.listDeliveries(limit ?? 50, sinkId);
+      return rows.map(row => ({
+        id: row.id,
+        sinkId: row.sinkId,
+        itemId: row.itemId,
+        status: row.status as SinkDeliveryDto['status'],
+        attempts: row.attempts,
+        error: row.error,
+        at: row.at.toISOString(),
+      }));
+    },
+
+    async listAlertRules() {
+      const rows = await store.listAlertRules();
+      return rows.map(toAlertRuleDto);
+    },
+
+    async createAlertRule(input) {
+      validateAlertRule(input);
+      const created = await store.insertAlertRule({
+        id: randomUUID(),
+        name: input.name.trim(),
+        enabled: input.enabled ?? true,
+        severity: input.severity ?? 'warning',
+        target: input.target,
+        windowMs: input.windowMs,
+        condition: input.condition,
+        labels: input.labels ?? {},
+        annotations: input.annotations ?? {},
+      });
+      return toAlertRuleDto(created);
+    },
+
+    async updateAlertRule(id, input) {
+      validateAlertRule(input);
+      const updated = await store.updateAlertRule(id, {
+        name: input.name.trim(),
+        enabled: input.enabled ?? true,
+        severity: input.severity ?? 'warning',
+        target: input.target,
+        windowMs: input.windowMs,
+        condition: input.condition,
+        labels: input.labels ?? {},
+        annotations: input.annotations ?? {},
+      });
+      if (!updated) throw new MetricsSettingsError(`Unknown alert rule "${id}"`);
+      return toAlertRuleDto(updated);
+    },
+
+    async deleteAlertRule(id) {
+      return store.deleteAlertRule(id);
+    },
+
+    async listAlertInstances() {
+      const rows = await store.listAlertInstances();
+      return rows.map(row => ({
+        ruleId: row.ruleId,
+        ruleName: row.ruleName,
+        state: row.state === 'firing' ? 'firing' : 'pending',
+        value: row.value,
+        activeAt: row.activeAt.toISOString(),
+        lastEvalAt: row.lastEvalAt.toISOString(),
+      }));
+    },
+
+    async listAlertEvents(limit) {
+      const rows = await store.listAlertEvents(limit ?? 50);
+      return rows.map(row => ({
+        id: row.id,
+        ruleId: row.ruleId,
+        ruleName: row.ruleName,
+        state: row.state,
+        severity: row.severity,
+        value: row.value,
+        message: row.message,
+        at: row.at.toISOString(),
+      }));
+    },
+
+    async evaluateAlerts(now = new Date()) {
+      if (alertsRunning) return { evaluated: 0, firing: 0, resolved: 0 };
+      alertsRunning = true;
+      const result = { evaluated: 0, firing: 0, resolved: 0 };
+      try {
+        const rules = await store.listAlertRules(true);
+        for (const rule of rules) {
+          const from = new Date(now.getTime() - rule.windowMs);
+          const value = await targetValue(rule.target, from, now);
+          const breaching = rule.condition.kind === 'absence' ? value === 0 : isBreaching(value, rule.condition);
+          const existing = await store.getAlertInstance(rule.id, 'default');
+          const decision = decideAlertState(
+            existing
+              ? { state: existing.state === 'firing' ? 'firing' : 'pending', activeAt: existing.activeAt, value: existing.value ?? 0 }
+              : null,
+            breaching,
+            rule.condition.kind === 'threshold' ? (rule.condition.forMs ?? 0) : (rule.condition.forMs ?? 0),
+            now.getTime(),
+          );
+
+          if (decision.remove) {
+            await store.deleteAlertInstance(rule.id, 'default');
+          } else if (decision.state === 'resolved') {
+            await store.deleteAlertInstance(rule.id, 'default');
+            await store.insertAlertEvent({
+              ruleId: rule.id,
+              state: 'resolved',
+              severity: rule.severity,
+              value,
+              labels: rule.labels,
+              message: rule.annotations.summary ?? null,
+            });
+            eventBus?.emit('metrics.alert', {
+              ruleId: rule.id,
+              name: rule.name,
+              state: 'resolved',
+              severity: rule.severity,
+              value,
+            });
+            result.resolved += 1;
+          } else {
+            await store.upsertAlertInstance({
+              ruleId: rule.id,
+              fingerprint: 'default',
+              state: decision.state,
+              value,
+              labels: rule.labels,
+              activeAt: existing?.activeAt ?? now,
+              lastEvalAt: now,
+              resolvedAt: null,
+            });
+            if (decision.emit === 'alert') {
+              await store.insertAlertEvent({
+                ruleId: rule.id,
+                state: 'firing',
+                severity: rule.severity,
+                value,
+                labels: rule.labels,
+                message: rule.annotations.summary ?? null,
+              });
+              eventBus?.emit('metrics.alert', {
+                ruleId: rule.id,
+                name: rule.name,
+                state: 'firing',
+                severity: rule.severity,
+                value,
+              });
+              result.firing += 1;
+            }
+          }
+          result.evaluated += 1;
+        }
+        return result;
+      } finally {
+        alertsRunning = false;
+      }
+    },
+
+    async pruneAlertEvents(before) {
+      return store.pruneAlertEvents(before);
+    },
+
+    async health() {
+      const [eventsByKind, storage, approximateRows, seriesCount, outbox, alerts] = await Promise.all([
+        store.eventsByKindLastHour(),
+        store.storageStats(),
+        store.approximateRows(),
+        store.countSeries(),
+        store.outboxStatsBySink(),
+        store.countAlertInstancesByState(),
+      ]);
+      const outboxTotals = [...outbox.values()].reduce(
+        (sum, entry) => ({ pending: sum.pending + entry.pending, dead: sum.dead + entry.dead }),
+        { pending: 0, dead: 0 },
+      );
+      const runtime = runtimeStats?.() ?? {
+        bufferSize: 0,
+        bufferOverflow: 0,
+        lastFlushAt: null,
+        flushErrors: 0,
+      };
+      return {
+        eventsByKind,
+        storage,
+        seriesCount,
+        approximateRows,
+        outbox: outboxTotals,
+        alerts,
+        ingest: { ...healthCounters },
+        runtime: {
+          bufferSize: runtime.bufferSize,
+          bufferOverflow: runtime.bufferOverflow,
+          lastFlushAt: runtime.lastFlushAt?.toISOString() ?? null,
+          flushErrors: runtime.flushErrors,
+          lastDispatchAt: dispatcher?.stats.lastDispatchAt?.toISOString() ?? null,
+        },
+      };
+    },
+
+    startAlerts() {
+      if (alertTimer) return;
+      alertTimer = setInterval(() => void this.evaluateAlerts().catch(() => undefined), 60_000);
+      alertTimer.unref?.();
+    },
+
+    async stopAlerts() {
+      if (alertTimer) clearInterval(alertTimer);
+      alertTimer = null;
+    },
+
+    async dispatchOutbox() {
+      if (!dispatcher) return { sent: 0, failed: 0, dead: 0 };
+      return dispatcher.dispatch();
+    },
+
+    startSinks() {
+      dispatcher?.start();
+    },
+
+    async stopSinks() {
+      await dispatcher?.stop();
+    },
+
+    async exportEventsCsv({ from, to, kind, name, limit }) {
+      const rows = await store.exportEvents(from, to, kind, name, limit);
+      const header = [
+        'occurred_at',
+        'received_at',
+        'name',
+        'kind',
+        'module',
+        'actor_kind',
+        'actor_hash',
+        'session_hash',
+        'route',
+        'release',
+        'attributes',
+        'measures',
+      ];
+      const escape = (value: unknown): string => {
+        const text = value === null || value === undefined ? '' : typeof value === 'string' ? value : JSON.stringify(value);
+        return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+      };
+      const lines = [header.join(',')];
+      for (const row of rows) {
+        lines.push(
+          [
+            row.occurredAt.toISOString(),
+            row.receivedAt.toISOString(),
+            row.name,
+            row.kind,
+            row.module,
+            row.actorKind,
+            row.actorHash,
+            row.sessionHash,
+            row.route,
+            row.release,
+            row.attributes,
+            row.measures,
+          ]
+            .map(escape)
+            .join(','),
+        );
+      }
+      return `${lines.join('\n')}\n`;
+    },
+
+    async writeMeasurements(points) {
+      await store.writeMeasurements(points);
+    },
+
+    async upsertSqlFingerprints(entries) {
+      await store.upsertSqlFingerprints(entries);
+    },
+
+    async insertSlowQueries(rows) {
+      await store.insertSlowQueries(rows);
+    },
+
+    async getCollectorConfig() {
+      const settings = await settingsOrThrow();
+      return {
+        enabled: settings.enabled,
+        sampleSqlRate: settings.sampleSqlRate,
+        slowSqlThresholdMs: settings.slowSqlThresholdMs,
+      };
+    },
+
+    emit(input) {
+      const row = buildEmittedRow(input, pseudonymizer);
+      if (row) eventBuffer.push(row);
+    },
+
+    emitBatch(inputs) {
+      for (const input of inputs) this.emit(input);
+    },
+
+    drainEmittedEvents() {
+      return eventBuffer.drain();
+    },
+
+    listDefinitions() {
+      return getDefinitions();
+    },
+
+    async definitionsSummary(from, to, stepSeconds) {
+      const summaries: MetricDefinitionSummaryDto[] = [];
+      for (const definition of getDefinitions()) {
+        const byBucket = new Map<number, number>();
+        const merge = (series: { points: { t: Date; v: number }[] }[]) => {
+          for (const item of series) {
+            for (const point of item.points) {
+              byBucket.set(point.t.getTime(), (byBucket.get(point.t.getTime()) ?? 0) + point.v);
+            }
+          }
+        };
+
+        for (const name of definition.source.events ?? []) {
+          merge(await store.eventSeries({ name, from, to, stepSeconds }));
+        }
+        if (definition.source.eventPrefix) {
+          merge(await store.eventSeries({ eventPrefix: definition.source.eventPrefix, from, to, stepSeconds }));
+        }
+
+        const points = [...byBucket.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([time, value]) => ({ t: new Date(time).toISOString(), v: value }));
+        summaries.push({
+          definition,
+          total: points.reduce((sum, point) => sum + point.v, 0),
+          points,
+        });
+      }
+      return summaries;
+    },
+
+    async eventSeries(input) {
+      const series = await store.eventSeries(input);
+      return series.map(item => ({
+        key: item.key,
+        points: item.points.map(point => ({ t: point.t.toISOString(), v: point.v })),
+      }));
+    },
+
+    async checkIngestRate(key, cost) {
+      const settings = await settingsOrThrow();
+      const decision = await limiter.consume(key, cost, settings.ingestEventsPerMinute);
+      if (!decision.allowed) healthCounters.rateLimited += 1;
+      return decision;
+    },
+
+    async getSettings() {
+      return toSettingsDto(await settingsOrThrow());
+    },
+
+    async updateSettings(patch) {
+      const values: Parameters<typeof store.updateSettingsRow>[0] = {};
+      if (patch.enabled !== undefined) values.enabled = Boolean(patch.enabled);
+      if (patch.retentionEventsDays !== undefined) {
+        if (!Number.isInteger(patch.retentionEventsDays) || patch.retentionEventsDays < 1 || patch.retentionEventsDays > 3650) {
+          throw new MetricsSettingsError('retentionEventsDays must be an integer between 1 and 3650');
+        }
+        values.retentionEventsDays = patch.retentionEventsDays;
+      }
+      if (patch.retentionPointsDays !== undefined) {
+        if (!Number.isInteger(patch.retentionPointsDays) || patch.retentionPointsDays < 1 || patch.retentionPointsDays > 3650) {
+          throw new MetricsSettingsError('retentionPointsDays must be an integer between 1 and 3650');
+        }
+        values.retentionPointsDays = patch.retentionPointsDays;
+      }
+      if (patch.slowSqlThresholdMs !== undefined) {
+        if (!Number.isInteger(patch.slowSqlThresholdMs) || patch.slowSqlThresholdMs < 1 || patch.slowSqlThresholdMs > 600_000) {
+          throw new MetricsSettingsError('slowSqlThresholdMs must be an integer between 1 and 600000');
+        }
+        values.slowSqlThresholdMs = patch.slowSqlThresholdMs;
+      }
+      if (patch.sampleSqlRate !== undefined) values.sampleSqlRate = clampRate(patch.sampleSqlRate, 'sampleSqlRate');
+      if (patch.samplePageviewRate !== undefined) values.samplePageviewRate = clampRate(patch.samplePageviewRate, 'samplePageviewRate');
+      if (patch.sampleClickRate !== undefined) values.sampleClickRate = clampRate(patch.sampleClickRate, 'sampleClickRate');
+      if (patch.ingestEventsPerMinute !== undefined) {
+        if (!Number.isInteger(patch.ingestEventsPerMinute) || patch.ingestEventsPerMinute < 1 || patch.ingestEventsPerMinute > 100_000) {
+          throw new MetricsSettingsError('ingestEventsPerMinute must be an integer between 1 and 100000');
+        }
+        values.ingestEventsPerMinute = patch.ingestEventsPerMinute;
+      }
+      if (patch.storeRawUrls !== undefined) values.storeRawUrls = Boolean(patch.storeRawUrls);
+
+      const row = await store.updateSettingsRow(values);
+      if (!row) throw new MetricsSettingsError('Metrics settings row is missing — migrations not applied?');
+      return toSettingsDto(row);
+    },
+
+    async getContext() {
+      const settings = await settingsOrThrow();
+      return {
+        enabled: settings.enabled,
+        sampleRates: { pageview: settings.samplePageviewRate, ui: settings.sampleClickRate },
+        limits: {
+          maxBatchEvents: DEFAULT_EVENT_LIMITS.maxEventsPerBatch,
+          maxEventBytes: DEFAULT_EVENT_LIMITS.maxEventBytes,
+          maxAttributes: DEFAULT_EVENT_LIMITS.maxAttributes,
+          maxStringLength: DEFAULT_EVENT_LIMITS.maxStringLength,
+        },
+      };
+    },
+
+    async ensurePartitions() {
+      return [
+        ...(await ensurePartitions(db, 'events')),
+        ...(await ensurePartitions(db, 'points')),
+        ...(await ensurePartitions(db, 'slow_queries')),
+      ];
+    },
+
+    async prune() {
+      const settings = await settingsOrThrow();
+      return [
+        ...(await dropExpiredPartitions(db, 'events', settings.retentionEventsDays)),
+        ...(await dropExpiredPartitions(db, 'points', settings.retentionPointsDays)),
+        ...(await dropExpiredPartitions(db, 'slow_queries', SLOW_QUERIES_RETENTION_DAYS)),
+      ];
+    },
+  };
+}
+
+export type { ClientEventInput };

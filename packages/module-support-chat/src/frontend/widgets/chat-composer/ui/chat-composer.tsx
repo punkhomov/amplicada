@@ -118,6 +118,7 @@ export function ChatComposer({ placeholder, hint, pending, onSubmit }: ChatCompo
             className="rounded-full"
             aria-label={t('widget_attach')}
             disabled={uploading}
+            data-metrics="ui.click.chat_attach"
             onClick={() => fileInputRef.current?.click()}
           >
             <PlusIcon />
@@ -126,7 +127,14 @@ export function ChatComposer({ placeholder, hint, pending, onSubmit }: ChatCompo
           <div className="flex min-w-0 items-center gap-2">
             {error ? <span className="truncate text-xs text-destructive">{error}</span> : null}
             {!error && hint ? <span className="truncate text-xs text-muted-foreground">{hint}</span> : null}
-            <Button type="submit" size="icon-sm" className="rounded-full" aria-label={t('widget_send')} disabled={!canSend}>
+            <Button
+              type="submit"
+              size="icon-sm"
+              className="rounded-full"
+              aria-label={t('widget_send')}
+              data-metrics="ui.click.chat_send"
+              disabled={!canSend}
+            >
               {pending ? <Spinner /> : <ArrowUpIcon />}
             </Button>
           </div>

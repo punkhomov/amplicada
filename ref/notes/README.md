@@ -30,6 +30,7 @@ date: 2026-09-15
 | `module-admin` | [Заметки](module-admin.md) |
 | `module-auth-password` | [Заметки](module-auth-password.md) |
 | `module-hr-poll` | [Заметки](module-hr-poll.md) |
+| `module-metrics` | [Заметки](module-metrics.md) — журнал событий: партиции, uuid-идемпотентность, HMAC-псевдонимизация через core `secrets`, retention; этап 00 плана |
 | `module-support-chat` | [Заметки](module-support-chat.md) — первое приложение админки: таблицы вместо документов, SSE + Redis, вложения через storage, карточка-виджет, портал «Мои обращения» |
 | `platform-core` | [Заметки](platform-core.md) — UI-кит: вендоринг, синк, `cn`, политика возраста |
 | `module-hr` | — |

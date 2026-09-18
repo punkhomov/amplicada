@@ -3,9 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { logger } from '@amplicada/platform-core/backend';
 import type { BackendDbService, BackendModule } from '@amplicada/platform-core/contracts/backend';
 import { moduleManifest } from '../contracts/manifest.js';
+import { SUPPORT_CHAT_METRIC_DEFINITIONS } from './metrics.js';
 import { createSupportChatRoutes } from './routes.js';
 import { publishSupportChatEvent, SupportChatEventBridge, type SupportChatRedisClient } from './services/event-bridge.js';
-import { createSupportChatService } from './services/support-chat-service.js';
+import { type CreateSupportChatServiceOptions, createSupportChatService } from './services/support-chat-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,11 +20,28 @@ export const supportChatModule: BackendModule = {
     const migrationsPath = join(__dirname, '..', '..', 'migrations');
     context.migrations.register('support-chat', migrationsPath);
 
+    for (const definition of SUPPORT_CHAT_METRIC_DEFINITIONS) {
+      context.extensions.contribute('metrics:definitions', definition);
+    }
+
+    // Метрики — опциональная интеграция: сервис резолвится лениво, модуль метрик может отсутствовать.
+    const emitMetric: CreateSupportChatServiceOptions['emitMetric'] = event => {
+      if (!context.services.has('metrics')) return;
+      context.services.resolve<{ emit(input: Record<string, unknown>): void }>('metrics').emit({
+        name: event.name,
+        kind: 'business',
+        module: 'support-chat',
+        actor: event.actorUserId ? { kind: 'user', userId: event.actorUserId } : undefined,
+        attributes: event.attributes,
+      });
+    };
+
     const redis = context.services.resolve<SupportChatRedisClient>('redis');
     eventBridge = new SupportChatEventBridge({ redis, eventBus: context.eventBus });
 
     const service = createSupportChatService({
       db: context.services.resolve<BackendDbService>('db'),
+      emitMetric,
       publish: (type, payload) => {
         void publishSupportChatEvent(redis, type, payload).catch(error => {
           logger.warn({ err: error }, 'Failed to publish support chat event');

@@ -59,6 +59,8 @@ export {
   createApiClient,
 } from './lib/api-client.js';
 export { AUTH_REDIRECT_KEY, redirectToLogin } from './lib/auth-redirect.js';
+export type { FrontendErrorHandler, FrontendErrorInfo } from './lib/error-reporter.js';
+export { frontendErrors } from './lib/error-reporter.js';
 export { createI18n, i18n, type LocaleResources, Trans, useTranslation } from './lib/i18n.js';
 export { createQueryClient } from './lib/query-client.js';
 export { getErrorMessage } from './lib/query-error.js';

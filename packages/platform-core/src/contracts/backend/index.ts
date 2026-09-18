@@ -27,12 +27,15 @@ export type {
   ListConfigResult,
 } from './document-runtime.js';
 export type { BackendExtensionPointRegistry } from './extension-point.js';
+export type { HttpObserver } from './http-observer.js';
 export type { BackendMigrationEntry, BackendMigrationRegistry } from './migration.js';
 export type { BackendModule } from './module.js';
 export type { BackendModuleRegistry, RegisteredBackendModule } from './module-registry.js';
 export type { BackendPipeline, BackendPipelineStage } from './pipeline.js';
 export type { BackendRegistry, BackendRegistryEntry, BackendRegistryKey } from './registry.js';
+export type { BackendRequestContext, BackendRequestContextService } from './request-context.js';
 export type { BackendRouteDefinition, BackendRouteHandler, BackendRouteRegistry } from './route-registry.js';
+export type { BackendSecretsService } from './secrets.js';
 export type { BackendSetupContext } from './setup.js';
 export type { BackendStorageService, StorageObjectInfo, StoragePutOptions } from './storage.js';
 export type {

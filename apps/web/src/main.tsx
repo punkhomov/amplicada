@@ -2,6 +2,7 @@ import {
   bootstrapFrontend,
   buildModuleRouteTree,
   createFrontendApp,
+  frontendErrors,
   FrontendProvider,
   RootLayout,
 } from '@amplicada/platform-core/frontend';
@@ -28,7 +29,13 @@ async function init() {
 
   const rootEl = document.getElementById('root');
   if (!rootEl) throw new Error('Root element not found');
-  createRoot(rootEl).render(
+  createRoot(rootEl, {
+    // React 19: ошибки рендера идут в общий репортер ядра, откуда их читает модуль метрик.
+    onUncaughtError: (error, errorInfo) =>
+      frontendErrors.report(error, { source: 'react-uncaught', componentStack: errorInfo.componentStack ?? undefined }),
+    onCaughtError: (error, errorInfo) =>
+      frontendErrors.report(error, { source: 'react-caught', componentStack: errorInfo.componentStack ?? undefined }),
+  }).render(
     <StrictMode>
       <FrontendProvider context={context} queryClient={queryClient}>
         <RouterProvider router={router} />

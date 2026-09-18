@@ -98,5 +98,10 @@
   "provider_openai": "OpenAI",
   "provider_anthropic": "Anthropic",
   "provider_google": "Google",
-  "provider_local": "Локальная модель"
+  "provider_local": "Локальная модель",
+  "metrics_threads_opened": "Новые обращения",
+  "metrics_messages_sent": "Сообщения",
+  "metrics_status_changes": "Смены статуса",
+  "panel_threads_opened": "Новые обращения",
+  "panel_messages_sent": "Сообщения поддержки"
 }

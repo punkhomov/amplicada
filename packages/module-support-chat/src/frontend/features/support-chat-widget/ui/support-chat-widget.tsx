@@ -75,6 +75,8 @@ export function SupportChatWidget() {
           size="icon-lg"
           className="fixed right-4 bottom-4 z-50 size-14 rounded-full shadow-xl transition-transform hover:scale-105 active:scale-95 [&_svg:not([class*='size-'])]:size-6"
           aria-label={t('widget_open')}
+          data-metrics="ui.click.support_widget_toggle"
+          data-metrics-state="open"
           onClick={() => handleOpenChange(true)}
         >
           <LifeBuoyIcon />
@@ -102,6 +104,8 @@ export function SupportChatWidget() {
                   variant="ghost"
                   size="icon-sm"
                   aria-label={t('widget_close_thread')}
+                  data-metrics="ui.click.support_status_set"
+                  data-metrics-status="closed"
                   disabled={setStatus.isPending}
                   onClick={() => setStatus.mutate('closed')}
                 >
@@ -112,6 +116,8 @@ export function SupportChatWidget() {
                   variant="ghost"
                   size="icon-sm"
                   aria-label={t('portal_reopen')}
+                  data-metrics="ui.click.support_status_set"
+                  data-metrics-status="open"
                   disabled={setStatus.isPending}
                   onClick={() => setStatus.mutate('open')}
                 >
@@ -122,6 +128,7 @@ export function SupportChatWidget() {
                 variant="ghost"
                 size="icon-sm"
                 aria-label={t('widget_all_requests')}
+                data-metrics="ui.click.support_portal_open"
                 onClick={() => {
                   setOpen(false);
                   navigate('/support');
@@ -129,7 +136,14 @@ export function SupportChatWidget() {
               >
                 <MessagesSquareIcon />
               </Button>
-              <Button variant="ghost" size="icon-sm" aria-label={t('widget_close')} onClick={() => handleOpenChange(false)}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('widget_close')}
+                data-metrics="ui.click.support_widget_toggle"
+                data-metrics-state="closed"
+                onClick={() => handleOpenChange(false)}
+              >
                 <XIcon />
               </Button>
             </div>

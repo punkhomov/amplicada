@@ -111,6 +111,8 @@ export interface SupportChatService extends SupportChatBackendService {
 export interface CreateSupportChatServiceOptions {
   db: BackendDbService;
   publish?: (type: string, payload: SupportChatEventPayload) => void;
+  /** Бизнес-метрики: вызывается после успешных операций, если модуль метрик собран. */
+  emitMetric?: (event: { name: string; actorUserId?: string; attributes?: Record<string, string | number | boolean> }) => void;
 }
 
 type SupportChatTx = Parameters<Parameters<BackendDbService['transaction']>[0]>[0];
@@ -182,7 +184,7 @@ export function toThreadDto(
 }
 
 export function createSupportChatService(options: CreateSupportChatServiceOptions): SupportChatService {
-  const { db, publish } = options;
+  const { db, publish, emitMetric } = options;
 
   async function loadMessages(reader: MessageReader, threadId: string): Promise<SupportChatMessageWithAuthor[]> {
     const rows = await reader
@@ -235,6 +237,11 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
   }
 
   function emitMessage(thread: SupportChatThreadRow, message: SupportChatMessageRow): void {
+    emitMetric?.({
+      name: 'support.message.sent',
+      actorUserId: message.authorId ?? undefined,
+      attributes: { role: message.authorRole },
+    });
     publish?.(SUPPORT_CHAT_EVENTS.MESSAGE_CREATED, {
       threadId: thread.id,
       userId: thread.userId,
@@ -375,6 +382,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
 
     async sendUserMessage(userId, body, attachment) {
       const now = new Date();
+      let created = false;
       const result = await db.transaction(async tx => {
         const [existing] = await tx
           .select()
@@ -389,10 +397,12 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
             .insert(supportChatThreads)
             .values({ userId, status: 'open', createdAt: now, updatedAt: now, userLastReadAt: now })
             .returning();
+          created = true;
         }
 
         return writeMessage(tx, thread, 'user', userId, body, attachment ?? null, now);
       });
+      if (created) emitMetric?.({ name: 'support.thread.opened', actorUserId: userId, attributes: { kind: 'question' } });
       emitMessage(result.thread, result.message);
       return result;
     },
@@ -423,6 +433,7 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
           .returning();
         return writeMessage(tx, thread, 'user', userId, body, attachment ?? null, now);
       });
+      emitMetric?.({ name: 'support.thread.opened', actorUserId: userId, attributes: { kind: 'question' } });
       emitMessage(result.thread, result.message);
       return result;
     },
@@ -599,6 +610,10 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
       const messages = await loadMessages(db, thread.id);
 
       if (patch.status && patch.status !== current.status) {
+        emitMetric?.({
+          name: 'support.thread.status_changed',
+          attributes: { from: current.status, to: thread.status, by: 'admin' },
+        });
         publish?.(SUPPORT_CHAT_EVENTS.THREAD_UPDATED, {
           threadId: thread.id,
           userId: thread.userId,
@@ -623,6 +638,11 @@ export function createSupportChatService(options: CreateSupportChatServiceOption
         .where(eq(supportChatThreads.id, threadId))
         .returning();
       const messages = await loadMessages(db, thread.id);
+      emitMetric?.({
+        name: 'support.thread.status_changed',
+        actorUserId: userId,
+        attributes: { from: current.status, to: thread.status, by: 'user' },
+      });
       publish?.(SUPPORT_CHAT_EVENTS.THREAD_UPDATED, {
         threadId: thread.id,
         userId: thread.userId,

@@ -1,4 +1,5 @@
 import type { AdminAppsService } from '@amplicada/module-admin/frontend';
+import type { MetricPanel, MetricsPanelsService } from '@amplicada/module-metrics/contracts';
 import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend';
 import { API_CLIENT_TOKEN, type ApiClient, i18n } from '@amplicada/platform-core/frontend';
 import { LifeBuoyIcon } from 'lucide-react';
@@ -9,6 +10,24 @@ import { supportChatFrontendLocales } from './locales/index.js';
 import { MyThreadPage } from './pages/my-thread/index.js';
 import { MyThreadsPage } from './pages/my-threads/index.js';
 import { SupportChatAdminPage } from './pages/support-chat-admin/index.js';
+
+/** Токен сервиса панелей метрик; литерал — runtime-импорт модуля метрик не обязателен. */
+const METRICS_PANELS_TOKEN = 'metrics:panels';
+
+const SUPPORT_CHAT_METRIC_PANELS: MetricPanel[] = [
+  {
+    id: 'support-chat.threads-opened',
+    titleKey: 'support-chat:panel_threads_opened',
+    kind: 'timeseries',
+    event: 'support.thread.opened',
+  },
+  {
+    id: 'support-chat.messages-sent',
+    titleKey: 'support-chat:panel_messages_sent',
+    kind: 'timeseries',
+    event: 'support.message.sent',
+  },
+];
 
 export const supportChatFrontendModule: FrontendModule = {
   ...moduleManifest,
@@ -27,6 +46,12 @@ export const supportChatFrontendModule: FrontendModule = {
     });
 
     context.extensions.contribute('floating', { component: SupportChatWidget, order: 10 });
+
+    // Панели на дашборде метрик — опциональная интеграция.
+    if (context.services.has(METRICS_PANELS_TOKEN)) {
+      const panels = context.services.resolve<MetricsPanelsService>(METRICS_PANELS_TOKEN);
+      for (const panel of SUPPORT_CHAT_METRIC_PANELS) panels.register(panel);
+    }
 
     // Портал: список «Мои обращения» и страница обращения; виджет рядом продолжает активное
     // (свежее) обращение. Метка навигации — статичная строка, поэтому переводится на старте.
