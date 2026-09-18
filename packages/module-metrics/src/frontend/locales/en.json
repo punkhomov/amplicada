@@ -154,5 +154,8 @@
   "alert_last_eval": "Last evaluation",
   "alert_state_pending": "Pending",
   "alert_state_firing": "Firing",
-  "alert_state_resolved": "Resolved"
+  "alert_state_resolved": "Resolved",
+  "sink_yandex_metrica": "Yandex Metrica",
+  "sink_settings_json": "Settings (JSON): counterId, goalMap",
+  "sink_settings_invalid_json": "Invalid JSON"
 }

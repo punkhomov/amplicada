@@ -23,6 +23,7 @@ import { Pseudonymizer } from './services/pseudonym.js';
 import { IngestRateLimiter, type RateLimiterRedis } from './services/rate-limiter.js';
 import { createSinkRegistry } from './sinks/sink.js';
 import { createWebhookSink } from './sinks/webhook-sink.js';
+import { createYandexMetricaSink } from './sinks/yandex-metrica-sink.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -77,6 +78,7 @@ export const metricsModule: BackendModule = {
     // Выходы: адаптеры регистрируются кодом, включаются по конфигу `metrics.sink_configs`.
     const sinkRegistry = createSinkRegistry();
     sinkRegistry.register(createWebhookSink({ getSecret: name => secrets.get(name) }));
+    sinkRegistry.register(createYandexMetricaSink({ getSecret: name => secrets.get(name) }));
 
     const service = createMetricsService({
       db,

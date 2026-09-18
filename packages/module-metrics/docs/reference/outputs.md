@@ -34,6 +34,22 @@ PATCH /api/metrics/admin/sinks/webhook
 - `2xx` — успех; `429`/`5xx`/сеть — повтор; остальные `4xx` — сразу в DLQ;
 - фильтр `events`: точные имена или префиксы с `*` (`support.*`); пусто — все события.
 
+## Яндекс.Метрика
+
+Адаптер `yandex-metrica` (выключен по умолчанию) поддерживает два серверных канала:
+
+- **Measurement Protocol** — для событий с атрибутом `yandex.client_id` (его выдаёт клиентский
+  счётчик `ym(id, 'getClientID')`): GET `https://mc.yandex.ru/collect` с `tid`, `cid`, `t=event`,
+  `ea=<goalId>`, `et`, `ms=<OAuth-токен>`;
+- **Offline Conversions** — CSV `UserId,Target,DateTime` (UserId — псевдоним актора) и загрузка
+  `POST /management/v1/counter/{id}/offline_conversions/upload?client_id_type=USER_ID`
+  с OAuth-токеном.
+
+Настройки: `counterId`, `goalMap` (`имя события → ID цели`); токен — секрет
+`AMPLICADA_METRICS_YANDEX_TOKEN` (core `secrets`), в БД не хранится. Событие без ClientId и
+без псевдонима актора не отправляется. **Живьём не проверялось** (нет счётчика и OAuth-токена):
+покрыты построители URL/CSV и поведение `send` на стабах.
+
 ## Очередь и доставка
 
 Запись события и постановка в `metrics.outbox` происходят вместе (только для включённых
@@ -46,7 +62,7 @@ PATCH /api/metrics/admin/sinks/webhook
 | Метод | Путь | Назначение |
 |---|---|---|
 | `GET` | `/api/metrics/admin/sinks` | Конфиги + `pending`/`dead` по каждому |
-| `PATCH` | `/api/metrics/admin/sinks/:id` | Включение и настройки |
+| `PATCH` | `/api/metrics/admin/sinks/:id` | Включение и настройки (webhook — форма, остальные — JSON) |
 | `POST` | `/api/metrics/admin/sinks/:id/test` | Тестовое сообщение через адаптер |
 | `GET` | `/api/metrics/admin/deliveries` | Журнал доставки (`sinkId`, `limit`) |
 | `POST` | `/api/metrics/admin/outbox/dispatch` | Немедленный прогон очереди |
@@ -64,7 +80,6 @@ PATCH /api/metrics/admin/sinks/webhook
 
 ## Ограничения
 
-- Реализован только webhook; адаптер Яндекс.Метрики — следующий шаг (в списке есть
-  заготовка конфига `yandex-metrica`).
+- Адаптер Яндекс.Метрики не проверялся живой отправкой: нужны счётчик и OAuth-токен.
 - Измерения (гистограммы) наружу не отправляются — `accepts` у webhook только `event`.
 - Алертов пока нет; `dispatch` ручной или по внутреннему интервалу 15 с.

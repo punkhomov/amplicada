@@ -154,5 +154,8 @@
   "alert_last_eval": "Последняя проверка",
   "alert_state_pending": "Ожидание",
   "alert_state_firing": "Сработало",
-  "alert_state_resolved": "Решено"
+  "alert_state_resolved": "Решено",
+  "sink_yandex_metrica": "Яндекс.Метрика",
+  "sink_settings_json": "Настройки (JSON): counterId, goalMap",
+  "sink_settings_invalid_json": "Некорректный JSON"
 }

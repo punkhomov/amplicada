@@ -22,3 +22,8 @@ export { fingerprintSql, normalizeSql } from './services/sql-normalize.js';
 export type { BatchValidation, EventLimits, ValidatedEvent, ValidateResult } from './services/validation.js';
 export { DEFAULT_EVENT_LIMITS, validateBatch, validateClientEvent } from './services/validation.js';
 export { metricsModule as module } from './setup.js';
+export { OutboxDispatcher } from './sinks/outbox-dispatcher.js';
+export type { MetricSink, SinkItem, SinkRegistry, SinkSendResult } from './sinks/sink.js';
+export { createSinkRegistry, MAX_OUTBOX_ATTEMPTS, matchesEventFilter } from './sinks/sink.js';
+export { createWebhookSink } from './sinks/webhook-sink.js';
+export { buildMeasurementProtocolUrl, buildOfflineConversionsCsv, createYandexMetricaSink } from './sinks/yandex-metrica-sink.js';

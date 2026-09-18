@@ -55,6 +55,7 @@ order: 30
 |---|---|---|
 | `AMPLICADA_METRICS_PSEUDONYM_SALT` | для прода | Соль HMAC-псевдонимизации; читается core-сервисом `secrets`. Без неё — случайная процессная соль + warning |
 | `AMPLICADA_METRICS_WEBHOOK_SECRET` | нет | HMAC-секрет подписи webhook-доставки (`x-metrics-signature`); без него — без подписи |
+| `AMPLICADA_METRICS_YANDEX_TOKEN` | для Метрики | OAuth-токен Яндекс.Метрики (Measurement Protocol и Offline Conversions) |
 
 ## Точки core, на которые опирается модуль
 

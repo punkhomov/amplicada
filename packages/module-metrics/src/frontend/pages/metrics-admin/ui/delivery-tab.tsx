@@ -6,6 +6,7 @@ import { Input } from '@amplicada/platform-core/frontend/ui/input';
 import { Skeleton } from '@amplicada/platform-core/frontend/ui/skeleton';
 import { Switch } from '@amplicada/platform-core/frontend/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@amplicada/platform-core/frontend/ui/table';
+import { Textarea } from '@amplicada/platform-core/frontend/ui/textarea';
 import { useState } from 'react';
 import type { SinkConfigDto, SinkDeliveryDto } from '../../../../contracts/index.js';
 import { metricsDeliveriesQueryOptions, metricsQueryKeys, metricsSinksQueryOptions } from '../../../lib/query-options.js';
@@ -23,6 +24,8 @@ function SinkCard({ api, sink }: { api: ApiClient; sink: SinkConfigDto }) {
   const [url, setUrl] = useState(typeof sink.settings.url === 'string' ? sink.settings.url : '');
   const [events, setEvents] = useState(Array.isArray(sink.settings.events) ? (sink.settings.events as string[]).join(', ') : '');
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [jsonSettings, setJsonSettings] = useState(() => JSON.stringify(sink.settings, null, 2));
+  const [jsonError, setJsonError] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: (patch: { enabled?: boolean; settings?: Record<string, unknown> }) =>
@@ -45,6 +48,16 @@ function SinkCard({ api, sink }: { api: ApiClient; sink: SinkConfigDto }) {
           .filter(entry => entry.length > 0),
       },
     });
+
+  const saveJsonSettings = () => {
+    try {
+      const parsed = JSON.parse(jsonSettings) as Record<string, unknown>;
+      setJsonError(null);
+      save.mutate({ settings: parsed });
+    } catch {
+      setJsonError(t('sink_settings_invalid_json'));
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
@@ -79,14 +92,24 @@ function SinkCard({ api, sink }: { api: ApiClient; sink: SinkConfigDto }) {
             <Input value={events} placeholder="support.*, page.view" onChange={event => setEvents(event.target.value)} />
           </label>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex flex-col gap-1 text-sm">
+          <span className="text-muted-foreground">{t('sink_settings_json')}</span>
+          <Textarea
+            rows={5}
+            className="font-mono text-xs"
+            value={jsonSettings}
+            onChange={event => setJsonSettings(event.target.value)}
+            aria-label={t('sink_settings_json')}
+          />
+          {jsonError ? <span className="text-xs text-destructive">{jsonError}</span> : null}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
-        {sink.id === 'webhook' ? (
-          <Button size="sm" disabled={save.isPending} onClick={saveSettings}>
-            {save.isPending ? t('refreshing') : t('sink_save')}
-          </Button>
-        ) : null}
+        <Button size="sm" disabled={save.isPending} onClick={sink.id === 'webhook' ? saveSettings : saveJsonSettings}>
+          {save.isPending ? t('refreshing') : t('sink_save')}
+        </Button>
         <Button size="sm" variant="outline" disabled={test.isPending} onClick={() => test.mutate()}>
           {t('sink_test')}
         </Button>
