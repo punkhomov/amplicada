@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { BackendAuthService } from '@amplicada/platform-core/contracts/backend';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { METRIC_EVENT_KINDS, type MetricEventKind, type MetricsSettingsPatch } from '../contracts/index.js';
-import { type MetricsService, MetricsSettingsError } from './services/metrics-service.js';
+import { type MetricsService, MetricsSettingsError, toEventDto } from './services/metrics-service.js';
 
 export interface MetricsRoutesDeps {
   service: MetricsService;
@@ -114,6 +114,35 @@ export function createMetricsRoutes(fastify: FastifyInstance, deps: MetricsRoute
       }),
       stepSeconds,
     };
+  });
+
+  fastify.get('/errors', { preHandler: requireUser }, async (request, reply) => {
+    const query = request.query as { from?: string; to?: string; limit?: string };
+    const range = parseRange(query);
+    if ('error' in range) return reply.code(400).send({ error: range.error });
+    const limit = query.limit ? Number.parseInt(query.limit, 10) : 50;
+    const issues = await deps.service.listErrorIssues(range.from, range.to, limit);
+    return {
+      issues: issues.map(issue => ({
+        ...issue,
+        firstSeen: issue.firstSeen.toISOString(),
+        lastSeen: issue.lastSeen.toISOString(),
+      })),
+    };
+  });
+
+  fastify.get('/errors/:fingerprint/samples', { preHandler: requireUser }, async request => {
+    const { fingerprint } = request.params as { fingerprint: string };
+    const query = request.query as { limit?: string };
+    const limit = query.limit ? Number.parseInt(query.limit, 10) : 20;
+    const samples = await deps.service.listErrorSamples(fingerprint, limit);
+    return { samples: samples.map(toEventDto) };
+  });
+
+  fastify.get('/vitals', { preHandler: requireUser }, async (request, reply) => {
+    const range = parseRange(request.query as { from?: string; to?: string });
+    if ('error' in range) return reply.code(400).send({ error: range.error });
+    return { vitals: await deps.service.vitalsSummary(range.from, range.to) };
   });
 
   fastify.get('/routes', { preHandler: requireUser }, async (request, reply) => {

@@ -14,4 +14,5 @@ order: 30
 | [HTTP API](./http-api.md) | Эндпоинты, форматы, коды ошибок, клиентский трекер |
 | [Технические метрики](./technical-metrics.md) | Роуты (RED), SQL (fingerprint, samples), задачи, коллекторы |
 | [Бизнес-метрики](./business-metrics.md) | `emit`, определения, панели модулей |
+| [Ошибки и Web Vitals](./errors-and-vitals.md) | Issues, группировка, p75 метрик |
 | [Хранение и настройки](./settings.md) | Таблицы, поля настроек, задача обслуживания, env |

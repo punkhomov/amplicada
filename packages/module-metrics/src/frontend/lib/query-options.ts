@@ -1,5 +1,7 @@
 import type { ApiClient } from '@amplicada/platform-core/frontend';
 import type {
+  ErrorIssuesDto,
+  ErrorSamplesDto,
   MetricDefinition,
   MetricDefinitionsSummaryDto,
   MetricEventKind,
@@ -11,6 +13,7 @@ import type {
   RoutesSummaryDto,
   SlowQueryListDto,
   SqlSummaryListDto,
+  VitalsSummaryDto,
 } from '../../contracts/index.js';
 
 export const METRICS_REFETCH_INTERVAL_MS = 15_000;
@@ -21,6 +24,9 @@ export const metricsQueryKeys = {
   catalog: ['metrics', 'catalog'] as const,
   routes: (period: MetricsPeriod) => ['metrics', 'routes', period] as const,
   sql: (period: MetricsPeriod) => ['metrics', 'sql', period] as const,
+  errors: (period: MetricsPeriod) => ['metrics', 'errors', period] as const,
+  errorSamples: (fingerprint: string) => ['metrics', 'error-samples', fingerprint] as const,
+  vitals: (period: MetricsPeriod) => ['metrics', 'vitals', period] as const,
   definitions: ['metrics', 'definitions'] as const,
   definitionsSummary: (period: MetricsPeriod) => ['metrics', 'definitions-summary', period] as const,
   series: (event: string, period: MetricsPeriod) => ['metrics', 'series', event, period] as const,
@@ -39,6 +45,36 @@ const PERIOD_MS: Record<MetricsPeriod, number> = {
 
 function periodRange(period: MetricsPeriod, now = Date.now()): { from: string; to: string } {
   return { from: new Date(now - PERIOD_MS[period]).toISOString(), to: new Date(now).toISOString() };
+}
+
+export function metricsErrorsQueryOptions(api: ApiClient, period: MetricsPeriod) {
+  return {
+    queryKey: metricsQueryKeys.errors(period),
+    queryFn: () => {
+      const { from, to } = periodRange(period);
+      return api.get<ErrorIssuesDto>(`/metrics/errors?from=${from}&to=${to}&limit=50`);
+    },
+    refetchInterval: 30_000,
+  };
+}
+
+export function metricsErrorSamplesQueryOptions(api: ApiClient, fingerprint: string) {
+  return {
+    queryKey: metricsQueryKeys.errorSamples(fingerprint),
+    queryFn: () => api.get<ErrorSamplesDto>(`/metrics/errors/${fingerprint}/samples?limit=20`),
+    enabled: fingerprint.length > 0,
+  };
+}
+
+export function metricsVitalsQueryOptions(api: ApiClient, period: MetricsPeriod) {
+  return {
+    queryKey: metricsQueryKeys.vitals(period),
+    queryFn: () => {
+      const { from, to } = periodRange(period);
+      return api.get<VitalsSummaryDto>(`/metrics/vitals?from=${from}&to=${to}`);
+    },
+    refetchInterval: 60_000,
+  };
 }
 
 export function metricsDefinitionsQueryOptions(api: ApiClient) {

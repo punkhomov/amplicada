@@ -68,18 +68,21 @@ export const metricsModule: BackendModule = {
       logger.warn('AMPLICADA_METRICS_PSEUDONYM_SALT не задан: псевдонимы не переживут рестарт процесса');
     }
 
+    // Буфер — общий для HTTP, SQL и Web Vitals: одна пред-агрегация на все измерения.
+    const buffer = new MeasurementBuffer();
+    const collectorConfig = { ...DEFAULT_COLLECTOR_CONFIG };
+
     const service = createMetricsService({
       db,
       pseudonymizer: new Pseudonymizer(salt),
       limiter: new IngestRateLimiter(redis),
       getDefinitions: () => context.extensions.getAll<MetricDefinition>('metrics:definitions'),
+      recordMeasurement: (series, value) => buffer.record(series, value),
     });
     metricsService = service;
     context.services.register('metrics', service);
 
     // HTTP-метрики: наблюдатель видит все роуты (core ставит root-хуки до регистрации модулей).
-    const buffer = new MeasurementBuffer();
-    const collectorConfig = { ...DEFAULT_COLLECTOR_CONFIG };
     context.extensions.contribute('http:observer', createHttpObserver({ buffer }));
     for (const definition of BUILT_IN_DEFINITIONS) {
       context.extensions.contribute('metrics:definitions', definition);

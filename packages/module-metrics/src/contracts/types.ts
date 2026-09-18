@@ -146,6 +146,44 @@ export interface MetricPanel {
   aggregate?: 'count';
 }
 
+/** Сгруппированная ошибка (issue): fingerprint + агрегаты. */
+export interface ErrorIssueDto {
+  fingerprint: string;
+  errorType: string;
+  messageTemplate: string;
+  route: string | null;
+  issueCount: number;
+  periodCount: number;
+  affectedActors: number;
+  firstSeen: string;
+  lastSeen: string;
+  firstRelease: string | null;
+  lastRelease: string | null;
+}
+
+export interface ErrorIssuesDto {
+  issues: ErrorIssueDto[];
+}
+
+export interface ErrorSamplesDto {
+  samples: MetricEventDto[];
+}
+
+export interface VitalSummaryDto {
+  instrument: string;
+  unit: string;
+  calls: number;
+  p75: number;
+  p95: number;
+  good: number;
+  needsImprovement: number;
+  poor: number;
+}
+
+export interface VitalsSummaryDto {
+  vitals: VitalSummaryDto[];
+}
+
 export interface MetricsPanelsService {
   register(panel: MetricPanel): void;
   getAll(): MetricPanel[];

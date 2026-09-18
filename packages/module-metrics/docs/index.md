@@ -19,7 +19,9 @@ verified_commit: 9e0cfb80
 **технические метрики**: длительность HTTP-роутов (RED, p50/p95/p99), SQL-запросы
 (fingerprint, медленные samples) и фоновые задачи. Модули пишут **бизнес-события** через
 `metrics.emit`, объявляют определения в `metrics:definitions` и панели в `metrics:panels` —
-на вкладках «Бизнес» и «Панели» появляются их метрики (пилот — support-chat).
+на вкладках «Бизнес» и «Панели» появляются их метрики (пилот — support-chat). Клиентская
+диагностика: **ошибки** группируются в issues по fingerprint (стек + маршрут) со стеком
+примеров, **Web Vitals** считаются p75/p95 и раскладываются по рейтингам.
 
 Осознанно не входит на текущем этапе: измерения (HTTP/SQL/задачи), Web Vitals и ошибки,
 воронки/retention, алерты, внешние выходы (Яндекс.Метрика, webhook, CSV), экспорт.
@@ -35,7 +37,8 @@ verified_commit: 9e0cfb80
 | Бизнес-метрики | `metrics.emit`, extension point `metrics:definitions`, сервис `metrics:panels` | `src/backend/services/metrics-service.ts`, `src/frontend/lib/panel-registry.ts` |
 | Frontend | приложение админки `/admin/apps/metrics`, трекер на extension point `floating` | `src/frontend/setup.tsx` |
 | Технические коллекторы | `http:observer`, обёртка `pg-pool`, подписка на `TASK_EVENTS` | `src/backend/collectors/` |
-| Точки core | `http:observer`, `request-context`, `secrets` | `packages/platform-core` (`notes/platform-core.md` D-006) |
+| Ошибки и Web Vitals | `error.frontend` + `web_vital.*`, issues, p75 карточки | `src/frontend/lib/{error-capture,vitals}.ts`, `src/backend/services/{error-fingerprint,web-vitals}.ts` |
+| Точки core | `http:observer`, `request-context`, `secrets`, `frontendErrors` | `packages/platform-core` (`notes/platform-core.md` D-006, D-007) |
 | Псевдонимизация | `Pseudonymizer` (HMAC-SHA256), соль — `AMPLICADA_METRICS_PSEUDONYM_SALT` | `src/backend/services/pseudonym.ts` |
 
 ## Зависимости и порядок загрузки
@@ -67,6 +70,7 @@ verified_commit: 9e0cfb80
 | Frontend (FSD, роуты, слоты) | [reference/http-api.md](./reference/http-api.md#клиентский-трекер) — трекер и админ-приложение |
 | Конфиг: env, зависимости, порядок | [reference/settings.md](./reference/settings.md#переменные-окружения) |
 | Интеграции и потребители | [reference/business-metrics.md](./reference/business-metrics.md) |
+| Ошибки и Web Vitals | [reference/errors-and-vitals.md](./reference/errors-and-vitals.md) |
 | Ограничения для потребителя | [explanation/architecture.md](./explanation/architecture.md#ограничения) |
 
 ## Freshness
@@ -78,4 +82,5 @@ verified_commit: 9e0cfb80
 - Проверено вживую 2026-09-18: роуты (RED по 5 маршрутам), SQL-fingerprint'ы,
   корреляция slow-samples с `route`/`requestId`, партиции `points`/`slow_queries`,
   бизнес-события поддержки (`thread.opened`, `message.sent`, `status_changed`),
-  определения/сводки/серии.
+  определения/сводки/серии, группировка ошибок (2 issue из 3 событий, шаблон с `<n>`),
+  samples со стеком, p75 Web Vitals (LCP/CLS) с рейтингами.

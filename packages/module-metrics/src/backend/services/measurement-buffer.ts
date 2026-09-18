@@ -6,6 +6,8 @@ export interface MeasurementSeries {
   kind: 'histogram' | 'counter' | 'gauge';
   unit: string;
   dims: Record<string, string>;
+  /** Свои границы гистограммы (Web Vitals); по умолчанию — задержки OTel. */
+  boundaries?: readonly number[];
 }
 
 export interface AggregatedMeasurement {
@@ -48,7 +50,7 @@ export class MeasurementBuffer {
         sum: 0,
         min: null,
         max: null,
-        histogram: series.kind === 'histogram' ? createHistogram(this.boundaries) : null,
+        histogram: series.kind === 'histogram' ? createHistogram(series.boundaries ?? this.boundaries) : null,
       };
       this.buckets.set(key, point);
     }

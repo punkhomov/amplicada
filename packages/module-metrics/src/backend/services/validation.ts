@@ -34,7 +34,8 @@ export const DEFAULT_EVENT_LIMITS: EventLimits = {
 };
 
 const NAME_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
-const KEY_RE = /^[a-z][a-z0-9_]{0,63}$/;
+/** Ключи атрибутов/measures: точечная нотация (`error.type`, `http.status_code`) разрешена. */
+const KEY_RE = /^[a-z][a-z0-9_.]{0,63}$/;
 /** id события — uuid: PK журнала и ключ идемпотентности должен совпадать с типом колонки. */
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

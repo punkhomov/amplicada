@@ -1,12 +1,14 @@
-import { useApiClient, useQuery } from '@amplicada/platform-core/frontend';
+import { frontendErrors, useApiClient, useQuery } from '@amplicada/platform-core/frontend';
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { extractClickAttributes } from '../../../lib/clicks.js';
+import { errorEventFromUnknown } from '../../../lib/error-capture.js';
 import { detectMetricsOptOut } from '../../../lib/optout.js';
 import { metricsContextQueryOptions } from '../../../lib/query-options.js';
 import { chunkEvents, DEFAULT_FLUSH_INTERVAL_MS, MetricsQueue } from '../../../lib/queue.js';
 import { normalizeRoute } from '../../../lib/route.js';
 import { currentSessionId } from '../../../lib/session.js';
+import { observeWebVitals } from '../../../lib/vitals.js';
 
 const EVENT_NAME_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
 
@@ -29,8 +31,9 @@ function sendBatch(chunk: unknown[], viaBeacon: boolean): void {
 
 /**
  * Клиентский трекер: `page.view` на смену маршрута, `ui.*` по `data-metrics`-атрибутам,
- * батчи раз в 10 секунд, флаш при уходе со страницы через beacon. Молчит при выключенном
- * сборе, opt-out (localStorage `metrics.optout`) и DNT/GPC.
+ * ошибки (`window`, rejections, React 19 через `frontendErrors`) и Web Vitals; батчи
+ * раз в 10 секунд, флаш при уходе со страницы через beacon. Молчит при выключенном сборе,
+ * opt-out (localStorage `metrics.optout`) и DNT/GPC.
  */
 export function MetricsTracker() {
   const location = useLocation();
@@ -120,6 +123,44 @@ export function MetricsTracker() {
     document.addEventListener('click', onClick, true);
     return () => document.removeEventListener('click', onClick, true);
   }, [enabled, sampleClickRate]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const report = (event: Parameters<MetricsQueue['push']>[0]) => queueRef.current?.push(event);
+    const contextOf = () => ({ route: normalizeRoute(window.location.pathname), sessionId: currentSessionId() });
+
+    observeWebVitals(report, contextOf);
+
+    const onWindowError = (event: ErrorEvent) => {
+      report(
+        errorEventFromUnknown(event.error ?? event.message ?? 'Unknown window error', {
+          source: 'window-error',
+          ...contextOf(),
+        }),
+      );
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      report(errorEventFromUnknown(event.reason, { source: 'unhandled-rejection', ...contextOf() }));
+    };
+    window.addEventListener('error', onWindowError, true);
+    window.addEventListener('unhandledrejection', onRejection);
+
+    const unsubscribe = frontendErrors.subscribe((error, info) => {
+      report(
+        errorEventFromUnknown(error, {
+          source: typeof info.source === 'string' ? info.source : 'react',
+          componentStack: typeof info.componentStack === 'string' ? info.componentStack : undefined,
+          ...contextOf(),
+        }),
+      );
+    });
+
+    return () => {
+      window.removeEventListener('error', onWindowError, true);
+      window.removeEventListener('unhandledrejection', onRejection);
+      unsubscribe();
+    };
+  }, [enabled]);
 
   return null;
 }

@@ -47,6 +47,13 @@ test('битые поля отвергаются с причиной', () => {
   }
 });
 
+test('точечные ключи атрибутов сохраняются (error.type)', () => {
+  const result = validateClientEvent(pageView({ attributes: { 'error.type': 'TypeError', simple: 'ok' } }));
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.event.attributes, { 'error.type': 'TypeError', simple: 'ok' });
+});
+
 test('атрибуты: мусор отбрасывается, лишние уходят в overflow, строки обрезаются', () => {
   const attributes: Record<string, unknown> = { ok: 'x'.repeat(500) };
   for (let i = 0; i < 40; i += 1) attributes[`key_${i}`] = i;

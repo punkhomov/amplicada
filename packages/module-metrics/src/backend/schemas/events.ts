@@ -26,6 +26,7 @@ export const metricsEvents = metricsSchema.table(
     attributes: jsonb('attributes').$type<Record<string, MetricAttrValue>>().notNull().default({}),
     measures: jsonb('measures').$type<Record<string, number>>().notNull().default({}),
     samplingRate: real('sampling_rate'),
+    errorFingerprint: text('error_fingerprint'),
     schemaVersion: integer('schema_version').notNull().default(1),
   },
   table => [primaryKey({ columns: [table.occurredAt, table.id] })],

@@ -23,9 +23,11 @@ import {
   metricsSettingsQueryOptions,
 } from '../../../lib/query-options.js';
 import { BusinessTab } from './business-tab.js';
+import { ErrorsTab } from './errors-tab.js';
 import { PanelsTab } from './panels-tab.js';
 import { RoutesTab } from './routes-tab.js';
 import { SqlTab } from './sql-tab.js';
+import { VitalsTab } from './vitals-tab.js';
 
 const KIND_VARIANT: Record<MetricEventKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   page: 'secondary',
@@ -100,6 +102,8 @@ export function MetricsAdminPage() {
             <TabsTrigger value="events">{t('tab_events')}</TabsTrigger>
             <TabsTrigger value="routes">{t('tab_routes')}</TabsTrigger>
             <TabsTrigger value="sql">{t('tab_sql')}</TabsTrigger>
+            <TabsTrigger value="errors">{t('tab_errors')}</TabsTrigger>
+            <TabsTrigger value="vitals">{t('tab_vitals')}</TabsTrigger>
             <TabsTrigger value="business">{t('tab_business')}</TabsTrigger>
             <TabsTrigger value="panels">{t('tab_panels')}</TabsTrigger>
             <TabsTrigger value="catalog">{t('tab_catalog')}</TabsTrigger>
@@ -173,6 +177,14 @@ export function MetricsAdminPage() {
 
           <TabsContent value="sql">
             <SqlTab api={api} period={period} onPeriodChange={setPeriod} />
+          </TabsContent>
+
+          <TabsContent value="errors">
+            <ErrorsTab api={api} period={period} onPeriodChange={setPeriod} />
+          </TabsContent>
+
+          <TabsContent value="vitals">
+            <VitalsTab api={api} period={period} onPeriodChange={setPeriod} />
           </TabsContent>
 
           <TabsContent value="business">

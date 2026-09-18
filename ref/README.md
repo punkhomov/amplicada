@@ -33,9 +33,9 @@
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
 | `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar; D-002: режим «Приложения» |
-| `notes/module-metrics.md` | `in-progress` | D-001…D-007: события — партиционированные таблицы, uuid-идемпотентность, HMAC-псевдонимизация (core `secrets`), единая точка записи, retention через `DETACH`, same-origin ингестия, polling; этап 00 реализован |
+| `notes/module-metrics.md` | `in-progress` | D-001…D-015: события — партиционированные таблицы, uuid-идемпотентность, HMAC-псевдонимизация (core `secrets`), единая точка записи, retention через `DETACH`, same-origin ингестия, polling; технические метрики, бизнес-события и панели, группировка ошибок и Web Vitals |
 | `notes/module-support-chat.md` | `implemented` | D-001…D-013: таблицы вместо документов, SSE + Redis, приложения админки через общий хост, вложения через storage, карточка-виджет и композер на ките, несколько обращений и портал, опциональная интеграция метрик (этап 03 пилота) |
-| `notes/platform-core.md` | `implemented` | D-001…D-006: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней, точки для метрик (`secrets`, `http:observer`, `request-context`) |
+| `notes/platform-core.md` | `implemented` | D-001…D-007: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней, точки для метрик (`secrets`, `http:observer`, `request-context`), репортер клиентских ошибок |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
 
 Перед изменением пакета: `notes/<package>.md` (решения, отвергнутое, пробелы) +

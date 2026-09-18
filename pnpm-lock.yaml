@@ -652,6 +652,9 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+      web-vitals:
+        specifier: 6.2.1
+        version: 6.2.1
 
   packages/module-support-chat:
     devDependencies:
@@ -4330,6 +4333,9 @@ packages:
     engines: {node: ^22.13||^24||>=26}
     hasBin: true
 
+  web-vitals@6.2.1:
+    resolution: {integrity: sha512-rLcLXA2sx6+9dE88NHFubwTtGxpK4yYBLj6qHPdFoCaLr0cXGb4efOqtKLlm4loGA4OEKHIQKMKzZkKyOh5ctw==}
+
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
     engines: {node: '>= 8'}
@@ -7585,6 +7591,8 @@ snapshots:
       yaml: 2.9.0
 
   watskeburt@6.0.0: {}
+
+  web-vitals@6.2.1: {}
 
   which@2.0.2:
     dependencies:

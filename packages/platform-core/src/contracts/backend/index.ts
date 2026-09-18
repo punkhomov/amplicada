@@ -32,8 +32,8 @@ export type { BackendMigrationEntry, BackendMigrationRegistry } from './migratio
 export type { BackendModule } from './module.js';
 export type { BackendModuleRegistry, RegisteredBackendModule } from './module-registry.js';
 export type { BackendPipeline, BackendPipelineStage } from './pipeline.js';
-export type { BackendRequestContext, BackendRequestContextService } from './request-context.js';
 export type { BackendRegistry, BackendRegistryEntry, BackendRegistryKey } from './registry.js';
+export type { BackendRequestContext, BackendRequestContextService } from './request-context.js';
 export type { BackendRouteDefinition, BackendRouteHandler, BackendRouteRegistry } from './route-registry.js';
 export type { BackendSecretsService } from './secrets.js';
 export type { BackendSetupContext } from './setup.js';

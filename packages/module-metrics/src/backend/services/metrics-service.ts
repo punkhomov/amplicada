@@ -19,13 +19,16 @@ import type {
 import type { CollectorConfig } from '../collectors/config.js';
 import type { SlowQueryInsert } from '../collectors/sql-collector.js';
 import type { MetricEventRow, MetricsSettingsRow, NewMetricEventRow } from '../schemas/index.js';
+import { errorFingerprint } from './error-fingerprint.js';
 import { EventBuffer } from './event-buffer.js';
-import type { AggregatedMeasurement } from './measurement-buffer.js';
+import type { AggregatedMeasurement, MeasurementSeries } from './measurement-buffer.js';
+import type { ErrorIssueInput, ErrorIssueSummary, VitalSummary } from './metrics-store.js';
 import { createPostgresMetricsStore, type EventListFilter } from './metrics-store.js';
 import { dropExpiredPartitions, ensurePartitions } from './partitions.js';
 import type { Pseudonymizer } from './pseudonym.js';
 import type { IngestRateLimiter, RateLimitDecision } from './rate-limiter.js';
 import { DEFAULT_EVENT_LIMITS, validateBatch, validateClientEvent } from './validation.js';
+import { vitalSpecForEvent } from './web-vitals.js';
 
 const SLOW_QUERIES_RETENTION_DAYS = 7;
 
@@ -53,6 +56,9 @@ export interface MetricsService {
   drainEmittedEvents(): NewMetricEventRow[];
   listDefinitions(): MetricDefinition[];
   definitionsSummary(from: Date, to: Date, stepSeconds: number): Promise<MetricDefinitionSummaryDto[]>;
+  listErrorIssues(from: Date, to: Date, limit?: number): Promise<ErrorIssueSummary[]>;
+  listErrorSamples(fingerprint: string, limit?: number): Promise<MetricEventRow[]>;
+  vitalsSummary(from: Date, to: Date): Promise<VitalSummary[]>;
   eventSeries(input: {
     name?: string;
     eventPrefix?: string;
@@ -154,14 +160,54 @@ export function createMetricsService({
   pseudonymizer,
   limiter,
   getDefinitions,
+  recordMeasurement,
 }: {
   db: BackendDbService;
   pseudonymizer: Pseudonymizer;
   limiter: IngestRateLimiter;
   getDefinitions: () => MetricDefinition[];
+  /** Web Vitals дополнительно идут в измерительный конвейер (гистограммы). */
+  recordMeasurement?: (series: MeasurementSeries, value: number) => void;
 }): MetricsService {
   const store = createPostgresMetricsStore(db);
   const eventBuffer = new EventBuffer();
+
+  function errorMetaOf(row: NewMetricEventRow): { type: string; message: string; stack: string } {
+    const attributes = (row.attributes ?? {}) as Record<string, unknown>;
+    return {
+      type: typeof attributes['error.type'] === 'string' ? (attributes['error.type'] as string) : 'Error',
+      message: typeof attributes['error.message'] === 'string' ? (attributes['error.message'] as string) : '',
+      stack: typeof attributes['error.stack'] === 'string' ? (attributes['error.stack'] as string) : '',
+    };
+  }
+
+  /** Записывает события и синхронно обновляет группировку ошибок (только по реально вставленным). */
+  async function persistEvents(rows: NewMetricEventRow[]): Promise<{ inserted: number; duplicates: number }> {
+    if (rows.length === 0) return { inserted: 0, duplicates: 0 };
+    const result = await store.insertEvents(rows);
+    const insertedIds = new Set(result.insertedIds);
+
+    const issues = new Map<string, ErrorIssueInput>();
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      if (!insertedIds.has(row.id) || !row.errorFingerprint) continue;
+      counts.set(row.errorFingerprint, (counts.get(row.errorFingerprint) ?? 0) + 1);
+      if (!issues.has(row.errorFingerprint)) {
+        const meta = errorMetaOf(row);
+        const basis = errorFingerprint({ type: meta.type, message: meta.message, stack: meta.stack, route: row.route });
+        issues.set(row.errorFingerprint, {
+          fingerprint: row.errorFingerprint,
+          errorType: meta.type,
+          messageTemplate: basis.messageTemplate,
+          route: row.route ?? null,
+          release: row.release ?? null,
+        });
+      }
+    }
+    if (issues.size > 0) await store.upsertErrorIssues([...issues.values()], counts);
+
+    return { inserted: result.inserted, duplicates: result.duplicates };
+  }
 
   async function settingsOrThrow(): Promise<MetricsSettingsRow> {
     const row = await store.getSettingsRow();
@@ -179,28 +225,56 @@ export function createMetricsService({
 
       const rows = batch.accepted.map(event => {
         const occurredAt = new Date(event.occurredAt);
+        const attributes = event.attributes ?? {};
+        const errorType = typeof attributes['error.type'] === 'string' ? (attributes['error.type'] as string) : undefined;
+        const errorMessage = typeof attributes['error.message'] === 'string' ? (attributes['error.message'] as string) : undefined;
+        const errorStack = typeof attributes['error.stack'] === 'string' ? (attributes['error.stack'] as string) : undefined;
+        const route = event.context?.route ?? null;
+
+        if (event.kind === 'web_vital') {
+          const spec = vitalSpecForEvent(event.name);
+          const value = event.measures?.value;
+          if (spec && typeof value === 'number' && Number.isFinite(value)) {
+            recordMeasurement?.(
+              {
+                instrument: spec.instrument,
+                kind: 'histogram',
+                unit: spec.unit,
+                boundaries: spec.boundaries,
+                dims: { route: route ?? '<unattached>', rating: String(attributes.rating ?? 'unknown') },
+              },
+              value,
+            );
+          }
+        }
+
         return {
           id: event.id,
           occurredAt,
+          receivedAt: new Date(),
           name: event.name,
           kind: event.kind,
           module: null,
           actorKind: actor?.userId ? 'user' : 'anonymous',
           actorHash: actor?.userId ? pseudonymizer.forUser(actor.userId) : null,
           sessionHash: event.sessionId ? pseudonymizer.forSession(event.sessionId) : null,
-          route: event.context?.route ?? null,
+          route,
           url: event.context?.url ?? null,
           referrer: event.context?.referrer ?? null,
           release: null,
           instance: null,
-          attributes: event.attributes ?? {},
+          attributes,
           measures: event.measures ?? {},
           samplingRate: event.sampling?.rate ?? null,
           schemaVersion: 1,
+          errorFingerprint:
+            event.kind === 'error'
+              ? errorFingerprint({ type: errorType, message: errorMessage, stack: errorStack, route }).fingerprint
+              : null,
         };
       });
 
-      const { inserted, duplicates } = await store.insertEvents(rows);
+      const { inserted, duplicates } = await persistEvents(rows);
       return { accepted: inserted, duplicates, overflow: batch.overflow, rejected: batch.rejected };
     },
 
@@ -236,7 +310,30 @@ export function createMetricsService({
     },
 
     async writeEvents(rows) {
-      if (rows.length > 0) await store.insertEvents(rows);
+      for (const row of rows) {
+        if (row.kind === 'error' && !row.errorFingerprint) {
+          const meta = errorMetaOf(row);
+          row.errorFingerprint = errorFingerprint({
+            type: meta.type,
+            message: meta.message,
+            stack: meta.stack,
+            route: row.route,
+          }).fingerprint;
+        }
+      }
+      await persistEvents(rows);
+    },
+
+    async listErrorIssues(from, to, limit) {
+      return store.listErrorIssues(from, to, limit);
+    },
+
+    async listErrorSamples(fingerprint, limit) {
+      return store.listErrorSamples(fingerprint, limit);
+    },
+
+    async vitalsSummary(from, to) {
+      return store.vitalsSummary(from, to);
     },
 
     async writeMeasurements(points) {

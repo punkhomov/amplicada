@@ -2,8 +2,10 @@ import type { BackendDbService } from '@amplicada/platform-core/contracts/backen
 import { and, count, desc, eq, gte, ilike, lt, max, min, type SQL, sql } from 'drizzle-orm';
 import type { MetricCatalogEntryDto, MetricEventKind } from '../../contracts/index.js';
 import {
+  type ErrorIssueRow,
   type MetricEventRow,
   type MetricsSettingsRow,
+  metricsErrorIssues,
   metricsEvents,
   metricsPoints,
   metricsSeries,
@@ -15,6 +17,9 @@ import {
 } from '../schemas/index.js';
 import { createHistogram, type Histogram, histogramCount, LATENCY_BOUNDARIES_SECONDS, percentileFromHistogram } from './histogram.js';
 import { type AggregatedMeasurement, hashDims, type MeasurementSeries } from './measurement-buffer.js';
+import { VITAL_SPECS } from './web-vitals.js';
+
+const VITAL_SPEC_BY_INSTRUMENT = new Map(Object.values(VITAL_SPECS).map(spec => [spec.instrument, spec]));
 
 export interface EventListFilter {
   kind?: MetricEventKind;
@@ -42,6 +47,30 @@ export interface SqlSummary {
   p95Ms: number;
   maxMs: number;
   lastSeen: string | null;
+}
+
+export interface ErrorIssueInput {
+  fingerprint: string;
+  errorType: string;
+  messageTemplate: string;
+  route: string | null;
+  release: string | null;
+}
+
+export interface ErrorIssueSummary extends ErrorIssueRow {
+  periodCount: number;
+  affectedActors: number;
+}
+
+export interface VitalSummary {
+  instrument: string;
+  unit: string;
+  calls: number;
+  p75: number;
+  p95: number;
+  good: number;
+  needsImprovement: number;
+  poor: number;
 }
 
 export interface EventSeriesQuery {
@@ -81,10 +110,14 @@ export type MetricsSettingsPatchRow = Partial<
 
 export function createPostgresMetricsStore(db: BackendDbService) {
   return {
-    async insertEvents(rows: NewMetricEventRow[]): Promise<{ inserted: number; duplicates: number }> {
-      if (rows.length === 0) return { inserted: 0, duplicates: 0 };
+    async insertEvents(rows: NewMetricEventRow[]): Promise<{ inserted: number; duplicates: number; insertedIds: string[] }> {
+      if (rows.length === 0) return { inserted: 0, duplicates: 0, insertedIds: [] };
       const inserted = await db.insert(metricsEvents).values(rows).onConflictDoNothing().returning({ id: metricsEvents.id });
-      return { inserted: inserted.length, duplicates: rows.length - inserted.length };
+      return {
+        inserted: inserted.length,
+        duplicates: rows.length - inserted.length,
+        insertedIds: inserted.map(row => row.id),
+      };
     },
 
     async listEvents(filter: EventListFilter = {}): Promise<MetricEventRow[]> {
@@ -98,6 +131,139 @@ export function createPostgresMetricsStore(db: BackendDbService) {
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(metricsEvents.occurredAt))
         .limit(limit);
+    },
+
+    /** Upsert сгруппированных ошибок: счётчик растёт, рамки жизни и релизы обновляются. */
+    async upsertErrorIssues(issues: ErrorIssueInput[], counts: Map<string, number>, now = new Date()): Promise<void> {
+      for (const issue of issues) {
+        const increment = counts.get(issue.fingerprint) ?? 1;
+        await db
+          .insert(metricsErrorIssues)
+          .values({
+            fingerprint: issue.fingerprint,
+            errorType: issue.errorType,
+            messageTemplate: issue.messageTemplate,
+            route: issue.route,
+            issueCount: increment,
+            firstSeen: now,
+            lastSeen: now,
+            firstRelease: issue.release,
+            lastRelease: issue.release,
+          })
+          .onConflictDoUpdate({
+            target: metricsErrorIssues.fingerprint,
+            set: {
+              issueCount: sql`${metricsErrorIssues.issueCount} + ${increment}`,
+              lastSeen: now,
+              route: sql`coalesce(excluded.route, ${metricsErrorIssues.route})`,
+              lastRelease: sql`coalesce(excluded.last_release, ${metricsErrorIssues.lastRelease})`,
+            },
+          });
+      }
+    },
+
+    async listErrorIssues(from: Date, to: Date, limit = 50): Promise<ErrorIssueSummary[]> {
+      const result = await db.execute(sql`
+        select i.fingerprint, i.error_type, i.message_template, i.route,
+               i.issue_count, i.first_seen, i.last_seen, i.first_release, i.last_release,
+               count(e.id)::bigint as period_count,
+               count(distinct e.actor_hash)::bigint as affected_actors
+        from metrics.error_issues i
+        join metrics.events e
+          on e.error_fingerprint = i.fingerprint and e.occurred_at >= ${from} and e.occurred_at < ${to}
+        group by 1, 2, 3, 4, 5, 6, 7, 8, 9
+        order by 10 desc
+        limit ${limit}
+      `);
+
+      return (result.rows as Record<string, unknown>[]).map(row => ({
+        fingerprint: String(row.fingerprint),
+        errorType: String(row.error_type),
+        messageTemplate: String(row.message_template),
+        route: row.route === null ? null : String(row.route),
+        issueCount: Number(row.issue_count),
+        firstSeen: new Date(row.first_seen as string),
+        lastSeen: new Date(row.last_seen as string),
+        firstRelease: row.first_release === null ? null : String(row.first_release),
+        lastRelease: row.last_release === null ? null : String(row.last_release),
+        periodCount: Number(row.period_count),
+        affectedActors: Number(row.affected_actors),
+      }));
+    },
+
+    async listErrorSamples(fingerprint: string, limit = 20): Promise<MetricEventRow[]> {
+      return db
+        .select()
+        .from(metricsEvents)
+        .where(eq(metricsEvents.errorFingerprint, fingerprint))
+        .orderBy(desc(metricsEvents.occurredAt))
+        .limit(Math.min(Math.max(limit, 1), 100));
+    },
+
+    /** Web Vitals: перцентили из гистограмм + раскладка по рейтингам из атрибутов событий. */
+    async vitalsSummary(from: Date, to: Date): Promise<VitalSummary[]> {
+      const totalsResult = await db.execute(sql`
+        select s.instrument as instrument,
+               max(s.unit) as unit,
+               sum(p.count)::bigint as calls
+        from metrics.points p
+        join metrics.series s on s.id = p.series_id
+        where s.instrument like 'web_vital.%' and p.bucket >= ${from} and p.bucket < ${to}
+        group by 1
+      `);
+
+      const histogramResult = await db.execute(sql`
+        select s.instrument as instrument,
+               (b.idx - 1)::int as idx,
+               sum((b.value)::bigint)::bigint as count
+        from metrics.points p
+        join metrics.series s on s.id = p.series_id
+        cross join lateral jsonb_array_elements_text(p.histogram->'bucketCounts') with ordinality as b(value, idx)
+        where s.instrument like 'web_vital.%' and p.bucket >= ${from} and p.bucket < ${to}
+        group by 1, 2
+      `);
+
+      const ratingsResult = await db.execute(sql`
+        select name, coalesce(attributes->>'rating', 'unknown') as rating, count(*)::bigint as count
+        from metrics.events
+        where kind = 'web_vital' and occurred_at >= ${from} and occurred_at < ${to}
+        group by 1, 2
+      `);
+
+      const histograms = new Map<string, Histogram>();
+      for (const row of histogramResult.rows as { instrument: string; idx: number; count: string }[]) {
+        let histogram = histograms.get(row.instrument);
+        if (!histogram) {
+          const spec = VITAL_SPEC_BY_INSTRUMENT.get(row.instrument);
+          histogram = createHistogram(spec?.boundaries ?? LATENCY_BOUNDARIES_SECONDS);
+          histograms.set(row.instrument, histogram);
+        }
+        const index = Number(row.idx);
+        if (index >= 0 && index < histogram.bucketCounts.length) histogram.bucketCounts[index] += Number(row.count);
+      }
+
+      const ratings = new Map<string, { good: number; needsImprovement: number; poor: number }>();
+      for (const row of ratingsResult.rows as { name: string; rating: string; count: string }[]) {
+        const entry = ratings.get(row.name) ?? { good: 0, needsImprovement: 0, poor: 0 };
+        const count = Number(row.count);
+        if (row.rating === 'good') entry.good += count;
+        else if (row.rating === 'needs-improvement') entry.needsImprovement += count;
+        else if (row.rating === 'poor') entry.poor += count;
+        ratings.set(row.name, entry);
+      }
+
+      return (totalsResult.rows as { instrument: string; unit: string; calls: string }[]).map(row => {
+        const histogram = histograms.get(row.instrument) ?? createHistogram();
+        const rating = ratings.get(row.instrument) ?? { good: 0, needsImprovement: 0, poor: 0 };
+        return {
+          instrument: row.instrument,
+          unit: row.unit,
+          calls: Number(row.calls),
+          p75: percentileFromHistogram(histogram, 0.75) ?? 0,
+          p95: percentileFromHistogram(histogram, 0.95) ?? 0,
+          ...rating,
+        };
+      });
     },
 
     /** Серии событий по времени: count (или sum measures) с шагом и опциональной группировкой. */
@@ -142,11 +308,13 @@ export function createPostgresMetricsStore(db: BackendDbService) {
 
       const seriesRows = [...seriesByKey.entries()].map(([key, series]) => {
         const [, dimsHash] = key.split('|');
+        const point = points.find(candidate => candidate.series === series);
         return {
           instrument: series.instrument,
           kind: series.kind,
           unit: series.unit,
-          boundaries: series.kind === 'histogram' ? [...LATENCY_BOUNDARIES_SECONDS] : null,
+          boundaries:
+            series.kind === 'histogram' ? [...(point?.histogram?.boundaries ?? series.boundaries ?? LATENCY_BOUNDARIES_SECONDS)] : null,
           dims: series.dims,
           dimsHash: dimsHash ?? '',
         };

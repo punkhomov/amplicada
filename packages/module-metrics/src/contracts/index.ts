@@ -4,6 +4,9 @@ export type {
   ClientEventInput,
   CollectRequest,
   CollectResponse,
+  ErrorIssueDto,
+  ErrorIssuesDto,
+  ErrorSamplesDto,
   MetricAttrValue,
   MetricCatalogEntryDto,
   MetricDefinition,
@@ -30,5 +33,7 @@ export type {
   SlowQueryListDto,
   SqlSummaryDto,
   SqlSummaryListDto,
+  VitalSummaryDto,
+  VitalsSummaryDto,
 } from './types.js';
 export { METRIC_EVENT_KINDS, METRICS_PANELS_TOKEN } from './types.js';

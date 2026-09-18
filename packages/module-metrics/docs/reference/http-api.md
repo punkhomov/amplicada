@@ -24,6 +24,9 @@ order: 20
 | `GET` | `/api/metrics/definitions` | требуется | Определения бизнес-метрик от модулей |
 | `GET` | `/api/metrics/definitions/summary` | требуется | Totals и тренды определений (`from`, `to`, `step`) |
 | `GET` | `/api/metrics/series` | требуется | Серия событий (`name` или `eventPrefix`, `groupBy`, `measure`) |
+| `GET` | `/api/metrics/errors` | требуется | Issues сгруппированных ошибок (`from`, `to`, `limit`) |
+| `GET` | `/api/metrics/errors/:fingerprint/samples` | требуется | Примеры ошибки (стек, контекст) |
+| `GET` | `/api/metrics/vitals` | требуется | p75/p95 и рейтинги Web Vitals |
 | `GET` | `/api/metrics/admin/settings` | требуется | Настройки метрик |
 | `PATCH` | `/api/metrics/admin/settings` | требуется | Изменение настроек |
 
@@ -65,6 +68,13 @@ order: 20
 Параметры `from`/`to` — ISO 8601; по умолчанию последние 24 часа; невалидный диапазон — 400
 `{ "error": "invalid_range" }`. Формат ответов — `RouteSummaryDto[]`, `SqlSummaryDto[]`,
 `SlowQueryDto[]` (`src/contracts/types.ts`). Тексты SQL нормализованы (литералы → `?`).
+
+### `GET /errors`, `/errors/:fingerprint/samples`, `/vitals`
+
+- `/errors` → `{ issues: ErrorIssueDto[] }` (fingerprint, тип, шаблон, счётчики, релизы);
+- samples → `{ samples: MetricEventDto[] }`;
+- `/vitals` → `{ vitals: VitalSummaryDto[] }` (p75/p95 + good/needs-improvement/poor).
+Подробности — [errors-and-vitals.md](./errors-and-vitals.md).
 
 ### `GET /definitions`, `/definitions/summary`, `/series`
 

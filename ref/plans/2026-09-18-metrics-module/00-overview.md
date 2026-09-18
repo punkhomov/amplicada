@@ -41,6 +41,14 @@ endpoints `/routes`, `/sql`, `/slow-queries`, вкладки «Роуты» (RED
 `support.message.sent`, `support.thread.status_changed`, три определения, две панели;
 интеграция опциональная (ленивый resolve + type-only импорты). Воронки/retention —
 осознанно отложены (см. notes D-013).
+
+**Обновление 2026-09-18 (этап 04):** клиентские ошибки и Web Vitals. Core-репортер
+`frontendErrors` + React 19-хуки в `createRoot`; трекер ловит window-ошибки,
+unhandledrejection и React-ошибки, нормализует сообщения/стеки и шлёт `error.frontend`.
+Сервер группирует в `metrics.error_issues` (fingerprint = тип + маршрут + кадры), отдаёт
+issues и samples. `web-vitals` (6.2.1) шлёт `web_vital.*`, сервер пишет и события, и
+гистограммы с порогами good/poor — вкладка «Web Vitals» показывает p75/p95 и рейтинги.
+Release health и воронки — осознанно отложены (notes D-014, D-015).
 Рационал — `ref/notes/module-metrics.md`.
 
 Зонтичная папка по модулю метрик (`module-metrics`). Исследование возможности и направления:
