@@ -1,13 +1,16 @@
 ---
 title: Admin — интеграция действий
 type: reference
-updated: 2026-09-16
-verified_commit: a5c2ac9
+updated: 2026-09-17
+verified_commit: 5767b800
 ---
 
 # Admin — интеграция действий
 
-Frontend setup регистрирует сервис `admin:toolbar` (`src/frontend/index.tsx:28`).
+Frontend setup регистрирует сервисы `admin:toolbar` и `admin:apps`
+(`src/frontend/index.tsx:31-32`).
+
+## Действия документа (`admin:toolbar`)
 Типы `AdminToolbarService`, `ToolbarAction`, `ToolbarActionProps` экспортируются из
 `@amplicada/module-admin/contracts` (`src/contracts/toolbar.ts:3`).
 
@@ -41,3 +44,45 @@ if (context.modules.getById('admin')) {
 
 Генератор гарантирует порядок setup выбранного peer. При ручной композиции задавайте
 runtime dependencies самостоятельно. Сервис существует только на frontend.
+
+## Приложения (`admin:apps`)
+
+Режим «Приложения» — вкладка `apps` в шапке админки (`src/frontend/layouts/admin-layout.tsx:22`).
+Каталог открывается на `/admin/apps`, конкретное приложение — на `/admin/apps/:appId`
+(`src/frontend/index.tsx:73-74`); хост рендерит компонент приложения под шапкой
+с кнопкой «назад» и названием приложения (без хлебных крошек — их, если нужно, рисует
+само приложение).
+
+| Метод | Поведение |
+|---|---|
+| `register(app)` | Добавляет приложение; тот же id заменяет предыдущее |
+| `getAll()` | Возвращает приложения, сортируя по order (по умолчанию 0) |
+| `getById(id)` | Приложение по id или `undefined` |
+
+`AdminApp` (`src/contracts/apps.ts:3`): `id` и `component` обязательны; `titleKey` и
+`descriptionKey` — i18n-ключи вида `support-chat:app_title` (локали модуля неймспейсятся
+его id), `icon` — компонент иконки, `iconClass` — tailwind-классы подложки иконки
+в каталоге (`bg-sky-500/10 text-sky-600`), `order` — порядок в каталоге.
+
+Заголовок открытого приложения подставляется в шапку админки, а не рисуется отдельной
+полосой: страница вызывает `useAdminHeader(render, deps)`
+(`src/frontend/lib/admin-header.ts`), и пока она смонтирована, layout показывает её
+заголовок слева вместо «Администрирование» и вкладок.
+
+```ts
+import type { AdminAppsService } from '@amplicada/module-admin/frontend';
+
+// Внутри setup(context), при объявленном peer @amplicada/module-admin:
+const apps = context.services.resolve<AdminAppsService>('admin:apps');
+apps.register({
+  id: 'my-app',
+  titleKey: 'my-module:app_title',
+  descriptionKey: 'my-module:app_description',
+  icon: WrenchIcon,
+  order: 20,
+  component: MyAppPage,
+});
+```
+
+Типы экспортируются из `@amplicada/module-admin/contracts` и `@amplicada/module-admin/frontend`.
+Первое приложение — `module-support-chat` (`/admin/apps/support-chat`).

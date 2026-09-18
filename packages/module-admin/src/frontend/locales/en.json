@@ -4,11 +4,12 @@
   "admin_tab_apps": "Apps",
   "admin_toggle_theme": "Toggle theme",
   "admin_logout": "Log out",
-
   "admin_breadcrumb_root": "Admin",
-
+  "admin_apps_empty": "No applications yet",
+  "admin_apps_back": "Back to apps",
+  "admin_apps_empty_hint": "Modules register applications through the admin:apps service.",
+  "admin_apps_not_found": "Application not found",
   "admin_modules_title": "Modules",
-
   "admin_storage_title": "Storage",
   "admin_storage_upload": "Upload",
   "admin_storage_col_key": "Key",
@@ -20,7 +21,6 @@
   "admin_storage_empty_title": "No files",
   "admin_storage_empty_description": "There are no objects in storage yet",
   "admin_storage_upload_error": "Failed to upload file",
-
   "admin_task_breadcrumb_tasks": "Background tasks",
   "admin_task_history": "Run history",
   "admin_task_stale": "Stale",
@@ -39,13 +39,11 @@
   "admin_task_logs_run_title": "Logs — run from {{date}}",
   "admin_task_select_run": "Select a run in the table",
   "admin_task_no_logs": "No logs",
-
   "admin_table_refresh": "Refresh",
   "admin_table_summary": "{{total}} records | {{selected}} selected",
   "admin_table_prev": "Prev",
   "admin_table_next": "Next",
   "admin_table_all_loaded": "All loaded",
-
   "admin_toolbar_create": "Create",
   "admin_toolbar_create_disabled": "Creating new records is disabled for this document type",
   "admin_toolbar_delete_disabled": "Deletion is disabled for this document type",
@@ -64,7 +62,6 @@
   "admin_toolbar_mode_pages": "Pages",
   "admin_toolbar_import": "Import",
   "admin_toolbar_import_disabled": "Import is disabled for this document type",
-
   "admin_import_success": "Import complete. Created: {{created}}, Updated: {{updated}}",
   "admin_import_errors_suffix": ", Errors: {{count}}",
   "admin_import_invalid_format": "Invalid file format: missing items array",
@@ -74,7 +71,6 @@
   "admin_import_more": "...and {{count}} more records",
   "admin_import_pending": "Importing...",
   "admin_import_confirm": "Import",
-
   "admin_filter_op_eq": "equals",
   "admin_filter_op_ne": "not equals",
   "admin_filter_op_contains": "contains",
@@ -106,13 +102,11 @@
   "admin_filter_value_remove": "Remove value",
   "admin_filter_flattened_warning": "This filter was built outside the UI and will be simplified on save",
   "admin_export_failed": "Export failed",
-
   "admin_column_pin_left": "Pin left",
   "admin_column_pin_right": "Pin right",
   "admin_column_unpin": "Unpin",
   "admin_column_pinned_left": "Pinned left",
   "admin_column_pinned_right": "Pinned right",
-
   "admin_auth_log_action_login": "Login",
   "admin_auth_log_action_logout": "Logout",
   "admin_auth_log_empty_title": "No events",
@@ -125,12 +119,10 @@
   "admin_auth_log_col_user_agent": "User agent",
   "admin_auth_log_success": "Success",
   "admin_auth_log_failure": "Failure",
-
   "admin_members_empty_title": "No members",
   "admin_members_empty_description": "This group has no members yet",
   "admin_members_col_login": "Login",
   "admin_members_col_id": "ID",
-
   "admin_schedule_freq_never": "Never",
   "admin_schedule_freq_periodic": "Periodic",
   "admin_schedule_freq_daily": "Daily",
@@ -167,7 +159,6 @@
   "admin_schedule_quarter_0": "Jan / Apr / Jul / Oct",
   "admin_schedule_quarter_1": "Feb / May / Aug / Nov",
   "admin_schedule_quarter_2": "Mar / Jun / Sep / Dec",
-
   "admin_task_field_stale": "Stale",
   "admin_task_field_stale_description": "The task no longer exists in code, but run history is kept. It does not execute.",
   "admin_task_field_id": "ID",
@@ -176,7 +167,6 @@
   "admin_task_field_timeout": "Timeout (ms)",
   "admin_task_field_timeout_help": "0 — unlimited",
   "admin_task_field_alert": "Alert on failure",
-
   "admin_doc_title_create": "Create",
   "admin_doc_save": "Save",
   "admin_doc_save_pending": "Saving...",
@@ -189,7 +179,6 @@
   "admin_doc_unsaved_description": "You have unsaved changes. If you leave the page, all unsaved data will be lost.",
   "admin_doc_stay": "Stay",
   "admin_doc_leave": "Leave page",
-
   "admin_list_confirm_delete_one": "Delete record?",
   "admin_list_confirm_delete_many": "Delete {{count}} records?",
   "admin_list_select_all": "Select all",

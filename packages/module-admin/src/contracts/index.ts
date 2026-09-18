@@ -1,3 +1,4 @@
+export type { AdminApp, AdminAppsService } from './apps.js';
 export type { AdminToolbarService, ToolbarAction, ToolbarActionProps } from './toolbar.js';
 export type {
   AdminDashboardItem,

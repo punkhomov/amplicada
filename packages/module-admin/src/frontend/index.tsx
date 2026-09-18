@@ -3,9 +3,12 @@ import { API_CLIENT_TOKEN, type ApiClient } from '@amplicada/platform-core/front
 import type { LoaderFunction } from 'react-router-dom';
 import { moduleManifest } from '../contracts/manifest.js';
 import { AdminLayout } from './layouts/admin-layout.js';
+import { createAdminAppsService } from './lib/app-registry.js';
 import { registerComponent } from './lib/component-registry.js';
 import { createToolbarService } from './lib/toolbar-action-registry.js';
 import { adminLocales } from './locales/index.js';
+import { AdminAppHostPage } from './pages/admin-app-host/index.js';
+import { AdminAppsPage } from './pages/admin-apps/index.js';
 import { AdminDashboard, adminDashboardQueryOptions } from './pages/admin-dashboard/index.js';
 import { AdminDocumentCard, adminDocumentDetailQueryOptions } from './pages/admin-document-card/index.js';
 import {
@@ -26,6 +29,7 @@ const adminFrontendModule: FrontendModule = {
   locales: { frontend: { ru: adminLocales.ru, en: adminLocales.en } },
   setup(context) {
     context.services.register('admin:toolbar', createToolbarService());
+    context.services.register('admin:apps', createAdminAppsService());
     registerComponent('user-group-members', MembersDisplay);
     registerComponent('user-auth-log', AuthLogDisplay);
     registerComponent('scheduled-task-fields', ScheduledTaskCard);
@@ -64,6 +68,10 @@ const adminFrontendModule: FrontendModule = {
         return null;
       },
     });
+    // Каталог встроенных приложений и хост конкретного приложения — статические пути,
+    // ранжирование React Router держит их выше динамического /admin/:type.
+    context.routes.register('/admin/apps', <AdminAppsPage />, { layout: 'admin' });
+    context.routes.register('/admin/apps/:appId', <AdminAppHostPage />, { layout: 'admin' });
     context.routes.register('/admin/:type', <AdminDocumentList />, {
       layout: 'admin',
       loader: async ({ params }) => {
@@ -94,6 +102,7 @@ const adminFrontendModule: FrontendModule = {
   },
 };
 
+export type { AdminApp, AdminAppsService } from '../contracts/apps.js';
 export type { AdminToolbarService, ToolbarAction, ToolbarActionProps } from '../contracts/toolbar.js';
 export { AdminLayout } from './layouts/admin-layout.js';
 export type { TableAction, TableActionProps } from './lib/admin-table-action-registry.js';
@@ -101,6 +110,8 @@ export { registerTableAction } from './lib/admin-table-action-registry.js';
 export { registerComponent } from './lib/component-registry.js';
 export type { DocumentCardContextValue } from './lib/document-card-context.js';
 export { useDocumentCardContext } from './lib/document-card-context.js';
+export { AdminAppHostPage } from './pages/admin-app-host/index.js';
+export { AdminAppsPage } from './pages/admin-apps/index.js';
 export { AdminDashboard } from './pages/admin-dashboard/index.js';
 export { AdminDocumentCard } from './pages/admin-document-card/index.js';
 export { AdminDocumentList } from './pages/admin-document-list/index.js';

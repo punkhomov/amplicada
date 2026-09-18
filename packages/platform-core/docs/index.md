@@ -3,7 +3,7 @@ title: "platform-core — обзор"
 type: index
 package: platform-core
 updated: 2026-09-17
-verified_commit: ce72875d
+verified_commit: 5767b800
 ---
 
 # platform-core
@@ -25,6 +25,7 @@ verified_commit: ce72875d
 | Компоненты UI | deep import `@amplicada/platform-core/frontend/ui/<name>` | `src/frontend/ui/*.tsx` |
 | Токен `cn` | `export { cn }` из `cn` | `src/frontend/lib/utils.ts`, `src/frontend/index.ts:65` |
 | Синхронизация кита | `pnpm --filter @amplicada/platform-core ui:sync \| ui:check` | `scripts/shadcn-sync.mjs` |
+| Точки расширения UI | `context.extensions.contribute('<id>', { component })` | `src/frontend/registries/extension-point.ts` |
 
 ## Карта документации
 
@@ -45,13 +46,13 @@ verified_commit: ce72875d
 | Документы, списки, дашборд | — нет |
 | Задачи и фоновые процессы | — нет |
 | Frontend: UI-кит | [reference/ui-kit.md](./reference/ui-kit.md) |
-| Frontend: реестры, роуты, слоты, layouts | — нет |
+| Frontend: реестры, роуты, слоты, layouts | [reference/frontend-extension-points.md](./reference/frontend-extension-points.md) (точки расширения); остальное — нет |
 | Конфиг: env, порядок загрузки | — нет |
 | Интеграции и потребители | — нет |
 | Ограничения для потребителя | [reference/ui-kit.md](./reference/ui-kit.md) (кит); остальное — нет |
 
 ## Freshness
 
-- Сверено с кодом: `2026-09-17`, коммит `ce72875d`, рабочее дерево грязное (ветка `feat/shadcn-ui-automation`).
+- Сверено с кодом: `2026-09-17`, коммит `5767b800`, рабочее дерево грязное (ветка `feat/support-chat-app`).
 - Не проверено вживую: браузерный смоук `message-scroller`, `questionnaire`, `toast`;
   визуальная регрессия остальных компонентов после синка.

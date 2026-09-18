@@ -17,6 +17,7 @@
     "@amplicada/module-hr-learning": "workspace:*",
     "@amplicada/module-hr-poll": "workspace:*",
     "@amplicada/module-hr-request": "workspace:*",
+    "@amplicada/module-support-chat": "workspace:*",
     "@amplicada/module-workflow": "workspace:*",
     "@amplicada/platform-core": "workspace:*",
     "pino-pretty": "^13.1.3"
