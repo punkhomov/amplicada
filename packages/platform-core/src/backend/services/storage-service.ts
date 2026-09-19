@@ -16,6 +16,8 @@ import { getSignedUrl as getS3SignedUrl } from '@aws-sdk/s3-request-presigner';
 import type {
   BackendStorageService,
   StorageGetStreamOptions,
+  StorageListOptions,
+  StorageListResult,
   StorageObjectInfo,
   StorageObjectStream,
   StoragePutOptions,
@@ -90,7 +92,7 @@ export class StorageServiceImpl implements BackendStorageService {
     // сборке ключа, а не намерение.
     if (!prefix) throw new Error('deletePrefix требует непустой префикс');
 
-    const keys = (await this.listObjects(prefix)).map(object => object.key).filter(Boolean);
+    const keys = (await this.listObjects(prefix)).objects.map(object => object.key).filter(Boolean);
     // DeleteObjects принимает не больше 1000 ключей за раз. Пакет курса легко больше — без
     // разбиения на пачки запрос просто отвергается.
     for (let i = 0; i < keys.length; i += 1000) {
@@ -99,6 +101,11 @@ export class StorageServiceImpl implements BackendStorageService {
         new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true } }),
       );
     }
+    // Маркер папки листингом не достать: SeaweedFS filer держит пустую директорию отдельной
+    // записью, которой нет среди объектов, — без этого удалённая «папка» так и висела бы
+    // пустой в листинге. В настоящем S3 это no-op (DeleteObject на отсутствующий ключ → 204),
+    // а если маркер там правда был объектом — добьёт и его.
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: prefix }));
     return keys.length;
   }
 
@@ -118,21 +125,30 @@ export class StorageServiceImpl implements BackendStorageService {
     }
   }
 
-  async listObjects(prefix?: string): Promise<StorageObjectInfo[]> {
+  async listObjects(prefix?: string, options?: StorageListOptions): Promise<StorageListResult> {
     const objects: StorageObjectInfo[] = [];
+    const prefixes: string[] = [];
     // ListObjectsV2 отдаёт максимум 1000 ключей за вызов и не сообщает об этом ничем, кроме
     // IsTruncated — без дочитывания по токену большой префикс молча виден лишь частично.
     let continuationToken: string | undefined;
     do {
       const result = await this.client.send(
-        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: continuationToken }),
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          Delimiter: options?.delimiter,
+          ContinuationToken: continuationToken,
+        }),
       );
       for (const obj of result.Contents ?? []) {
         objects.push({ key: obj.Key ?? '', size: obj.Size ?? 0, etag: obj.ETag, lastModified: obj.LastModified });
       }
+      for (const common of result.CommonPrefixes ?? []) {
+        if (common.Prefix) prefixes.push(common.Prefix);
+      }
       continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
     } while (continuationToken);
-    return objects;
+    return { objects, prefixes };
   }
 
   async getSignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {

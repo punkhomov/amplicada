@@ -22,6 +22,22 @@ export interface StorageObjectInfo {
   lastModified?: Date;
 }
 
+export interface StorageListOptions {
+  /**
+   * Разделитель «папок». В S3 директорий нет — ключи плоские, а `delimiter: '/'` лишь не даёт
+   * листингу уйти вглубь: объекты текущего уровня приходят в `objects`, а общие префиксы до
+   * следующего разделителя — в `prefixes` (`CommonPrefixes`). Без него листинг рекурсивный.
+   */
+  delimiter?: string;
+}
+
+/** Разделение листинга на уровне «папки»: то, что лежит здесь, и то, что лежит глубже. */
+export interface StorageListResult {
+  objects: StorageObjectInfo[];
+  /** Полные префиксы «папок», включая разделитель на конце: `learning/pkg/`. */
+  prefixes: string[];
+}
+
 export interface StorageGetStreamOptions {
   /**
    * Значение HTTP-заголовка `Range` (RFC 9110), например `bytes=0-1023`. Уходит в S3 как есть —
@@ -66,7 +82,12 @@ export interface BackendStorageService {
    */
   deletePrefix(prefix: string): Promise<number>;
   headObject(key: string): Promise<StorageObjectInfo | null>;
-  /** Дочитывает все страницы листинга: `ListObjectsV2` отдаёт максимум 1000 ключей за вызов. */
-  listObjects(prefix?: string): Promise<StorageObjectInfo[]>;
+  /**
+   * Дочитывает все страницы листинга: `ListObjectsV2` отдаёт максимум 1000 ключей за вызов.
+   * С `delimiter` останавливается на границе «папок» — это листинг одного уровня для файлового
+   * менеджера, а не рекурсивный обход; объекты-маркеры папок (ключи с разделителем на конце)
+   * приходят в `objects` как есть, отсеивать их — дело потребителя.
+   */
+  listObjects(prefix?: string, options?: StorageListOptions): Promise<StorageListResult>;
   getSignedUrl(key: string, expiresInSeconds?: number): Promise<string>;
 }

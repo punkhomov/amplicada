@@ -11,3 +11,4 @@ verified_commit: ce72875d
 |---|---|
 | Вендоренный UI-кит (shadcn/ui) | [ui-kit.md](./ui-kit.md) |
 | Frontend: точки расширения | [frontend-extension-points.md](./frontend-extension-points.md) |
+| Сервис storage (S3) | [storage.md](./storage.md) |

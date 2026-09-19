@@ -47,6 +47,8 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `useRequireAuth`, `redirectToLogin`, `useLogout` | frontend/hooks — гейт и редирект на `loginUrl` метода |
 | `PASSWORD_LOGIN_PATH` | module-auth-password/contracts/paths.ts — `/auth/password/login` |
 | `BackendStorageService`, `StorageServiceImpl` | S3-compatible object storage, service token `storage` — contracts/backend/storage.ts, backend/services/storage-service.ts |
+| `listObjects`, `delimiter`, `CommonPrefixes`, `StorageListResult` | листинг «папок» в S3: `listObjects(prefix, { delimiter })` → `{ objects, prefixes }` — contracts/backend/storage.ts, backend/services/storage-service.ts |
+| `admin/storage`, файловый менеджер, `objects/view` | `/admin/storage`: папки-префиксы, загрузка в папку, `inline`-превью (image/video/audio/pdf/text), рекурсивное удаление папки; ключ объекта — query-параметр `key` (Fastify `:key` не матчит слэши) — packages/module-admin/src/backend/routes/storage.ts, packages/module-admin/src/frontend/pages/admin-storage/ |
 | `allocateDocumentId`, `indexCreated` | document-runtime.ts — резервирование id в `core.document_index` перед вставкой строки |
 | `writeVersion`, `versionWriteMode`, `CARD_CORRECTION` | module-hr: коррекция записи vs новый интервал версии |
 | `getObjectStream`, `StorageGetStreamOptions` | потоковое чтение из S3 с `Range` → `206` |

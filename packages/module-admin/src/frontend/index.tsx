@@ -53,8 +53,11 @@ const adminFrontendModule: FrontendModule = {
     });
     context.routes.register('/admin/storage', <AdminStorage />, {
       layout: 'admin',
-      loader: async () => {
-        await context.queryClient.ensureQueryData(adminStorageObjectsQueryOptions(api));
+      loader: async ({ request }) => {
+        // Прогреваем только корень: папка приходит из query-параметра, а без неё `ensureQueryData`
+        // вернул бы данные не той папки и компонент успел бы отрисовать чужой листинг.
+        const prefix = new URL(request.url).searchParams.get('prefix') ?? '';
+        await context.queryClient.ensureQueryData(adminStorageObjectsQueryOptions(api, prefix));
         return null;
       },
     });

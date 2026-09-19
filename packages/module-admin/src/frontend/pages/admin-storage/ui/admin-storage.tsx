@@ -9,38 +9,39 @@ import {
 } from '@amplicada/platform-core/frontend';
 import { Button } from '@amplicada/platform-core/frontend/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@amplicada/platform-core/frontend/ui/empty';
+import { Input } from '@amplicada/platform-core/frontend/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@amplicada/platform-core/frontend/ui/table';
-import { Download, Trash2, Upload } from 'lucide-react';
-import { useRef } from 'react';
-import { AdminBreadcrumbs } from '../../../widgets/admin-breadcrumbs/index.js';
-
-interface StorageObject {
-  key: string;
-  size: number;
-  etag?: string;
-  lastModified?: string;
-}
+import {
+  Download,
+  Eye,
+  File,
+  FileAudio,
+  FileImage,
+  FileText,
+  FileType,
+  FileVideo,
+  Folder,
+  LoaderCircle,
+  Search,
+  Trash2,
+  Upload,
+} from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import type { StorageDeleteResult, StorageListing, StorageObject } from '../../../../contracts/storage.js';
+import { AdminBreadcrumbs, type BreadcrumbEntry } from '../../../widgets/admin-breadcrumbs/index.js';
+import { formatBytes, formatDate } from '../lib/format.js';
+import { folderName, objectName, storageDownloadUrl } from '../lib/paths.js';
+import { type StorageFileKind, storageFileKind } from '../lib/storage-file-kind.js';
+import { StoragePreviewDialog } from './storage-preview-dialog.js';
 
 const STORAGE_OBJECTS_QUERY_KEY = ['admin', 'storage', 'objects'] as const;
 
-export function adminStorageObjectsQueryOptions(api: ApiClient) {
+export function adminStorageObjectsQueryOptions(api: ApiClient, prefix: string) {
   return {
-    queryKey: STORAGE_OBJECTS_QUERY_KEY,
-    queryFn: () => api.get<StorageObject[]>('/admin/storage/objects'),
+    queryKey: [...STORAGE_OBJECTS_QUERY_KEY, prefix] as const,
+    queryFn: () => api.get<StorageListing>('/admin/storage/objects', { query: { prefix } }),
   };
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / 1024 ** exponent).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
-}
-
-function formatDate(value?: string): string {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
 }
 
 export function AdminStorage() {
@@ -48,101 +49,244 @@ export function AdminStorage() {
   const api = useApiClient();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [search, setSearch] = useState('');
+  const [preview, setPreview] = useState<StorageObject | null>(null);
 
-  const { data: objects = [], isLoading, isError, error: queryError, refetch } = useQuery(adminStorageObjectsQueryOptions(api));
+  const prefix = searchParams.get('prefix') ?? '';
+  const { data, isLoading, isError, error: queryError, refetch } = useQuery(adminStorageObjectsQueryOptions(api, prefix));
+
+  const folders = useMemo(() => [...(data?.prefixes ?? [])].sort((a, b) => a.localeCompare(b)), [data]);
+  const files = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return (data?.objects ?? [])
+      .filter(object => !term || objectName(object.key).toLowerCase().includes(term))
+      .sort((a, b) => a.key.localeCompare(b.key));
+  }, [data, search]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: STORAGE_OBJECTS_QUERY_KEY });
 
+  const navigateTo = (next: string) => {
+    setSearch('');
+    setSearchParams(next ? { prefix: next } : {});
+  };
+
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      return api.post('/admin/storage/objects', formData);
+    mutationFn: async (selected: File[]) => {
+      for (const file of selected) {
+        const formData = new FormData();
+        formData.append('file', file);
+        await api.post('/admin/storage/objects', formData, { query: { prefix } });
+      }
     },
     onSuccess: invalidate,
     onError: () => alert(t('admin_storage_upload_error')),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (key: string) => api.delete(`/admin/storage/objects/${encodeURIComponent(key)}`),
+  const deleteObjectMutation = useMutation({
+    mutationFn: (key: string) => api.delete('/admin/storage/objects', { query: { key } }),
     onSuccess: invalidate,
+    onError: () => alert(t('admin_storage_delete_error')),
   });
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (file) uploadMutation.mutate(file);
+  const deleteFolderMutation = useMutation({
+    mutationFn: (folder: string) => api.delete<StorageDeleteResult>('/admin/storage/folder', { query: { prefix: folder } }),
+    onSuccess: result => {
+      invalidate();
+      alert(t('admin_storage_folder_deleted', { count: result.deleted }));
+    },
+    onError: () => alert(t('admin_storage_delete_folder_error')),
+  });
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (selected.length) uploadMutation.mutate(selected);
   };
 
   const handleDownload = (key: string) => {
     // Проксируем через свой API, а не presigned S3-URL: хранилище живёт только во внутренней
     // сети (docker-hostname недоступен браузеру), плюс так скачивание остаётся под auth-guard'ом сессии.
-    window.open(`${api.baseUrl}/admin/storage/objects/${encodeURIComponent(key)}/download`, '_blank');
+    window.open(storageDownloadUrl(api, key), '_blank');
   };
 
-  const handleDelete = (key: string) => {
-    if (!confirm(t('admin_list_confirm_delete_one'))) return;
-    deleteMutation.mutate(key);
+  const handleDeleteObject = (key: string) => {
+    if (!confirm(t('admin_storage_delete_file_confirm', { name: objectName(key) }))) return;
+    deleteObjectMutation.mutate(key);
   };
+
+  const handleDeleteFolder = (folder: string) => {
+    if (!confirm(t('admin_storage_delete_folder_confirm', { name: folderName(folder, prefix) }))) return;
+    deleteFolderMutation.mutate(folder);
+  };
+
+  const breadcrumbItems: BreadcrumbEntry[] = [
+    { label: t('admin_breadcrumb_root'), to: '/admin' },
+    { label: t('admin_storage_title'), to: '/admin/storage' },
+    ...folderTrail(prefix).map((segment, index, trail) => ({
+      label: segment.name,
+      to: index === trail.length - 1 ? undefined : `/admin/storage?prefix=${encodeURIComponent(segment.prefix)}`,
+    })),
+  ];
 
   if (isError) return <QueryError error={queryError} onRetry={refetch} />;
   if (isLoading) return <div className="p-8 text-muted-foreground">{t('core:loading')}</div>;
+
+  const isEmpty = folders.length === 0 && files.length === 0;
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="w-full max-w-screen-2xl mx-auto flex flex-col px-8 py-4 gap-4">
         <div className="shrink-0 flex flex-col gap-4">
-          <AdminBreadcrumbs items={[{ label: t('admin_breadcrumb_root'), to: '/admin' }, { label: t('admin_storage_title') }]} />
+          <AdminBreadcrumbs items={breadcrumbItems} />
         </div>
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">{t('admin_storage_title')}</h1>
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
-          <Button onClick={() => fileInputRef.current?.click()} disabled={uploadMutation.isPending}>
-            <Upload className="size-4" />
-            {t('admin_storage_upload')}
-          </Button>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">{t('admin_storage_title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('admin_storage_summary', { folders: folders.length, files: files.length })}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder={t('admin_storage_search_placeholder')}
+                className="w-64 pl-8"
+              />
+            </div>
+            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+            <Button onClick={() => fileInputRef.current?.click()} disabled={uploadMutation.isPending}>
+              {uploadMutation.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              {uploadMutation.isPending ? t('admin_storage_uploading') : t('admin_storage_upload')}
+            </Button>
+          </div>
         </div>
 
-        {objects.length === 0 ? (
+        {isEmpty ? (
           <Empty>
             <EmptyHeader>
-              <EmptyTitle>{t('admin_storage_empty_title')}</EmptyTitle>
-              <EmptyDescription>{t('admin_storage_empty_description')}</EmptyDescription>
+              <EmptyTitle>
+                {search ? t('admin_storage_search_empty') : prefix ? t('admin_storage_empty_folder_title') : t('admin_storage_empty_title')}
+              </EmptyTitle>
+              <EmptyDescription>
+                {prefix ? t('admin_storage_empty_folder_description') : t('admin_storage_empty_description')}
+              </EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('admin_storage_col_key')}</TableHead>
-                <TableHead>{t('admin_storage_col_size')}</TableHead>
-                <TableHead>{t('admin_storage_col_modified')}</TableHead>
-                <TableHead>{t('admin_storage_col_actions')}</TableHead>
+                <TableHead>{t('admin_storage_col_name')}</TableHead>
+                <TableHead className="w-32">{t('admin_storage_col_size')}</TableHead>
+                <TableHead className="w-52">{t('admin_storage_col_modified')}</TableHead>
+                <TableHead className="w-36">{t('admin_storage_col_actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {objects.map(obj => (
-                <TableRow key={obj.key}>
-                  <TableCell className="font-mono text-xs">{obj.key}</TableCell>
-                  <TableCell>{formatBytes(obj.size)}</TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(obj.lastModified)}</TableCell>
+              {folders.map(folder => (
+                <TableRow key={folder} className="cursor-pointer" onClick={() => navigateTo(folder)}>
                   <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="outline" size="icon" title={t('admin_storage_download')} onClick={() => handleDownload(obj.key)}>
-                        <Download className="size-4" />
-                      </Button>
-                      <Button variant="outline" size="icon" title={t('admin_storage_delete')} onClick={() => handleDelete(obj.key)}>
-                        <Trash2 className="size-4" />
-                      </Button>
+                    <div className="flex items-center gap-2 font-medium">
+                      <Folder className="size-4 text-muted-foreground" />
+                      {folderName(folder, prefix)}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">—</TableCell>
+                  <TableCell className="text-muted-foreground">—</TableCell>
+                  <TableCell onClick={event => event.stopPropagation()}>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      title={t('admin_storage_delete')}
+                      disabled={deleteFolderMutation.isPending}
+                      onClick={() => handleDeleteFolder(folder)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
+              {files.map(object => {
+                const kind = storageFileKind(object.key);
+                const previewable = kind !== 'other';
+                return (
+                  <TableRow
+                    key={object.key}
+                    className={previewable ? 'cursor-pointer' : undefined}
+                    onClick={() => previewable && setPreview(object)}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <FileKindIcon kind={kind} />
+                        <span className="font-mono text-xs">{objectName(object.key)}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{formatBytes(object.size)}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(object.lastModified)}</TableCell>
+                    <TableCell onClick={event => event.stopPropagation()}>
+                      <div className="flex gap-1">
+                        {previewable && (
+                          <Button variant="outline" size="icon" title={t('admin_storage_preview')} onClick={() => setPreview(object)}>
+                            <Eye className="size-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title={t('admin_storage_download')}
+                          onClick={() => handleDownload(object.key)}
+                        >
+                          <Download className="size-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title={t('admin_storage_delete')}
+                          onClick={() => handleDeleteObject(object.key)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
       </div>
+
+      <StoragePreviewDialog api={api} file={preview} onOpenChange={open => !open && setPreview(null)} />
     </div>
   );
+}
+
+function FileKindIcon({ kind }: { kind: StorageFileKind }) {
+  const className = 'size-4 text-muted-foreground';
+  switch (kind) {
+    case 'image':
+      return <FileImage className={className} />;
+    case 'video':
+      return <FileVideo className={className} />;
+    case 'audio':
+      return <FileAudio className={className} />;
+    case 'pdf':
+      return <FileType className={className} />;
+    case 'text':
+      return <FileText className={className} />;
+    default:
+      return <File className={className} />;
+  }
+}
+
+/** Сегменты текущего префикса с накопленным путём: `learning/pkg/` → `learning/`, `learning/pkg/`. */
+function folderTrail(prefix: string): { name: string; prefix: string }[] {
+  const parts = prefix.split('/').filter(Boolean);
+  return parts.map((part, index) => ({
+    name: part,
+    prefix: `${parts.slice(0, index + 1).join('/')}/`,
+  }));
 }
