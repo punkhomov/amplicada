@@ -1,3 +1,4 @@
+import { type FileKind, FilePreviewDialog, type FileViewerLabels, fileKindOf, formatBytes } from '@amplicada/file-viewer/frontend';
 import {
   type ApiClient,
   QueryError,
@@ -30,10 +31,8 @@ import { useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { StorageDeleteResult, StorageListing, StorageObject } from '../../../../contracts/storage.js';
 import { AdminBreadcrumbs, type BreadcrumbEntry } from '../../../widgets/admin-breadcrumbs/index.js';
-import { formatBytes, formatDate } from '../lib/format.js';
-import { folderName, objectName, storageDownloadUrl } from '../lib/paths.js';
-import { type StorageFileKind, storageFileKind } from '../lib/storage-file-kind.js';
-import { StoragePreviewDialog } from './storage-preview-dialog.js';
+import { formatDate } from '../lib/format.js';
+import { folderName, objectName, storageDownloadUrl, storageViewUrl } from '../lib/paths.js';
 
 const STORAGE_OBJECTS_QUERY_KEY = ['admin', 'storage', 'objects'] as const;
 
@@ -46,6 +45,21 @@ export function adminStorageObjectsQueryOptions(api: ApiClient, prefix: string) 
 
 export function AdminStorage() {
   const { t } = useTranslation('admin');
+  const viewerLabels: Partial<FileViewerLabels> = {
+    zoomIn: t('admin_storage_zoom_in'),
+    zoomOut: t('admin_storage_zoom_out'),
+    zoomReset: t('admin_storage_zoom_reset'),
+    openExternal: t('admin_storage_open_external'),
+    download: t('admin_storage_download'),
+    unavailableTitle: t('admin_storage_preview_unsupported_title'),
+    unavailableDescription: t('admin_storage_preview_unsupported_description'),
+    failed: t('admin_storage_preview_failed'),
+    textTruncated: t('admin_storage_preview_truncated'),
+    edit: t('admin_storage_edit'),
+    save: t('admin_storage_save'),
+    saved: t('admin_storage_saved'),
+    retry: t('admin_storage_retry'),
+  };
   const api = useApiClient();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -210,7 +224,7 @@ export function AdminStorage() {
                 </TableRow>
               ))}
               {files.map(object => {
-                const kind = storageFileKind(object.key);
+                const kind = fileKindOf({ name: object.key });
                 const previewable = kind !== 'other';
                 return (
                   <TableRow
@@ -259,12 +273,26 @@ export function AdminStorage() {
         )}
       </div>
 
-      <StoragePreviewDialog api={api} file={preview} onOpenChange={open => !open && setPreview(null)} />
+      <FilePreviewDialog
+        open={preview !== null}
+        onOpenChange={open => !open && setPreview(null)}
+        source={preview ? { type: 'url', url: storageViewUrl(api, preview.key), name: objectName(preview.key), size: preview.size } : null}
+        description={preview ? `${formatBytes(preview.size)} · ${formatDate(preview.lastModified)}` : undefined}
+        labels={viewerLabels}
+        actions={
+          preview ? (
+            <Button variant="outline" size="sm" onClick={() => handleDownload(preview.key)}>
+              <Download className="size-4" />
+              {t('admin_storage_download')}
+            </Button>
+          ) : null
+        }
+      />
     </div>
   );
 }
 
-function FileKindIcon({ kind }: { kind: StorageFileKind }) {
+function FileKindIcon({ kind }: { kind: FileKind }) {
   const className = 'size-4 text-muted-foreground';
   switch (kind) {
     case 'image':

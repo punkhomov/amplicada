@@ -27,6 +27,7 @@ date: 2026-09-15
 | Пакет | Notes |
 |---|---|
 | `application-tools` | [Заметки](application-tools.md) — D-004: история перехода и альтернативы |
+| `file-viewer` | [Заметки](file-viewer.md) — общая либа превью: пакет, делегирование браузеру, Monaco, реестр рендереров |
 | `module-admin` | [Заметки](module-admin.md) — D-004: файловый менеджер `/admin/storage`, ключи в query, превью |
 | `module-auth-password` | [Заметки](module-auth-password.md) |
 | `module-hr-poll` | [Заметки](module-hr-poll.md) |

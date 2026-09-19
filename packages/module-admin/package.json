@@ -23,6 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
+    "@amplicada/file-viewer": "workspace:*",
     "@amplicada/platform-core": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -39,6 +40,7 @@
     "@tanstack/react-virtual": "^3.14.9"
   },
   "devDependencies": {
+    "@amplicada/file-viewer": "workspace:*",
     "@amplicada/platform-core": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",

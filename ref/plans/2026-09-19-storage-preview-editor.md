@@ -2,11 +2,18 @@
 title: Storage — превью текста (Monaco/Shiki) и multi-format решения
 type: plan
 tier: 3
-status: draft
+status: in-progress
 date: 2026-09-19
 ---
 
 # Storage — превью текста (Monaco/Shiki) и multi-format решения
+
+> **Реализовано 2026-09-19:** общий пакет `@amplicada/file-viewer` (D-001…D-004 в
+> `ref/notes/file-viewer.md`): рендереры image (зум/панорамирование), video, audio, pdf,
+> text (Monaco lazy, view/edit), external (браузер), реестр + `FileSource`.
+> `module-admin /admin/storage` переведён на него. Следующее: support-chat на lib,
+> `PUT`-роут в storage + правка текста, при необходимости точечные Office-плагины.
+> См. `packages/file-viewer/docs/reference/file-viewer.md`.
 
 Направление на будущее: чем усилить диалог предпросмотра `/admin/storage`. Текущий вариант —
 ручной и без зависимостей: `image`/`video`/`audio` через теги, `pdf` через `<iframe>`

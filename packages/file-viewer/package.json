@@ -1,0 +1,48 @@
+{
+  "name": "@amplicada/file-viewer",
+  "version": "0.0.0",
+  "description": "File preview and text editing components shared across modules",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "import": "./dist/contracts/index.js"
+    },
+    "./frontend": {
+      "types": "./dist/frontend/index.d.ts",
+      "import": "./dist/frontend/index.js"
+    },
+    "./frontend/tailwind.css": "./src/frontend/tailwind.css"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@amplicada/platform-core": "workspace:*",
+    "lucide-react": "^1.17.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "monaco-editor": "^0.56.0"
+  },
+  "devDependencies": {
+    "@amplicada/platform-core": "workspace:*",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^7.0.2"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "src/frontend"
+  ]
+}
