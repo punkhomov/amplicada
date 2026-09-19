@@ -21,6 +21,10 @@
   `setsid nohup pnpm dev > /tmp/opencode/dev.log 2>&1 < /dev/null & disown`
 - Проверка: `curl -s -o /dev/null -w "%{http_code}" http://localhost:5173/` (web) и `http://localhost:3000/` (api).
 - Инфра (postgres/redis/seaweedfs): `pnpm infra:up` (docker compose, файл `docker-compose.infra.yaml`).
+- **UI живьём — Playwright, только headless.** CLI и браузеры уже стоят в песочнице:
+  импорт `playwright` — абсолютным путём `/usr/local/share/npm-global/lib/node_modules/playwright/index.mjs`,
+  запуск с `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`; логин `admin`/`admin`, скрипты и скриншоты клади в `/tmp/opencode/`.
+  `waitUntil: 'networkidle'` не использовать (SSE/polling). Полностью: `ref/guides/playwright-sandbox.md`.
 
 ## Package Structure
 
