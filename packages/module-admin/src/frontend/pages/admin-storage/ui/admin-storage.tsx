@@ -29,17 +29,25 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { StorageDeleteResult, StorageListing, StorageObject } from '../../../../contracts/storage.js';
+import type { StorageConfig, StorageDeleteResult, StorageListing, StorageObject } from '../../../../contracts/storage.js';
 import { AdminBreadcrumbs, type BreadcrumbEntry } from '../../../widgets/admin-breadcrumbs/index.js';
 import { formatDate } from '../lib/format.js';
 import { folderName, objectName, storageDownloadUrl, storageViewUrl } from '../lib/paths.js';
 
 const STORAGE_OBJECTS_QUERY_KEY = ['admin', 'storage', 'objects'] as const;
+const STORAGE_CONFIG_QUERY_KEY = ['admin', 'storage', 'config'] as const;
 
 export function adminStorageObjectsQueryOptions(api: ApiClient, prefix: string) {
   return {
     queryKey: [...STORAGE_OBJECTS_QUERY_KEY, prefix] as const,
     queryFn: () => api.get<StorageListing>('/admin/storage/objects', { query: { prefix } }),
+  };
+}
+
+export function adminStorageConfigQueryOptions(api: ApiClient) {
+  return {
+    queryKey: STORAGE_CONFIG_QUERY_KEY,
+    queryFn: () => api.get<StorageConfig>('/admin/storage/config'),
   };
 }
 
@@ -69,6 +77,9 @@ export function AdminStorage() {
 
   const prefix = searchParams.get('prefix') ?? '';
   const { data, isLoading, isError, error: queryError, refetch } = useQuery(adminStorageObjectsQueryOptions(api, prefix));
+  // Правка — опциональная возможность деплоя: пока конфиг не приехал, превью только для чтения.
+  const { data: config } = useQuery(adminStorageConfigQueryOptions(api));
+  const editEnabled = config?.editEnabled ?? false;
 
   const folders = useMemo(() => [...(data?.prefixes ?? [])].sort((a, b) => a.localeCompare(b)), [data]);
   const files = useMemo(() => {
@@ -294,11 +305,15 @@ export function AdminStorage() {
         onOpenChange={open => !open && setPreview(null)}
         source={previewSource}
         description={preview ? `${formatBytes(preview.size)} · ${formatDate(preview.lastModified)}` : undefined}
-        mode="edit"
-        onSave={async content => {
-          // `mutateAsync` отдаёт обновлённый объект — `onSave` ждёт `void`, поэтому гасим результат.
-          await saveObjectMutation.mutateAsync({ key: preview?.key ?? '', content });
-        }}
+        mode={editEnabled ? 'edit' : 'view'}
+        onSave={
+          editEnabled
+            ? async content => {
+                // `mutateAsync` отдаёт обновлённый объект — `onSave` ждёт `void`, поэтому гасим результат.
+                await saveObjectMutation.mutateAsync({ key: preview?.key ?? '', content });
+              }
+            : undefined
+        }
         labels={viewerLabels}
         actions={
           preview ? (

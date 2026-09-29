@@ -17,6 +17,12 @@ const ACTIVE_CONTENT_TYPES = new Set(['image/svg+xml', 'text/html', 'application
 
 export function createStorageRoutes(fastify: FastifyInstance, context: BackendSetupContext): void {
   const storage = context.services.resolve<BackendStorageService>('storage');
+  // Правка выключена по умолчанию. Флаг читается один раз при регистрации: когда выключено,
+  // роута сохранения нет вовсе — спрятать только кнопку в UI мало, эндпоинт остался бы открыт.
+  const editEnabled = process.env.STORAGE_EDIT_ENABLED === 'true';
+
+  /** Возможности страницы для фронта: сейчас — только флаг правки. */
+  fastify.get('/storage/config', async () => ({ editEnabled }));
 
   /** Содержимое одной «папки»: объекты текущего уровня и префиксы вложенных папок. */
   fastify.get('/storage/objects', async request => {
@@ -45,16 +51,18 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
     return storage.headObject(key);
   });
 
-  fastify.put('/storage/objects', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
-    const key = objectKey(request);
-    if (!key) return reply.code(400).send({ error: 'Не указан ключ объекта' });
-    const { content } = (request.body ?? {}) as { content?: unknown };
-    if (typeof content !== 'string') return reply.code(400).send({ error: 'Не передано содержимое' });
-    const info = await storage.headObject(key);
-    if (!info) return reply.code(404).send({ error: 'Объект не найден' });
-    await storage.putObject(key, content, { contentType: info.contentType ?? 'text/plain; charset=utf-8' });
-    return storage.headObject(key);
-  });
+  if (editEnabled) {
+    fastify.put('/storage/objects', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
+      const key = objectKey(request);
+      if (!key) return reply.code(400).send({ error: 'Не указан ключ объекта' });
+      const { content } = (request.body ?? {}) as { content?: unknown };
+      if (typeof content !== 'string') return reply.code(400).send({ error: 'Не передано содержимое' });
+      const info = await storage.headObject(key);
+      if (!info) return reply.code(404).send({ error: 'Объект не найден' });
+      await storage.putObject(key, content, { contentType: info.contentType ?? 'text/plain; charset=utf-8' });
+      return storage.headObject(key);
+    });
+  }
 
   fastify.delete('/storage/objects', async (request, reply) => {
     const key = objectKey(request);

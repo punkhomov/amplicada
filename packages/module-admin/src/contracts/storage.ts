@@ -20,3 +20,9 @@ export interface StorageListing {
 export interface StorageDeleteResult {
   deleted: number;
 }
+
+/** Возможности страницы хранилища, которые задаёт деплой через env. */
+export interface StorageConfig {
+  /** Правка текста из превью; по умолчанию выключена (`STORAGE_EDIT_ENABLED`). */
+  editEnabled: boolean;
+}

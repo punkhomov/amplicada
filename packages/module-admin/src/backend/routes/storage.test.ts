@@ -16,8 +16,14 @@ interface HeadResult {
   contentType?: string;
 }
 
-/** `head` — переопределение ответа `headObject` (в т.ч. `null`); без него `notes/a.json` существует, остальное нет. */
-function appWith(head?: HeadResult | null) {
+/**
+ * `head` — переопределение ответа `headObject` (в т.ч. `null`); без него `notes/a.json` существует,
+ * остальное нет. `editEnabled` выставляет env-флаг до регистрации роутов: по умолчанию в тестах
+ * правка включена, чтобы проверять сам роут, а поведение «выключено» проверяется отдельным тестом.
+ */
+function appWith(head?: HeadResult | null, editEnabled = true) {
+  if (editEnabled) process.env.STORAGE_EDIT_ENABLED = 'true';
+  else delete process.env.STORAGE_EDIT_ENABLED;
   const puts: PutCall[] = [];
   const storage = {
     putObject: async (key: string, body: unknown, options?: { contentType?: string }) => {
@@ -97,4 +103,23 @@ test('PUT сохраняет кириллицу без искажений', asyn
   assert.equal(puts[0].body, 'привет');
   assert.equal((puts[0].body as string).length, 6);
   assert.equal(Buffer.byteLength(puts[0].body as string, 'utf8'), 12);
+});
+
+test('по умолчанию правка выключена: PUT не зарегистрирован, config.editEnabled=false', async () => {
+  const { app, puts } = appWith(undefined, false);
+  const put = await app.inject({ method: 'PUT', url: '/storage/objects?key=notes/a.json', payload: { content: 'x' } });
+  assert.equal(put.statusCode, 404);
+  assert.equal(puts.length, 0);
+  const config = await app.inject({ method: 'GET', url: '/storage/config' });
+  assert.equal(config.statusCode, 200);
+  assert.deepEqual(config.json(), { editEnabled: false });
+});
+
+test('с STORAGE_EDIT_ENABLED=true PUT зарегистрирован, config.editEnabled=true', async () => {
+  const { app } = appWith(undefined, true);
+  const config = await app.inject({ method: 'GET', url: '/storage/config' });
+  assert.equal(config.statusCode, 200);
+  assert.deepEqual(config.json(), { editEnabled: true });
+  const put = await app.inject({ method: 'PUT', url: '/storage/objects?key=notes/a.json', payload: { content: 'x' } });
+  assert.equal(put.statusCode, 200);
 });
