@@ -10,6 +10,10 @@ const KINDS_BY_MIME: Record<string, FileKind> = {
   'application/typescript': 'text',
   'application/sql': 'text',
   'image/svg+xml': 'image',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'word',
+  'application/vnd.ms-word.document.macroEnabled.12': 'word',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'spreadsheet',
+  'application/vnd.ms-excel.sheet.macroEnabled.12': 'spreadsheet',
 };
 
 const KINDS_BY_EXTENSION: Record<string, FileKind> = {
@@ -34,6 +38,10 @@ const KINDS_BY_EXTENSION: Record<string, FileKind> = {
   m4a: 'audio',
   aac: 'audio',
   pdf: 'pdf',
+  docx: 'word',
+  docm: 'word',
+  xlsx: 'spreadsheet',
+  xlsm: 'spreadsheet',
   txt: 'text',
   json: 'text',
   csv: 'text',

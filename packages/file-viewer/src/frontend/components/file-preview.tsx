@@ -40,6 +40,7 @@ export function FilePreview({ source, mode = 'view', onSave, labels, renderers, 
             descriptor={descriptor}
             url={resolved.url}
             readText={resolved.readText}
+            readBytes={resolved.readBytes}
             openExternal={resolved.openExternal}
             edit={edit}
           />

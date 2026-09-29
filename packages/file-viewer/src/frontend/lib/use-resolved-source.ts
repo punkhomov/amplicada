@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FileDescriptor, FileSource, TextReadResult } from '../../contracts/index.js';
+import { readSourceBytes } from './read-source.js';
 
 export const DEFAULT_TEXT_PREVIEW_LIMIT = 512 * 1024;
 
@@ -8,6 +9,7 @@ export interface ResolvedSource {
   /** `null`, пока object URL для `file`/`blob` ещё не создан. */
   url: string | null;
   readText(options?: { limitBytes?: number }): Promise<TextReadResult>;
+  readBytes(): Promise<ArrayBuffer>;
   openExternal(): void;
 }
 
@@ -85,6 +87,11 @@ export function useResolvedSource(source: FileSource | null): ResolvedSource | n
     [source, descriptor.size],
   );
 
+  const readBytes = useCallback((): Promise<ArrayBuffer> => {
+    if (!source) return Promise.reject(new Error('Источник не задан'));
+    return readSourceBytes(source);
+  }, [source]);
+
   const openExternal = useCallback(() => {
     const target = url ?? (source?.type === 'url' ? source.url : null);
     if (target) {
@@ -100,7 +107,7 @@ export function useResolvedSource(source: FileSource | null): ResolvedSource | n
   }, [url, source]);
 
   if (!source) return null;
-  return { descriptor, url, readText, openExternal };
+  return { descriptor, url, readText, readBytes, openExternal };
 }
 
 /** Имя источника без его разрешения — для шапки диалога. */

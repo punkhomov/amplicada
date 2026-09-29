@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
 
 /** Что за файл — определяет, какой рендерер его откроет. */
-export type FileKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'other';
+export type FileKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'word' | 'spreadsheet' | 'other';
 
 /** Минимум, нужный для выбора рендерера и шапки диалога. */
 export interface FileDescriptor {
@@ -38,6 +38,8 @@ export interface RendererProps {
   url: string | null;
   /** Читает текст (для URL — с `Range` и лимитом). */
   readText(options?: { limitBytes?: number }): Promise<TextReadResult>;
+  /** Читает файл целиком в память (для рендереров, которым нужны байты: Office, архивы). */
+  readBytes(): Promise<ArrayBuffer>;
   /** Открыть файл в новой вкладке — браузер решает, отрисовать или скачать. */
   openExternal(): void;
   edit?: TextEditOptions;
