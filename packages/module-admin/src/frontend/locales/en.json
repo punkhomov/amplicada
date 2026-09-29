@@ -36,6 +36,7 @@
   "admin_storage_empty_folder_description": "No files in this folder — you can upload new ones",
   "admin_storage_search_empty": "Nothing found",
   "admin_storage_upload_error": "Failed to upload file",
+  "admin_storage_save_error": "Failed to save file",
   "admin_storage_delete_error": "Failed to delete file",
   "admin_storage_delete_file_confirm": "Delete file \"{{name}}\"?",
   "admin_storage_delete_folder_confirm": "Delete folder \"{{name}}\" with all its contents?",

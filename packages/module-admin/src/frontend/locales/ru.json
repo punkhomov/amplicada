@@ -36,6 +36,7 @@
   "admin_storage_empty_folder_description": "В этой папке нет файлов — можно загрузить новые",
   "admin_storage_search_empty": "Ничего не найдено",
   "admin_storage_upload_error": "Не удалось загрузить файл",
+  "admin_storage_save_error": "Не удалось сохранить файл",
   "admin_storage_delete_error": "Не удалось удалить файл",
   "admin_storage_delete_file_confirm": "Удалить файл «{{name}}»?",
   "admin_storage_delete_folder_confirm": "Удалить папку «{{name}}» со всем содержимым?",

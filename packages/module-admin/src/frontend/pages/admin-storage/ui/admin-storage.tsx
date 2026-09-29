@@ -97,6 +97,14 @@ export function AdminStorage() {
     onError: () => alert(t('admin_storage_upload_error')),
   });
 
+  const saveObjectMutation = useMutation({
+    // Форма правки сохраняет текст в уже существующий объект — ключ уходит в query, тело — JSON.
+    mutationFn: ({ key, content }: { key: string; content: string }) =>
+      api.put<StorageObject>('/admin/storage/objects', { content }, { query: { key } }),
+    onSuccess: invalidate,
+    onError: () => alert(t('admin_storage_save_error')),
+  });
+
   const deleteObjectMutation = useMutation({
     mutationFn: (key: string) => api.delete('/admin/storage/objects', { query: { key } }),
     onSuccess: invalidate,
@@ -278,6 +286,11 @@ export function AdminStorage() {
         onOpenChange={open => !open && setPreview(null)}
         source={preview ? { type: 'url', url: storageViewUrl(api, preview.key), name: objectName(preview.key), size: preview.size } : null}
         description={preview ? `${formatBytes(preview.size)} · ${formatDate(preview.lastModified)}` : undefined}
+        mode="edit"
+        onSave={async content => {
+          // `mutateAsync` отдаёт обновлённый объект — `onSave` ждёт `void`, поэтому гасим результат.
+          await saveObjectMutation.mutateAsync({ key: preview?.key ?? '', content });
+        }}
         labels={viewerLabels}
         actions={
           preview ? (
