@@ -25,6 +25,9 @@ date: 2026-09-29
       конвертации из D-002 новым решением D-005. Качество и фолбэк проверены живьём.
 - [x] **Docs/notes/plan.** `ref/notes/file-viewer.md` (D-005 Office, D-006 правка),
       дописан D-004 в `module-admin`, `packages/*/docs`, ключевики в `ref/context.md`.
+- [x] **Флаг правки (follow-up 2026-09-29).** `STORAGE_EDIT_ENABLED` (default `false`):
+      без него `PUT` не регистрируется, `GET /storage/config` отдаёт `editEnabled`, UI открывает
+      превью read-only. Записано `module-admin` D-005.
 
 ## Итерация 2 — Explorer UI и операции
 
