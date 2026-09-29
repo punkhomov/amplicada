@@ -30,6 +30,8 @@ export interface StorageCreateFolderRequest {
 export interface StorageMoveRequest {
   keys: string[];
   destination: string;
+  /** Новое имя единственного перемещаемого элемента — переименование без смены папки. */
+  name?: string;
 }
 
 /** Ответ `POST /storage/move`: сколько верхнеуровневых элементов перенесено. */

@@ -95,12 +95,19 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
    * Ответ `moved` считает верхнеуровневые элементы, а не объекты поддерева.
    */
   fastify.post('/storage/move', async (request, reply) => {
-    const { keys: rawKeys, destination: rawDestination } = (request.body ?? {}) as Partial<StorageMoveRequest>;
+    const { keys: rawKeys, destination: rawDestination, name: rawName } = (request.body ?? {}) as Partial<StorageMoveRequest>;
     const keys = bodyKeys(rawKeys);
     if (!keys.length) return reply.code(400).send({ error: 'Не указаны ключи для перемещения' });
     if (typeof rawDestination !== 'string' || !rawDestination.trim()) {
       return reply.code(400).send({ error: 'Не указана папка назначения' });
     }
+    // Новое имя — хвост одного ключа, поэтому к нескольким ключам сразу оно неприменимо.
+    if (rawName !== undefined && keys.length > 1) {
+      return reply.code(400).send({ error: 'Новое имя допустимо только для одного элемента' });
+    }
+    const name = rawName === undefined ? undefined : folderName(rawName);
+    if (rawName !== undefined && !name) return reply.code(400).send({ error: 'Недопустимое новое имя' });
+
     // `/` нормализуется в корень бакета (`''`) — явная корневая папка валидна, пустая строка нет.
     const destination = folderPrefix(rawDestination.trim());
     if (hasParentSegment(destination)) return reply.code(400).send({ error: 'Недопустимый путь назначения' });
@@ -108,7 +115,7 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
     const plans: MovePlan[] = [];
     for (const key of keys) {
       const isFolder = key.endsWith(FOLDER_DELIMITER);
-      const target = moveTargetOf(key, destination);
+      const target = moveTargetOf(key, destination, name);
       if (!target) return reply.code(400).send({ error: 'Недопустимый ключ' });
       if (isFolder && (target === key || isDescendant(target, key))) {
         return reply.code(400).send({ error: 'Папку нельзя переместить в себя или в свою подпапку' });
@@ -249,7 +256,7 @@ function hasParentSegment(path: string): boolean {
   return path.split(FOLDER_DELIMITER).includes('..');
 }
 
-/** Имя новой папки — ровно один сегмент: разделители пути превратили бы его в чужую папку. */
+/** Имя папки или нового имени элемента — ровно один сегмент: разделитель пути увёл бы его в чужую папку. */
 function folderName(raw: unknown): string {
   if (typeof raw !== 'string') return '';
   const name = raw.trim();
@@ -263,14 +270,17 @@ export function folderKey(prefix: string, name: string): string {
   return `${prefix}${name}${FOLDER_DELIMITER}`;
 }
 
-/** Целевой ключ перемещения: к папке назначения добавляется последний сегмент исходного ключа. */
-export function moveTargetOf(key: string, destination: string): string {
+/**
+ * Целевой ключ перемещения: к папке назначения добавляется последний сегмент исходного ключа.
+ * С `name` хвост заменяется целиком — так выражается переименование.
+ */
+export function moveTargetOf(key: string, destination: string, name?: string): string {
   if (key.endsWith(FOLDER_DELIMITER)) {
-    const name = key.slice(0, -1).split(FOLDER_DELIMITER).pop() ?? '';
-    return name ? folderKey(destination, name) : '';
+    const base = name ?? key.slice(0, -1).split(FOLDER_DELIMITER).pop() ?? '';
+    return base ? folderKey(destination, base) : '';
   }
-  const name = fileName(key);
-  return name ? `${destination}${name}` : '';
+  const base = name ?? fileName(key);
+  return base ? `${destination}${base}` : '';
 }
 
 /** Цель лежит внутри папки; сама папка потомком не считается. */

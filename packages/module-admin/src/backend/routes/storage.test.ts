@@ -299,6 +299,62 @@ test('moveTargetOf переносит имя элемента в папку на
   assert.equal(moveTargetOf('a/f.txt', ''), 'f.txt');
 });
 
+test('moveTargetOf с name заменяет хвост ключа (переименование)', () => {
+  assert.equal(moveTargetOf('a/f.txt', 'a/', 'g.txt'), 'a/g.txt');
+  assert.equal(moveTargetOf('a/pkg/', 'b/', 'lib'), 'b/lib/');
+});
+
+test('POST /storage/move c name переименовывает файл', async () => {
+  const { app, moves } = appWith();
+  const res = await app.inject({
+    method: 'POST',
+    url: '/storage/move',
+    payload: { keys: ['a/f.txt'], destination: 'a/', name: 'g.txt' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json(), { moved: 1 });
+  assert.deepEqual(moves, [{ from: 'a/f.txt', to: 'a/g.txt' }]);
+});
+
+test('POST /storage/move c name переименовывает папку вместе с поддеревом', async () => {
+  const { app, moves, deletes } = appWith({ folderContents: { 'a/pkg/': ['a/pkg/i.html', 'a/pkg/sub/j.txt'] } });
+  const res = await app.inject({
+    method: 'POST',
+    url: '/storage/move',
+    payload: { keys: ['a/pkg/'], destination: 'b/', name: 'lib' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(moves, [
+    { from: 'a/pkg/i.html', to: 'b/lib/i.html' },
+    { from: 'a/pkg/sub/j.txt', to: 'b/lib/sub/j.txt' },
+  ]);
+  assert.deepEqual(deletes, [['a/pkg/i.html', 'a/pkg/sub/j.txt']]);
+});
+
+test('POST /storage/move с name и несколькими ключами — 400 без копирования', async () => {
+  const { app, moves } = appWith();
+  const res = await app.inject({
+    method: 'POST',
+    url: '/storage/move',
+    payload: { keys: ['a/f.txt', 'notes/a.json'], destination: 'c/', name: 'g.txt' },
+  });
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(moves, []);
+});
+
+test('POST /storage/move отвергает невалидное name', async () => {
+  const { app, moves } = appWith();
+  for (const name of ['', '..', 'x/y', 'x'.repeat(256)]) {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/storage/move',
+      payload: { keys: ['a/f.txt'], destination: 'a/', name },
+    });
+    assert.equal(res.statusCode, 400, name);
+  }
+  assert.deepEqual(moves, []);
+});
+
 test('isDescendant отличает потомка от соседа и самой папки', () => {
   assert.equal(isDescendant('a/pkg/sub/j.txt', 'a/pkg/'), true);
   assert.equal(isDescendant('a/pkg/', 'a/pkg/'), false);
