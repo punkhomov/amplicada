@@ -40,6 +40,15 @@ export function isInside(prefix: string, candidate: string): boolean {
   return root === '' || candidate.startsWith(root);
 }
 
+/** Сегменты текущего префикса с накопленным путём: `learning/pkg/` → `learning/`, `learning/pkg/`. */
+export function folderTrail(prefix: string): { name: string; prefix: string }[] {
+  const parts = prefix.split('/').filter(Boolean);
+  return parts.map((part, index) => ({
+    name: part,
+    prefix: `${parts.slice(0, index + 1).join('/')}/`,
+  }));
+}
+
 /** Префикс папки в каноническом виде — без ведущих слэшей и с завершающим: `b` и `/` → `b/` и `''`. */
 function normalizePrefix(prefix: string): string {
   const trimmed = prefix.replace(/^\/+/, '');

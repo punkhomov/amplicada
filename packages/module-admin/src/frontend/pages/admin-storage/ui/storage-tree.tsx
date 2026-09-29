@@ -3,25 +3,31 @@ import { ChevronDown, ChevronRight, Folder, HardDrive, LoaderCircle } from 'luci
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import type { StorageListing } from '../../../../contracts/storage.js';
 import { objectName } from '../lib/paths.js';
+import { useStorageDropTarget } from './storage-drop.js';
 
 export interface StorageTreeProps {
   prefix: string;
   onNavigate: (prefix: string) => void;
   /** Счётчик изменений листинга: раскрытые узлы перечитывают детей после create/rename/delete. */
   version: number;
+  /** Ключи текущего перетаскивания; `null` — перетаскивания нет. */
+  dragKeys: string[] | null;
+  /** Drop на узел: destination — префикс узла. */
+  onDropMove: (destination: string, keys: string[]) => void;
 }
 
 /**
  * Дерево папок слева. Дети узла тянутся лениво при раскрытии и кэшируются в состоянии компонента:
  * свёртывание не выкидывает уже загруженные уровни, а повторное раскрытие не ходит в API.
  */
-export function StorageTree({ prefix, onNavigate, version }: StorageTreeProps) {
+export function StorageTree({ prefix, onNavigate, version, dragKeys, onDropMove }: StorageTreeProps) {
   const { t } = useTranslation('admin');
   const api = useApiClient();
   const [children, setChildren] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string[]>(['']);
   const loaded = useRef(new Set<string>());
+  const drop = useStorageDropTarget(dragKeys, onDropMove);
 
   const load = useCallback(
     async (nodePrefix: string) => {
@@ -79,12 +85,20 @@ export function StorageTree({ prefix, onNavigate, version }: StorageTreeProps) {
     const isExpanded = expanded.includes(nodePrefix);
     const isLoading = loading.includes(nodePrefix);
     const isActive = prefix === nodePrefix;
+    // Узел принимает drop; невалидная цель (папка в себя/потомка, no-op) — красная и not-allowed.
+    const isDropTarget = dragKeys !== null && drop.overPrefix === nodePrefix;
+    const dropClass = isDropTarget
+      ? drop.invalidFor(nodePrefix)
+        ? 'bg-destructive/10 ring-1 ring-destructive'
+        : 'bg-primary/10 ring-1 ring-primary'
+      : '';
     return (
       <div key={nodePrefix || '\u0000root'}>
         <div
           data-tree-prefix={nodePrefix}
-          className={`flex items-center gap-1 rounded-sm pr-1 ${isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+          className={`flex items-center gap-1 rounded-sm pr-1 ${isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'} ${dropClass}`}
           style={{ paddingLeft: depth * 12 + 4 }}
+          {...drop.handlersFor(nodePrefix)}
         >
           <button
             type="button"

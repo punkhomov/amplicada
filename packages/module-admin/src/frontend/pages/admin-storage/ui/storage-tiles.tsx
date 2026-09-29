@@ -2,9 +2,10 @@ import { fileKindOf, formatBytes } from '@amplicada/file-viewer/frontend';
 import { useTranslation } from '@amplicada/platform-core/frontend';
 import { Checkbox } from '@amplicada/platform-core/frontend/ui/checkbox';
 import { Folder } from 'lucide-react';
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import type { StorageEntry } from '../lib/entries.js';
 import type { SelectionState } from '../lib/selection.js';
+import { useStorageDropTarget } from './storage-drop.js';
 import { FileKindIcon, InlineNameInput, type StorageEditing } from './storage-list.js';
 
 export interface StorageTilesProps {
@@ -18,12 +19,20 @@ export interface StorageTilesProps {
   onCommitEdit: (name: string) => void;
   onCancelEdit: () => void;
   onRenameStart: (key: string) => void;
+  /** Ключи текущего перетаскивания; `null` — перетаскивания нет. */
+  dragKeys: string[] | null;
+  onDragStart: (entry: StorageEntry, event: ReactDragEvent<HTMLDivElement>) => void;
+  onDragEnd: () => void;
+  onRowContextMenu: (entry: StorageEntry, event: ReactMouseEvent<HTMLDivElement>) => void;
+  /** Drop на карточку-папку: destination — ключ папки. */
+  onDropMove: (destination: string, keys: string[]) => void;
 }
 
 /** Плитка повторяет семантику списка (клик/модификаторы/чекбокс/двойной клик) другими средствами. */
 export function StorageTiles(props: StorageTilesProps) {
   const { t } = useTranslation('admin');
   const selected = new Set(props.selection.keys);
+  const drop = useStorageDropTarget(props.dragKeys, props.onDropMove);
 
   const handleClick = (entry: StorageEntry, event: ReactMouseEvent<HTMLButtonElement>) => {
     if (event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -51,6 +60,13 @@ export function StorageTiles(props: StorageTilesProps) {
       {props.entries.map(entry => {
         const isSelected = selected.has(entry.key);
         const renaming = props.editing?.mode === 'rename' && props.editing.key === entry.key;
+        // Drop-цель — только карточка-папка; невалидная цель подсвечивается красным и не принимает drop.
+        const isDropTarget = entry.kind === 'folder' && props.dragKeys !== null && drop.overPrefix === entry.key;
+        const dropClass = isDropTarget
+          ? drop.invalidFor(entry.key)
+            ? 'border-destructive ring-1 ring-destructive'
+            : 'border-primary ring-1 ring-primary'
+          : '';
         const icon =
           entry.kind === 'folder' ? (
             <Folder className="size-8 text-muted-foreground" />
@@ -58,13 +74,19 @@ export function StorageTiles(props: StorageTilesProps) {
             <FileKindIcon kind={fileKindOf({ name: entry.key })} className="size-8 text-muted-foreground" />
           );
         return (
+          // biome-ignore lint/a11y/noStaticElementInteractions: карточка — drag-обёртка, клики живут на вложенной кнопке
           <div
             key={entry.key}
             data-slot="storage-tile"
             data-state={isSelected ? 'selected' : undefined}
+            draggable
+            onContextMenu={event => props.onRowContextMenu(entry, event)}
+            onDragStart={event => props.onDragStart(entry, event)}
+            onDragEnd={props.onDragEnd}
+            {...(entry.kind === 'folder' ? drop.handlersFor(entry.key) : {})}
             className={`relative flex cursor-pointer select-none flex-col items-center gap-2 rounded-lg border p-3 text-center transition-colors ${
               isSelected ? 'border-primary bg-accent' : 'hover:bg-accent/50'
-            }`}
+            } ${dropClass}`}
           >
             <span className="absolute left-2 top-2">
               <Checkbox

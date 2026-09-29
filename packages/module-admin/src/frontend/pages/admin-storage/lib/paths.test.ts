@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isInside, moveTarget, parentPrefix, renameTarget } from './paths.js';
+import { folderTrail, isInside, moveTarget, parentPrefix, renameTarget } from './paths.js';
 
 test('parentPrefix: родитель папки, у верхнего уровня — корень', () => {
   assert.equal(parentPrefix('a/b/'), 'a/');
@@ -45,4 +45,20 @@ test('isInside: совпадение строки без границы сегм
   assert.equal(isInside('a/', 'b/a.txt'), false);
   assert.equal(isInside('a', 'a/b'), true);
   assert.equal(isInside('a', 'ab'), false);
+});
+
+test('folderTrail: сегменты префикса с накопленным путём', () => {
+  assert.deepEqual(folderTrail('a/b/'), [
+    { name: 'a', prefix: 'a/' },
+    { name: 'b', prefix: 'a/b/' },
+  ]);
+});
+
+test('folderTrail: корень — пустой список, хвостовой слэш не создаёт пустой сегмент', () => {
+  assert.deepEqual(folderTrail(''), []);
+  assert.deepEqual(folderTrail('/'), []);
+  assert.deepEqual(folderTrail('a/b'), [
+    { name: 'a', prefix: 'a/' },
+    { name: 'b', prefix: 'a/b/' },
+  ]);
 });

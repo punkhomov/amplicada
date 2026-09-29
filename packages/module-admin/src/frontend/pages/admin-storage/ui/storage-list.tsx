@@ -5,11 +5,19 @@ import { Checkbox } from '@amplicada/platform-core/frontend/ui/checkbox';
 import { Input } from '@amplicada/platform-core/frontend/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@amplicada/platform-core/frontend/ui/table';
 import { ArrowDown, ArrowUp, Download, Eye, File, FileAudio, FileImage, FileText, FileType, FileVideo, Folder, Trash2 } from 'lucide-react';
-import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react';
+import {
+  type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import type { StorageEntry } from '../lib/entries.js';
 import { formatDate } from '../lib/format.js';
 import type { SelectionState } from '../lib/selection.js';
 import type { StorageSort, StorageSortKey } from '../lib/sort.js';
+import { useStorageDropTarget } from './storage-drop.js';
 
 /** Состояние инлайн-правки: одна строка на страницу — либо создание папки, либо переименование. */
 export type StorageEditing = { mode: 'create' } | { mode: 'rename'; key: string } | null;
@@ -31,11 +39,19 @@ export interface StorageListProps {
   onDelete: (entry: StorageEntry) => void;
   onDownload: (key: string) => void;
   onPreview: (entry: StorageEntry) => void;
+  /** Ключи текущего перетаскивания; `null` — перетаскивания нет. */
+  dragKeys: string[] | null;
+  onDragStart: (entry: StorageEntry, event: ReactDragEvent<HTMLTableRowElement>) => void;
+  onDragEnd: () => void;
+  onRowContextMenu: (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => void;
+  /** Drop на папку-строку: destination — ключ папки. */
+  onDropMove: (destination: string, keys: string[]) => void;
 }
 
 export function StorageList(props: StorageListProps) {
   const { t } = useTranslation('admin');
   const { entries, sort, selection, editing } = props;
+  const drop = useStorageDropTarget(props.dragKeys, props.onDropMove);
 
   const selected = new Set(selection.keys);
   const allSelected = entries.length > 0 && entries.every(entry => selected.has(entry.key));
@@ -116,13 +132,21 @@ export function StorageList(props: StorageListProps) {
         {entries.map(entry => {
           const isSelected = selected.has(entry.key);
           const previewable = entry.kind === 'file' && fileKindOf({ name: entry.key }) !== 'other';
+          // Drop-цель — только папка-строка: файл-цель бэкенд отвергнет коллизией.
+          const isDropTarget = entry.kind === 'folder' && props.dragKeys !== null && drop.overPrefix === entry.key;
+          const dropClass = isDropTarget ? (drop.invalidFor(entry.key) ? 'bg-destructive/10' : 'bg-accent') : '';
           return (
             <TableRow
               key={entry.key}
+              draggable
               data-state={isSelected ? 'selected' : undefined}
-              className="cursor-pointer select-none"
+              className={`cursor-pointer select-none ${dropClass}`}
               onClick={event => handleRowClick(entry, event)}
               onDoubleClick={() => handleRowDoubleClick(entry)}
+              onContextMenu={event => props.onRowContextMenu(entry, event)}
+              onDragStart={event => props.onDragStart(entry, event)}
+              onDragEnd={props.onDragEnd}
+              {...(entry.kind === 'folder' ? drop.handlersFor(entry.key) : {})}
             >
               <TableCell onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
                 <Checkbox
