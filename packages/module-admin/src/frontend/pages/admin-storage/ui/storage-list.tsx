@@ -1,0 +1,278 @@
+import { type FileKind, fileExtension, fileKindOf, formatBytes } from '@amplicada/file-viewer/frontend';
+import { useTranslation } from '@amplicada/platform-core/frontend';
+import { Button } from '@amplicada/platform-core/frontend/ui/button';
+import { Checkbox } from '@amplicada/platform-core/frontend/ui/checkbox';
+import { Input } from '@amplicada/platform-core/frontend/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@amplicada/platform-core/frontend/ui/table';
+import { ArrowDown, ArrowUp, Download, Eye, File, FileAudio, FileImage, FileText, FileType, FileVideo, Folder, Trash2 } from 'lucide-react';
+import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react';
+import type { StorageEntry } from '../lib/entries.js';
+import { formatDate } from '../lib/format.js';
+import type { SelectionState } from '../lib/selection.js';
+import type { StorageSort, StorageSortKey } from '../lib/sort.js';
+
+/** Состояние инлайн-правки: одна строка на страницу — либо создание папки, либо переименование. */
+export type StorageEditing = { mode: 'create' } | { mode: 'rename'; key: string } | null;
+
+export interface StorageListProps {
+  entries: StorageEntry[];
+  sort: StorageSort;
+  selection: SelectionState;
+  editing: StorageEditing;
+  onSort: (key: StorageSortKey) => void;
+  /** Ctrl/Cmd- или Shift-клик: страница решает, как перестроить выбор. */
+  onRowClick: (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => void;
+  onCheck: (key: string, checked: boolean) => void;
+  onCheckAll: (checked: boolean) => void;
+  onOpen: (entry: StorageEntry) => void;
+  onCommitEdit: (name: string) => void;
+  onCancelEdit: () => void;
+  onRenameStart: (key: string) => void;
+  onDelete: (entry: StorageEntry) => void;
+  onDownload: (key: string) => void;
+  onPreview: (entry: StorageEntry) => void;
+}
+
+/**
+ * Пауза перед открытием строки. Она же — окно, в котором второй клик успевает стать двойным:
+ * без паузы первый клик уже открыл бы превью/папку, и переименовать двойным кликом было бы нельзя.
+ */
+const OPEN_DELAY_MS = 250;
+
+export function StorageList(props: StorageListProps) {
+  const { t } = useTranslation('admin');
+  const { entries, sort, selection, editing } = props;
+  const pendingOpen = useRef<number | null>(null);
+
+  const selected = new Set(selection.keys);
+  const allSelected = entries.length > 0 && entries.every(entry => selected.has(entry.key));
+  const someSelected = entries.some(entry => selected.has(entry.key));
+
+  // Таймер может пережить размонтирование списка (например, поиск ушёл в «ничего не найдено»).
+  useEffect(
+    () => () => {
+      if (pendingOpen.current !== null) window.clearTimeout(pendingOpen.current);
+    },
+    [],
+  );
+
+  const cancelPendingOpen = () => {
+    if (pendingOpen.current !== null) {
+      window.clearTimeout(pendingOpen.current);
+      pendingOpen.current = null;
+    }
+  };
+
+  const handleRowClick = (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      props.onRowClick(entry, event);
+      return;
+    }
+    cancelPendingOpen();
+    pendingOpen.current = window.setTimeout(() => {
+      pendingOpen.current = null;
+      props.onOpen(entry);
+    }, OPEN_DELAY_MS);
+  };
+
+  const handleRowDoubleClick = (entry: StorageEntry) => {
+    cancelPendingOpen();
+    props.onRenameStart(entry.key);
+  };
+
+  const renderName = (entry: StorageEntry) => {
+    if (editing?.mode === 'rename' && editing.key === entry.key) {
+      return <InlineNameInput initial={entry.name} onCommit={props.onCommitEdit} onCancel={props.onCancelEdit} />;
+    }
+    return (
+      <>
+        {entry.kind === 'folder' ? (
+          <Folder className="size-4 text-muted-foreground" />
+        ) : (
+          <FileKindIcon kind={fileKindOf({ name: entry.key })} />
+        )}
+        <span className={entry.kind === 'file' ? 'font-mono text-xs' : 'font-medium'}>{entry.name}</span>
+      </>
+    );
+  };
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-10">
+            <Checkbox
+              checked={allSelected}
+              // Частичный выбор в шапке — промежуточное состояние, а не «все выбраны».
+              indeterminate={someSelected && !allSelected}
+              onCheckedChange={checked => props.onCheckAll(checked)}
+              aria-label={t('admin_list_select_all')}
+            />
+          </TableHead>
+          <SortableHead label={t('admin_storage_col_name')} sortKey="name" sort={sort} onSort={props.onSort} />
+          <SortableHead label={t('admin_storage_col_size')} sortKey="size" sort={sort} onSort={props.onSort} className="w-28" />
+          <SortableHead label={t('admin_storage_col_modified')} sortKey="modified" sort={sort} onSort={props.onSort} className="w-52" />
+          <SortableHead label={t('admin_storage_col_type')} sortKey="type" sort={sort} onSort={props.onSort} className="w-28" />
+          <TableHead className="w-36 text-right">{t('admin_storage_col_actions')}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {editing?.mode === 'create' && (
+          <TableRow className="bg-muted/40">
+            <TableCell />
+            <TableCell>
+              <div className="flex items-center gap-2">
+                <Folder className="size-4 text-muted-foreground" />
+                <InlineNameInput
+                  initial=""
+                  placeholder={t('admin_storage_new_folder')}
+                  onCommit={props.onCommitEdit}
+                  onCancel={props.onCancelEdit}
+                />
+              </div>
+            </TableCell>
+            <TableCell className="text-muted-foreground">—</TableCell>
+            <TableCell className="text-muted-foreground">—</TableCell>
+            <TableCell className="text-muted-foreground">—</TableCell>
+            <TableCell />
+          </TableRow>
+        )}
+
+        {entries.map(entry => {
+          const isSelected = selected.has(entry.key);
+          const previewable = entry.kind === 'file' && fileKindOf({ name: entry.key }) !== 'other';
+          return (
+            <TableRow
+              key={entry.key}
+              data-state={isSelected ? 'selected' : undefined}
+              className="cursor-pointer select-none"
+              onClick={event => handleRowClick(entry, event)}
+              onDoubleClick={() => handleRowDoubleClick(entry)}
+            >
+              <TableCell onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={checked => props.onCheck(entry.key, checked)}
+                  aria-label={t('admin_list_select_row')}
+                />
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">{renderName(entry)}</div>
+              </TableCell>
+              <TableCell className="text-muted-foreground tabular-nums">
+                {entry.kind === 'folder' ? '—' : formatBytes(entry.size ?? 0)}
+              </TableCell>
+              <TableCell className="text-muted-foreground">{entry.kind === 'folder' ? '—' : formatDate(entry.lastModified)}</TableCell>
+              <TableCell className="text-muted-foreground uppercase">
+                {entry.kind === 'folder' ? '—' : fileExtension(entry.name) || t('admin_storage_other')}
+              </TableCell>
+              <TableCell onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
+                <div className="flex justify-end gap-1">
+                  {previewable && (
+                    <Button variant="outline" size="icon" title={t('admin_storage_preview')} onClick={() => props.onPreview(entry)}>
+                      <Eye className="size-4" />
+                    </Button>
+                  )}
+                  {entry.kind === 'file' && (
+                    <Button variant="outline" size="icon" title={t('admin_storage_download')} onClick={() => props.onDownload(entry.key)}>
+                      <Download className="size-4" />
+                    </Button>
+                  )}
+                  <Button variant="outline" size="icon" title={t('admin_storage_delete')} onClick={() => props.onDelete(entry)}>
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
+function SortableHead({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  className,
+}: {
+  label: string;
+  sortKey: StorageSortKey;
+  sort: StorageSort;
+  onSort: (key: StorageSortKey) => void;
+  className?: string;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <TableHead className={className}>
+      <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => onSort(sortKey)}>
+        {label}
+        {active && (sort.direction === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />)}
+      </button>
+    </TableHead>
+  );
+}
+
+function InlineNameInput({
+  initial,
+  placeholder,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  placeholder?: string;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  return (
+    <Input
+      ref={inputRef}
+      value={value}
+      placeholder={placeholder}
+      className="h-7 max-w-64 text-xs"
+      onChange={event => setValue(event.target.value)}
+      // Клик по инпуту не должен засчитываться строке: иначе открытие строки сработает поверх правки.
+      onClick={event => event.stopPropagation()}
+      onDoubleClick={event => event.stopPropagation()}
+      // Enter/Esc обрабатывает сам инпут, а не глобальные хоткеи страницы: подсветка и
+      // подсказки оставлены браузеру, клавиши не всплывают к обработчику списка.
+      onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          onCommit(value);
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          onCancel();
+        }
+      }}
+    />
+  );
+}
+
+function FileKindIcon({ kind }: { kind: FileKind }) {
+  const className = 'size-4 text-muted-foreground';
+  switch (kind) {
+    case 'image':
+      return <FileImage className={className} />;
+    case 'video':
+      return <FileVideo className={className} />;
+    case 'audio':
+      return <FileAudio className={className} />;
+    case 'pdf':
+      return <FileType className={className} />;
+    case 'text':
+      return <FileText className={className} />;
+    default:
+      return <File className={className} />;
+  }
+}
