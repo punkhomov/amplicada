@@ -27,6 +27,10 @@ export default function WordRenderer(props: RendererProps) {
       await instance.load(bytes);
       if (alive) setStatus('ready');
     })().catch(() => {
+      // Экран уходит на external-карточку, не меняя url, — cleanup тогда не сработает, поэтому
+      // гасим зритель прямо здесь, чтобы не течь WASM-памятью и слушателями.
+      viewer?.destroy();
+      viewer = null;
       if (alive) setStatus('error');
     });
     return () => {
