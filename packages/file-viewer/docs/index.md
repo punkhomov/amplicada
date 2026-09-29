@@ -24,7 +24,7 @@ verified_commit: 74e82866
 | Редактор текста | `<TextEditor value language readOnly onChange onSave />` |
 | Определение типа | `fileKindOf(descriptor)`, `fileExtension(name)`, `monacoLanguageOf(descriptor)` |
 | Реестр рендереров | `defaultRenderers` (image, video, audio, pdf, text, word, spreadsheet, external), `externalRenderer`; свой — проп `renderers` |
-| Байты для рендерера | `RendererProps.readBytes(): Promise<ArrayBuffer>`; свободная `readSourceBytes(source)` |
+| Байты для рендерера | `RendererProps.readBytes(): Promise<ArrayBuffer>` (часть контракта рендерера) |
 | Источник | типы `FileSource`, `FileDescriptor` из `@amplicada/file-viewer/contracts` |
 | Формат размера | `formatBytes(bytes)` |
 
