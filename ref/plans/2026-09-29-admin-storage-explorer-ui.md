@@ -1,6 +1,6 @@
 # Admin Storage Explorer UI Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Довести `/admin/storage` до файлового менеджера в духе Windows Explorer: командная панель, дерево, адресная строка, мультивыбор, операции (папка/переименовать/переместить/удалить), контекстное меню, сортировка, хоткеи, вид списком и плиткой.
 
@@ -115,13 +115,13 @@ git commit -m "feat(platform-core): storage copyObject and deleteObjects primiti
 - Produces (contracts):
   ```ts
   export interface StorageCreateFolderRequest { name: string }
-  export interface StorageMoveRequest { keys: string[]; destination: string }
+  export interface StorageMoveRequest { keys: string[]; destination: string; name?: string }
   export interface StorageMoveResult { moved: number }
   export interface StorageDeleteRequest { keys: string[] }
   ```
 - Produces (routes):
   - `POST /storage/folder?prefix=` body `{ name }` → папка-маркер `${prefix}${name}/` (пустое тело, `contentType: 'application/x-directory'`), ответ — `headObject`. `400` пустое/невалидное имя (`/`, `\`, `..`, длина > 255), `409` если префикс уже существует.
-  - `POST /storage/move` body `{ keys, destination }` → для файла: `copyObject(key, destination + basename)`; для папки (ключ с `/`): рекурсивный листинг → `copyObject` каждого → `deleteObjects` старых → удалить маркер. `destination` нормализуется (`foo` → `foo/`). `400`: пустой `keys`, пустой/невалидный `destination`, папка перемещается в себя/потомка, ключа нет в бакете. `409`: целевой ключ уже существует. Ответ `{ moved }` (число верхнеуровневых элементов).
+  - `POST /storage/move` body `{ keys, destination, name? }` → для файла: `copyObject(key, destination + basename)`; для папки (ключ с `/`): рекурсивный листинг → `copyObject` каждого → `deleteObjects` старых → удалить маркер (и пересоздать целевой, чтобы пустые папки выживали). `name` — только с одним ключом, задаёт новое имя (rename). `destination` нормализуется (`foo` → `foo/`, `'/'` = корень). `400`: пустой `keys`, пустой/невалидный `destination`/`name`, папка перемещается в себя/потомка. `409`: целевой ключ уже существует. Ответ `{ moved }` (число верхнеуровневых элементов).
   - `DELETE /storage/objects` — теперь тело `{ keys: string[] }` вместо `?key=`: `400` пустой список, `200 { deleted }`, `deleteObjects`. Прежняя форма `?key=` удаляется (UI обновляется в Task 4).
   - Хелперы (экспортировать для тестов): `folderKey(prefix, name)`, `moveTargetOf(key, destination)`, `isDescendant(target, folderKey)`.
 
@@ -340,9 +340,9 @@ git commit -m "feat(module-admin): folder create, move and bulk delete routes"
 
 **Files:** `/tmp/opencode/verify-explorer-e2e.mjs` (не коммитится).
 
-- [ ] Сценарий: логин → засеять `expl/l1/f1.txt`, `expl/l2/` → создать папку → переименовать файл → Ctrl-выбор двух файлов → bulk delete → move файла в папку → открыть контекстное меню → свойства → переключить плитку. На каждом шаге скриншот в `/tmp/opencode/`, собрать `pageerror`/`console.error`.
-- [ ] `pnpm build && pnpm test && pnpm typecheck` — всё зелёное.
-- [ ] Commit (если остались правки после проверки): `test: storage explorer e2e adjustments` или пропустить шаг, если правок нет.
+- [x] Сценарий: логин → засеять `expl/l1/f1.txt`, `expl/l2/` → создать папку → переименовать файл → Ctrl-выбор двух файлов → bulk delete → move файла в папку → открыть контекстное меню → свойства → переключить плитку. На каждом шаге скриншот в `/tmp/opencode/`, собрать `pageerror`/`console.error`.
+- [x] `pnpm build && pnpm test && pnpm typecheck` — всё зелёное.
+- [x] Commit (если остались правки после проверки): `test: storage explorer e2e adjustments` или пропустить шаг, если правок нет.
 
 ---
 
