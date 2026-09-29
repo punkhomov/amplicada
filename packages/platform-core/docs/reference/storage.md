@@ -1,8 +1,8 @@
 ---
 title: platform-core — сервис storage (S3)
 type: reference
-updated: 2026-09-18
-verified_commit: 56aa450c
+updated: 2026-09-29
+verified_commit: 45ab313f
 ---
 
 # platform-core — сервис storage (S3)
@@ -22,13 +22,20 @@ Core-сервис `storage` — тонкая обёртка над S3-совме
 | `putObjectStream(key, body, options?)` | Запись `Readable`; с `contentLength` — одним `PUT`, без — multipart через `Upload` |
 | `getObject(key)` | Чтение объекта в память (`Buffer`) |
 | `getObjectStream(key, { range })` | Потоковое чтение; `range` — HTTP-заголовок `Range` как есть |
+| `copyObject(fromKey, toKey)` | Серверное копирование одного объекта (`CopyObject`); `CopySource` URL-кодируется целиком |
 | `deleteObject(key)` | Удаление одного ключа |
+| `deleteObjects(keys)` | Удаление списка ключей пачками по 1000; возвращает число ключей, пустой список — no-op |
 | `deletePrefix(prefix)` | Рекурсивное удаление под префиксом пачками по 1000; возвращает число ключей |
 | `headObject(key)` | `StorageObjectInfo` или `null`, если объекта нет |
 | `listObjects(prefix?, { delimiter })` | Листинг: `{ objects, prefixes }`; с `delimiter` — один уровень |
 | `getSignedUrl(key, expiresInSeconds?)` | Presigned URL (по умолчанию 3600 с) |
 
 `StorageObjectInfo`: `key`, `size`, `contentType?`, `etag?`, `lastModified?` (`Date`).
+
+`copyObject` копирует ровно один объект и поддерево не обходит — «перемещение» в S3
+собирается потребителем как copy + delete. `deleteObjects` режет список на пачки по 1000
+(лимит `DeleteObjects`) и возвращает число ключей; `deletePrefix` переиспользует его —
+батчинг и защита от пустого запроса живут в одном месте.
 
 ## Листинг и «папки»
 
@@ -68,6 +75,7 @@ Core-сервис `storage` — тонкая обёртка над S3-совме
 ## Ограничения
 
 - Бакет один, задаётся при инициализации сервиса; `ensureBucket` создаёт его при старте.
-- Нет `CopyObject`: переименование/перемещение в S3 — это copy + delete, в контракте его нет.
+- Перемещения в контракте нет: S3 не переименовывает префикс, move — это `copyObject` на
+  каждый объект + `deleteObjects`. Рекурсию по поддереву собирает потребитель.
 - `listObjects` не постраничный: отдаёт весь уровень целиком.
 - `putObject` держит тело в памяти; для крупных файлов — `putObjectStream`.

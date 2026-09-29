@@ -1,8 +1,8 @@
 ---
 title: Admin — интеграция действий — обзор
 type: index
-updated: 2026-09-18
-verified_commit: 56aa450c
+updated: 2026-09-29
+verified_commit: 45ab313f
 ---
 
 # Admin — интеграция действий — обзор
@@ -15,7 +15,7 @@ verified_commit: 56aa450c
 | Состав, зависимости и порядок setup | [Справочник](./reference/composition.md) |
 | Сервисы и интеграции действий | [Справочник](./reference/composition.md) |
 | Режим «Приложения» (`admin:apps`, `/admin/apps`) | [Справочник](./reference/composition.md) |
-| Страница хранилища (`/admin/storage`, HTTP API, превью) | [Справочник](./reference/storage.md) |
+| Страница хранилища (`/admin/storage`, Explorer UI, операции, HTTP API, превью) | [Справочник](./reference/storage.md) |
 | Frontend: интеграция; остальные страницы и слоты | [Справочник](./reference/composition.md); полное покрытие — нет |
 | HTTP API (кроме storage), env | — нет |
 | Схемы БД и миграции | — нет |
@@ -23,5 +23,6 @@ verified_commit: 56aa450c
 | Фоновые задачи | — нет |
 | Ограничения optional-интеграции | [Справочник](./reference/composition.md) |
 
-Сверено с рабочим деревом поверх 5767b800 (ветка `feat/support-chat-app`).
-Режим приложений проверен живым прогоном API; визуальная проверка — за браузером.
+Сверено с рабочим деревом на `45ab313f` (ветка `feat/admin-storage-explorer`). Режим
+приложений проверен живым прогоном API; Explorer-UI и операции хранилища сверены по коду
+и тестам, визуальная проверка — за браузером.

@@ -2,8 +2,8 @@
 title: "platform-core — обзор"
 type: index
 package: platform-core
-updated: 2026-09-18
-verified_commit: 56aa450c
+updated: 2026-09-29
+verified_commit: 45ab313f
 ---
 
 # platform-core
@@ -55,11 +55,12 @@ verified_commit: 56aa450c
 
 ## Freshness
 
-- Сверено с кодом: `2026-09-18`, коммит `56aa450c`, рабочее дерево грязное (ветка `feat/admin-storage-explorer`).
+- Сверено с кодом: `2026-09-29`, коммит `45ab313f`, рабочее дерево чистое (ветка `feat/admin-storage-explorer`).
 - Storage проверен живым прогоном: API (листинг по папкам, `Range`/`206`, `inline`/`attachment`,
   CSP `sandbox`, загрузка, рекурсивное удаление) и браузерный e2e-смоук страницы `/admin/storage`
   в Playwright (логин, загрузка, превью текста/изображения, скачивание, навигация по папкам,
   удаление файла и папки). Найденный дефект SeaweedFS (пустая папка после удаления) закрыт
-  добивкой маркера в `deletePrefix`.
+  добивкой маркера в `deletePrefix`. `copyObject`/`deleteObjects` и батчинг `deletePrefix`
+  покрыты unit-тестами сервиса.
 - Не проверено вживую: браузерный смоук `message-scroller`, `questionnaire`, `toast`;
   визуальная регрессия остальных компонентов после синка.

@@ -47,7 +47,7 @@
   - `deleteObjects(keys: string[]): Promise<number>` — пакетами по 1000 (`DeleteObjects`, `Quiet: true`), возвращает число удалённых ключей. Пустой массив — no-op, возвращает `0`.
 - `deletePrefix` внутри переиспользует `deleteObjects` (батчинг в одном месте), поведение не меняется.
 
-- [ ] **Step 1: Написать падающие тесты** (в существующий `storage-service.test.ts`, стиль `fakeClient`/`page` оттуда)
+- [x] **Step 1: Написать падающие тесты** (в существующий `storage-service.test.ts`, стиль `fakeClient`/`page` оттуда)
 
 ```ts
 test('copyObject шлёт CopyObject с ключом и URL-encoded источником', async () => {
@@ -80,21 +80,21 @@ test('deleteObjects с пустым списком не ходит в S3', async
 });
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
 Run: `pnpm --filter @amplicada/platform-core build && pnpm --filter @amplicada/platform-core exec node --test dist/backend/services/storage-service.test.js`
 Expected: FAIL — `copyObject`/`deleteObjects` не функции.
 
-- [ ] **Step 3: Реализовать**
+- [x] **Step 3: Реализовать**
 - В контракт добавить методы с док-комментариями (почему именно так — в стиле файла).
 - В `StorageServiceImpl`: `CopyObjectCommand` из `@aws-sdk/client-s3`; `deleteObjects` — цикл по 1000 (как в `deletePrefix`), `Quiet: true`; `deletePrefix` переписать через `deleteObjects`.
 
-- [ ] **Step 4: Прогнать — проходит**
+- [x] **Step 4: Прогнать — проходит**
 
 Run: `pnpm --filter @amplicada/platform-core build && pnpm --filter @amplicada/platform-core test`
 Expected: PASS, включая прежние тесты `deletePrefix`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/platform-core/src/contracts/backend/storage.ts packages/platform-core/src/backend/services/storage-service.ts packages/platform-core/src/backend/services/storage-service.test.ts
@@ -125,7 +125,7 @@ git commit -m "feat(platform-core): storage copyObject and deleteObjects primiti
   - `DELETE /storage/objects` — теперь тело `{ keys: string[] }` вместо `?key=`: `400` пустой список, `200 { deleted }`, `deleteObjects`. Прежняя форма `?key=` удаляется (UI обновляется в Task 4).
   - Хелперы (экспортировать для тестов): `folderKey(prefix, name)`, `moveTargetOf(key, destination)`, `isDescendant(target, folderKey)`.
 
-- [ ] **Step 1: Написать падающие тесты** (дополнить `storage.test.ts`; fake-storage расширить `listObjects`/`copyObject`/`deleteObjects`)
+- [x] **Step 1: Написать падающие тесты** (дополнить `storage.test.ts`; fake-storage расширить `listObjects`/`copyObject`/`deleteObjects`)
 
 ```ts
 test('POST /storage/folder создаёт маркер папки', async () => {
@@ -180,19 +180,19 @@ test('DELETE /storage/objects удаляет список ключей', async (
 });
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
 Run: `pnpm --filter @amplicada/module-admin build && pnpm --filter @amplicada/module-admin exec node --test dist/backend/routes/storage.test.js`
 Expected: FAIL — роутов нет.
 
-- [ ] **Step 3: Реализовать** роуты и хелперы строго по интерфейсам выше. Общие правила: ключи и destination нормализуются (`folderPrefix`), запрет `..`, проверка существования источника через `headObject`/листинг, проверка коллизии цели через `headObject`, ответ `reply` во всех ветках.
+- [x] **Step 3: Реализовать** роуты и хелперы строго по интерфейсам выше. Общие правила: ключи и destination нормализуются (`folderPrefix`), запрет `..`, проверка существования источника через `headObject`/листинг, проверка коллизии цели через `headObject`, ответ `reply` во всех ветках.
 
-- [ ] **Step 4: Прогнать — проходит**
+- [x] **Step 4: Прогнать — проходит**
 
 Run: `pnpm --filter @amplicada/module-admin build && pnpm --filter @amplicada/module-admin test`
 Expected: PASS (PUT-тесты тоже — env выставляется в `appWith`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/module-admin/src/contracts/storage.ts packages/module-admin/src/backend/routes/storage.ts packages/module-admin/src/backend/routes/storage.test.ts
@@ -243,11 +243,11 @@ git commit -m "feat(module-admin): folder create, move and bulk delete routes"
   export function isInside(prefix: string, candidate: string): boolean  // candidate в поддереве prefix
   ```
 
-- [ ] **Step 1: Написать тесты** для всех четырёх модулей (в той же папке, стиль `node:test`): граничные случаи `toEntries` (маркеры уже отфильтрованы бэком), range-выбор, sync, сортировка папок/файлов и направлений, `moveTarget`/`renameTarget` для файла и папки, `isInside`.
-- [ ] **Step 2: Прогнать — падает** (`pnpm --filter @amplicada/module-admin build && ... exec node --test dist/frontend/pages/admin-storage/lib/*.test.js`)
-- [ ] **Step 3: Реализовать** функции (чистые, без React).
-- [ ] **Step 4: Прогнать — проходит** (`pnpm --filter @amplicada/module-admin test`)
-- [ ] **Step 5: Commit** `feat(module-admin): storage explorer helpers (entries, selection, sort, paths)`
+- [x] **Step 1: Написать тесты** для всех четырёх модулей (в той же папке, стиль `node:test`): граничные случаи `toEntries` (маркеры уже отфильтрованы бэком), range-выбор, sync, сортировка папок/файлов и направлений, `moveTarget`/`renameTarget` для файла и папки, `isInside`.
+- [x] **Step 2: Прогнать — падает** (`pnpm --filter @amplicada/module-admin build && ... exec node --test dist/frontend/pages/admin-storage/lib/*.test.js`)
+- [x] **Step 3: Реализовать** функции (чистые, без React).
+- [x] **Step 4: Прогнать — проходит** (`pnpm --filter @amplicada/module-admin test`)
+- [x] **Step 5: Commit** `feat(module-admin): storage explorer helpers (entries, selection, sort, paths)`
 
 ---
 
@@ -274,11 +274,11 @@ git commit -m "feat(module-admin): folder create, move and bulk delete routes"
 
 **Проверка:** `pnpm build`, `pnpm typecheck`; Playwright: открыть `/admin/storage`, создать папку инлайн, переименовать файл, выбрать два файла чекбоксами (статус-бар показывает «Выбрано: 2»), `Delete` — подтверждение и удаление.
 
-- [ ] **Step 1: Локали** — новые ключи `admin_storage_new_folder`, `admin_storage_rename`, `admin_storage_move`, `admin_storage_move_here`, `admin_storage_delete_selected`, `admin_storage_selected_count`, `admin_storage_items_count`, `admin_storage_folder_exists`, `admin_storage_invalid_name`, `admin_storage_other` (и ru-варианты).
-- [ ] **Step 2: `storage-status-bar.tsx`** — три показателя по пропсам `{ selected: number; total: number; selectedBytes: number }`.
-- [ ] **Step 3: `storage-list.tsx`** — таблица с пропсами `{ entries, sort, selection, editing, onSort, onRowClick, onCheck, onOpen, onCommitEdit, onCancelEdit, onRenameStart, onDelete, onDownload, onPreview }`.
-- [ ] **Step 4: собрать в `admin-storage.tsx`** — состояние (selection reducer, sort, editing), мутации, хоткеи на уровне страницы, интеграция `StorageStatusBar`; существующий диалог превью и тулбар-кнопка «Загрузить» сохраняются (тулбар расширяется в Task 5).
-- [ ] **Step 5: сборка/типы + Playwright**, затем commit `feat(module-admin): storage list with selection, sorting and inline rename`.
+- [x] **Step 1: Локали** — новые ключи `admin_storage_new_folder`, `admin_storage_rename`, `admin_storage_move`, `admin_storage_move_here`, `admin_storage_delete_selected`, `admin_storage_selected_count`, `admin_storage_items_count`, `admin_storage_folder_exists`, `admin_storage_invalid_name`, `admin_storage_other` (и ru-варианты).
+- [x] **Step 2: `storage-status-bar.tsx`** — три показателя по пропсам `{ selected: number; total: number; selectedBytes: number }`.
+- [x] **Step 3: `storage-list.tsx`** — таблица с пропсами `{ entries, sort, selection, editing, onSort, onRowClick, onCheck, onOpen, onCommitEdit, onCancelEdit, onRenameStart, onDelete, onDownload, onPreview }`.
+- [x] **Step 4: собрать в `admin-storage.tsx`** — состояние (selection reducer, sort, editing), мутации, хоткеи на уровне страницы, интеграция `StorageStatusBar`; существующий диалог превью и тулбар-кнопка «Загрузить» сохраняются (тулбар расширяется в Task 5).
+- [x] **Step 5: сборка/типы + Playwright**, затем commit `feat(module-admin): storage list with selection, sorting and inline rename`.
 
 ---
 
@@ -296,7 +296,7 @@ git commit -m "feat(module-admin): folder create, move and bulk delete routes"
 
 **Проверка:** Playwright — дерево раскрывает вложенную папку, клик по крошке возвращает на уровень выше, переключатель плитки показывает/скрывает сетку.
 
-- [ ] Шаги: компоненты → интеграция → локали → сборка/типы → Playwright → commit `feat(module-admin): storage explorer toolbar, address bar, tree and tiles`.
+- [x] Шаги: компоненты → интеграция → локали → сборка/типы → Playwright → commit `feat(module-admin): storage explorer toolbar, address bar, tree and tiles`.
 
 ---
 
@@ -314,7 +314,7 @@ git commit -m "feat(module-admin): folder create, move and bulk delete routes"
 
 **Проверка:** Playwright — правый клик открывает меню; «Переместить…» переносит файл в другую папку (видно после навигации); drag&drop строки на узел дерева переносит файл.
 
-- [ ] Шаги: компоненты → интеграция → локали → сборка/типы → Playwright → commit `feat(module-admin): storage context menu, move dialog, properties and drag&drop`.
+- [x] Шаги: компоненты → интеграция → локали → сборка/типы → Playwright → commit `feat(module-admin): storage context menu, move dialog, properties and drag&drop`.
 
 ---
 
@@ -332,7 +332,7 @@ git commit -m "feat(module-admin): folder create, move and bulk delete routes"
 - notes: D-006 — почему пакетные операции и move=copy+delete, отвергнутое (presigned multipart copy, «move» через переименование префикса — S3 не умеет), грабли (CopySource encoding, >1000 ключей).
 - roadmap: чекбоксы итерации 2; `ref/context.md` — ключевики `POST /storage/folder`, `/storage/move`, bulk delete, Explorer-UI.
 
-- [ ] Commit `docs: storage explorer UI and operations`.
+- [x] Commit `docs: storage explorer UI and operations`.
 
 ---
 
