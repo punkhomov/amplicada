@@ -19,7 +19,22 @@ test('URL читается с credentials: include', async () => {
   }
 });
 
+test('URL с ошибочным статусом бросает с адресом', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => new Response('nope', { status: 404 })) as typeof fetch;
+  try {
+    await assert.rejects(() => readSourceBytes({ type: 'url', url: '/api/missing' }), /HTTP 404 \/api\/missing/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('blob читается без fetch', async () => {
   const bytes = await readSourceBytes({ type: 'blob', blob: new Blob([new Uint8Array([7, 8])]), name: 'b' });
   assert.deepEqual([...new Uint8Array(bytes)], [7, 8]);
+});
+
+test('file читается через arrayBuffer', async () => {
+  const bytes = await readSourceBytes({ type: 'file', file: new File([new Uint8Array([9, 10, 11])], 'f.bin') });
+  assert.deepEqual([...new Uint8Array(bytes)], [9, 10, 11]);
 });

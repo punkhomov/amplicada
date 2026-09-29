@@ -4,7 +4,7 @@ import type { FileSource } from '../../contracts/index.js';
 export async function readSourceBytes(source: FileSource): Promise<ArrayBuffer> {
   if (source.type === 'url') {
     const response = await fetch(source.url, { credentials: 'include' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status} ${source.url}`);
     return response.arrayBuffer();
   }
   const blob = source.type === 'file' ? source.file : source.blob;

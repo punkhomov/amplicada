@@ -32,7 +32,7 @@
 |------|--------|----------|
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
-| `notes/file-viewer.md` | `implemented` | D-001…D-006: общая либа превью, делегирование сложных форматов браузеру, ленивый Monaco, реестр рендереров; D-005: Office-WASM-рендерер `@silurus/ooxml`; D-006: правка текста через `PUT` потребителя |
+| `notes/file-viewer.md` | `implemented` | D-001…D-007: общая либа превью, делегирование сложных форматов браузеру, ленивый Monaco, реестр рендереров; D-005: Office-WASM-рендерер `@silurus/ooxml`; D-006: правка текста через `PUT` потребителя; D-007: accepted risk — недоверенный Office парсится на своём origin |
 | `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar; D-002: режим «Приложения»; D-004: файловый менеджер хранилища и `PUT`-правка текста |
 | `notes/module-support-chat.md` | `implemented` | D-001…D-008: таблицы вместо документов, SSE + Redis, приложения админки через общий хост, вложения через storage, карточка-виджет и композер на ките, несколько обращений и портал |
 | `notes/platform-core.md` | `implemented` | D-001…D-006: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней, `delimiter` в `listObjects` |

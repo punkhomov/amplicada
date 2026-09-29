@@ -12,18 +12,31 @@ const EDIT_LIMIT_BYTES = 5 * 1024 * 1024;
 
 type TextState = { status: 'loading' } | { status: 'error' } | { status: 'ready'; text: string; truncated: boolean };
 
-export default function TextRenderer({ descriptor, readText, edit }: RendererProps) {
+export default function TextRenderer({ descriptor, url, readText, edit }: RendererProps) {
   const { labels, textPreviewLimitBytes } = useFileViewer();
   const [state, setState] = useState<TextState>({ status: 'loading' });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const content = useRef('');
+  const editMode = Boolean(edit);
 
+  // `readText`/`edit`/лимит читаются из ref: родитель (пример: `admin-storage`) пересоздаёт объект
+  // `source`/`edit` на каждый рендер, и зависимость от их идентичности перечитывала бы файл и
+  // сбрасывала буфер редактора при любом ре-рендере — например, во время сохранения.
+  const readRef = useRef(readText);
+  readRef.current = readText;
+  const editRef = useRef(edit);
+  editRef.current = edit;
+  const previewLimitRef = useRef(textPreviewLimitBytes);
+  previewLimitRef.current = textPreviewLimitBytes;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: url — ключ перезагрузки, `editMode` меняет лимит чтения; readText/лимит берём из ref, чтобы новая ссылка не перечитывала файл
   useEffect(() => {
     let alive = true;
     setState({ status: 'loading' });
-    readText({ limitBytes: edit ? EDIT_LIMIT_BYTES : textPreviewLimitBytes })
+    readRef
+      .current({ limitBytes: editMode ? EDIT_LIMIT_BYTES : previewLimitRef.current })
       .then(result => {
         if (!alive) return;
         content.current = result.text;
@@ -36,19 +49,22 @@ export default function TextRenderer({ descriptor, readText, edit }: RendererPro
     return () => {
       alive = false;
     };
-  }, [readText, edit, textPreviewLimitBytes]);
+  }, [url, editMode]);
 
   const handleSave = useCallback(() => {
-    if (!edit || saving) return;
+    const current = editRef.current;
+    if (!current || saving) return;
     setSaving(true);
-    Promise.resolve(edit.onSave(content.current))
+    Promise.resolve(current.onSave(content.current))
       .then(() => {
         setDirty(false);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       })
+      // Потребитель уже показал `onError`; иначе отказ сохранения всплывёт unhandled rejection'ом.
+      .catch(() => {})
       .finally(() => setSaving(false));
-  }, [edit, saving]);
+  }, [saving]);
 
   if (state.status === 'loading') return <PreviewLoader />;
   if (state.status === 'error') {

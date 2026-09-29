@@ -42,7 +42,7 @@
 - Consumes: `createStorageRoutes(fastify, context)` из `./storage.js`; `context.services.resolve<BackendStorageService>('storage')`; методы `storage.headObject(key)`, `storage.putObject(key, body, { contentType })`.
 - Produces: роут `PUT /storage/objects?key=<key>`, тело JSON `{ content: string }`, `bodyLimit` 8 МБ. Ответ — `StorageObjectInfo` от `headObject`. Ошибки: `400 { error }` (нет ключа / нет строкового `content`), `404 { error }` (объект не найден).
 
-- [ ] **Step 1: Написать падающий тест**
+- [x] **Step 1: Написать падающий тест**
 
 Create `packages/module-admin/src/backend/routes/storage.test.ts`:
 
@@ -119,19 +119,19 @@ test('PUT сохраняет кириллицу без искажений', asyn
 });
 ```
 
-- [ ] **Step 2: Прогнать тест — падает**
+- [x] **Step 2: Прогнать тест — падает**
 
 Run: `pnpm --filter @amplicada/module-admin build && pnpm --filter @amplicada/module-admin exec node --test dist/backend/routes/storage.test.js`
 Expected: FAIL — `PUT` не зарегистрирован (404 `Route PUT:/storage/objects not found`).
 
-- [ ] **Step 3: Добавить `test`-скрипт в пакет**
+- [x] **Step 3: Добавить `test`-скрипт в пакет**
 
 В `packages/module-admin/package.json` в `"scripts"` добавить (рядом с `typecheck`):
 ```json
 "test": "node --test \"dist/**/*.test.js\""
 ```
 
-- [ ] **Step 4: Реализовать роут**
+- [x] **Step 4: Реализовать роут**
 
 В `packages/module-admin/src/backend/routes/storage.ts` внутри `createStorageRoutes`, после `POST /storage/objects`:
 
@@ -150,12 +150,12 @@ fastify.put('/storage/objects', { bodyLimit: 8 * 1024 * 1024 }, async (request, 
 
 `bodyLimit` — потому что дефолт Fastify 1 МБ, а потолок редактора в либе — 5 МБ текста (JSON-тело чуть больше).
 
-- [ ] **Step 5: Прогнать тесты — проходят**
+- [x] **Step 5: Прогнать тесты — проходят**
 
 Run: `pnpm --filter @amplicada/module-admin build && pnpm --filter @amplicada/module-admin test`
 Expected: PASS, все тесты `storage.test.js`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/module-admin/package.json packages/module-admin/src/backend/routes/storage.ts packages/module-admin/src/backend/routes/storage.test.ts
@@ -175,13 +175,13 @@ git commit -m "feat(module-admin): PUT /storage/objects for saving text content"
 - Consumes: роут из Task 1; `api.put<StorageObject>(path, body, { query })` из `@amplicada/platform-core/frontend`; `FilePreviewDialog` принимает `mode` и `onSave(content: string): Promise<void> | void` (либа сама включает редактор только для `text`).
 - Produces: сохранение текста из диалога превью с обновлением листинга.
 
-- [ ] **Step 1: Добавить строку ошибки в словари**
+- [x] **Step 1: Добавить строку ошибки в словари**
 
 В `en.json` и `ru.json` в группе ключей `admin_storage_*` добавить `admin_storage_save_error`:
 - en: `"Failed to save file"`
 - ru: `"Не удалось сохранить файл"`
 
-- [ ] **Step 2: Добавить мутацию сохранения**
+- [x] **Step 2: Добавить мутацию сохранения**
 
 В `admin-storage.tsx`, рядом с `deleteObjectMutation`:
 
@@ -194,7 +194,7 @@ const saveObjectMutation = useMutation({
 });
 ```
 
-- [ ] **Step 3: Подключить `onSave` к диалогу**
+- [x] **Step 3: Подключить `onSave` к диалогу**
 
 В `FilePreviewDialog` (строка ~276) добавить рядом с `source`/`labels`:
 
@@ -205,12 +205,12 @@ onSave={content => saveObjectMutation.mutateAsync({ key: preview?.key ?? '', con
 
 Либа гасит правку для не-текстовых типов сама (`canEdit`), поэтому условие по типу в вызывающем коде не нужно.
 
-- [ ] **Step 4: Проверить сборку**
+- [x] **Step 4: Проверить сборку**
 
 Run: `pnpm typecheck`
 Expected: без ошибок в `@amplicada/module-admin`.
 
-- [ ] **Step 5: Живой Playwright-сценарий (проверка)**
+- [x] **Step 5: Живой Playwright-сценарий (проверка)**
 
 Остановить dev, затем поднять (см. AGENTS.md). Скрипт `/tmp/opencode/verify-edit.mjs`:
 1. Логин `admin`/`admin` (см. `ref/guides/playwright-sandbox.md`).
@@ -222,7 +222,7 @@ Expected: без ошибок в `@amplicada/module-admin`.
 Run: `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright node /tmp/opencode/verify-edit.mjs`
 Expected: скриншот показывает `new content`; в консоли нет ошибок.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/module-admin/src/frontend/pages/admin-storage/ui/admin-storage.tsx packages/module-admin/src/frontend/locales/en.json packages/module-admin/src/frontend/locales/ru.json
@@ -248,7 +248,7 @@ git commit -m "feat(module-admin): edit text files from storage preview"
   - `RendererProps.readBytes(): Promise<ArrayBuffer>` (и `ResolvedSource.readBytes`).
   - `readSourceBytes(source: FileSource): Promise<ArrayBuffer>` — для URL `fetch(url, { credentials: 'include' })` c проверкой `res.ok`; для `file`/`blob` — `blob.arrayBuffer()`.
 
-- [ ] **Step 1: Написать падающие тесты**
+- [x] **Step 1: Написать падающие тесты**
 
 Create `packages/file-viewer/src/frontend/lib/file-kind.test.ts`:
 
@@ -302,19 +302,19 @@ test('blob читается без fetch', async () => {
 });
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
 Run: `pnpm --filter @amplicada/file-viewer build && pnpm --filter @amplicada/file-viewer exec node --test dist/frontend/lib/file-kind.test.js`
 Expected: FAIL — `fileKindOf(...'docx')` возвращает `'other'`, `readSourceBytes` не экспортирован.
 
-- [ ] **Step 3: Добавить `test`-скрипт**
+- [x] **Step 3: Добавить `test`-скрипт**
 
 В `packages/file-viewer/package.json` в `"scripts"` добавить:
 ```json
 "test": "node --test \"dist/**/*.test.js\""
 ```
 
-- [ ] **Step 4: Расширить контракты**
+- [x] **Step 4: Расширить контракты**
 
 В `packages/file-viewer/src/contracts/index.ts`:
 - `FileKind` → `'image' | 'video' | 'audio' | 'pdf' | 'text' | 'word' | 'spreadsheet' | 'other'`.
@@ -324,7 +324,7 @@ Expected: FAIL — `fileKindOf(...'docx')` возвращает `'other'`, `read
   readBytes(): Promise<ArrayBuffer>;
 ```
 
-- [ ] **Step 5: Маппинг типов**
+- [x] **Step 5: Маппинг типов**
 
 В `file-kind.ts` дополнить `KINDS_BY_MIME`:
 ```ts
@@ -335,7 +335,7 @@ Expected: FAIL — `fileKindOf(...'docx')` возвращает `'other'`, `read
 ```
 и `KINDS_BY_EXTENSION`: `docx: 'word'`, `docm: 'word'`, `xlsx: 'spreadsheet'`, `xlsm: 'spreadsheet'`.
 
-- [ ] **Step 6: Реализовать `readSourceBytes`**
+- [x] **Step 6: Реализовать `readSourceBytes`**
 
 Create `packages/file-viewer/src/frontend/lib/read-source.ts`:
 
@@ -354,7 +354,7 @@ export async function readSourceBytes(source: FileSource): Promise<ArrayBuffer> 
 }
 ```
 
-- [ ] **Step 7: Прокинуть `readBytes` в `useResolvedSource`**
+- [x] **Step 7: Прокинуть `readBytes` в `useResolvedSource`**
 
 В `use-resolved-source.ts`:
 - в интерфейс `ResolvedSource` добавить `readBytes(): Promise<ArrayBuffer>;`
@@ -370,12 +370,12 @@ const readBytes = useCallback((): Promise<ArrayBuffer> => {
 
 В `packages/file-viewer/src/frontend/components/file-preview.tsx` в `<Renderer ... />` добавить проп `readBytes={resolved.readBytes}`.
 
-- [ ] **Step 8: Прогнать тесты — проходят**
+- [x] **Step 8: Прогнать тесты — проходят**
 
 Run: `pnpm --filter @amplicada/file-viewer build && pnpm --filter @amplicada/file-viewer test`
 Expected: PASS (`file-kind.test.js`, `read-source.test.js`).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/file-viewer/package.json packages/file-viewer/src/contracts/index.ts packages/file-viewer/src/frontend/lib/file-kind.ts packages/file-viewer/src/frontend/lib/read-source.ts packages/file-viewer/src/frontend/lib/use-resolved-source.ts packages/file-viewer/src/frontend/components/file-preview.tsx packages/file-viewer/src/frontend/lib/file-kind.test.ts packages/file-viewer/src/frontend/lib/read-source.test.ts
@@ -397,14 +397,14 @@ git commit -m "feat(file-viewer): Office file kinds and readBytes source access"
 - Consumes: `RendererProps.readBytes()` (Task 3), `PreviewLoader`, `useFileViewer`, `ExternalRenderer` (фолбэк); `@silurus/ooxml/docx` → `DocxScrollViewer`, `@silurus/ooxml/xlsx` → `XlsxViewer`.
 - Produces: рендереры `word` и `spreadsheet` в `defaultRenderers`; при ошибке загрузки/рендера — external-карточка.
 
-- [ ] **Step 1: Установить зависимость**
+- [x] **Step 1: Установить зависимость**
 
 ```bash
 pnpm --filter @amplicada/file-viewer add @silurus/ooxml@0.88.0
 ```
 Затем в `packages/file-viewer/package.json` убедиться, что в `"dependencies"` стоит точный `"@silurus/ooxml": "0.88.0"` (pnpm может поставить `^`, если передать не тот формат — поправить вручную и выполнить `pnpm install`).
 
-- [ ] **Step 2: Рендерер DOCX**
+- [x] **Step 2: Рендерер DOCX**
 
 Create `packages/file-viewer/src/frontend/renderers/word.tsx`:
 
@@ -458,7 +458,7 @@ export default function WordRenderer(props: RendererProps) {
 
 `useEffect` зависит только от `url`, а `readBytes` берётся из ref: иначе новый объект `source` на каждый рендер родителя перезапускал бы загрузку.
 
-- [ ] **Step 3: Рендерер XLSX**
+- [x] **Step 3: Рендерер XLSX**
 
 Create `packages/file-viewer/src/frontend/renderers/spreadsheet.tsx` — то же, но `XlsxViewer`:
 
@@ -510,7 +510,7 @@ export default function SpreadsheetRenderer(props: RendererProps) {
 }
 ```
 
-- [ ] **Step 4: Зарегистрировать рендереры**
+- [x] **Step 4: Зарегистрировать рендереры**
 
 В `registry.ts`:
 
@@ -529,12 +529,12 @@ const spreadsheetRenderer: RendererPlugin = {
 ```
 И в `defaultRenderers` добавить `wordRenderer, spreadsheetRenderer` перед `externalRenderer`.
 
-- [ ] **Step 5: Сборка**
+- [x] **Step 5: Сборка**
 
 Run: `pnpm build`
 Expected: успех. Проверить, что в выводе сборки `apps/web` для Office-рендереров и WASM появились **отдельные** чанки (не в основном бандле).
 
-- [ ] **Step 6: Живой Playwright-сценарий (проверка)**
+- [x] **Step 6: Живой Playwright-сценарий (проверка)**
 
 Поднять dev. Скрипт `/tmp/opencode/verify-office.mjs`:
 1. Логин, затем `page.context().request.post` multipart — загрузить реальные `sample-1.docx` и `sample-1.xlsx`:
@@ -548,7 +548,7 @@ Expected: успех. Проверить, что в выводе сборки `a
 Run: `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright node /tmp/opencode/verify-office.mjs`
 Expected: на скриншотах — отрендеренные Word-страница и Excel-сетка; ошибок нет.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/file-viewer/package.json pnpm-lock.yaml packages/file-viewer/src/frontend/renderers/word.tsx packages/file-viewer/src/frontend/renderers/spreadsheet.tsx packages/file-viewer/src/frontend/renderers/registry.ts
@@ -571,7 +571,7 @@ git commit -m "feat(file-viewer): lazy docx/xlsx preview via @silurus/ooxml"
 
 **Interfaces:** нет кода; документация по формату скилла `.agents/skills/module-docs/`.
 
-- [ ] **Step 1: Заметки `file-viewer`**
+- [x] **Step 1: Заметки `file-viewer`**
 
 В `ref/notes/file-viewer.md`:
 - Добавить **D-005. Office — клиентский WASM/Canvas-рендерер вместо запрета конвертации** (accepted). Контекст: D-002 отклонял клиентскую конвертацию; появился `@silurus/ooxml` (Rust/WASM, Canvas, read-only, MIT, 0 deps). Решение: docx→`word`, xlsx→`spreadsheet`, лениво; `.doc/.xls` — external. Отвергнуто: документ-сервер Collabora/ONLYOFFICE (инфра), облачные вьюеры (приватность), серверная конвертация (инфра). Риск: pre-1.0, AI-generated. Что изменит: требование редактирования Office.
@@ -579,24 +579,24 @@ git commit -m "feat(file-viewer): lazy docx/xlsx preview via @silurus/ooxml"
 - В блоке цитаты вверху добавить строки-дайджесты D-005/D-006.
 - В «Пробелы» удалить «Правка пока не подключена…», обновить про Office.
 
-- [ ] **Step 2: Заметки `module-admin`**
+- [x] **Step 2: Заметки `module-admin`**
 
 В D-004 дописать абзац: добавлен `PUT /storage/objects` (JSON `{content}`, `bodyLimit` 8 МБ, сохранение `contentType`), UI подключён через `mode="edit"`/`onSave`.
 
-- [ ] **Step 3: Потребительские docs**
+- [x] **Step 3: Потребительские docs**
 
 - `packages/file-viewer/docs/index.md`: в «Публичная поверхность» добавить рендереры `word`/`spreadsheet` и `readBytes`; в «Freshness» — обновить; убрать строку «режим правки не проверен».
 - `packages/file-viewer/docs/reference/file-viewer.md`: описать kinds `word|spreadsheet`, `readBytes`, зависимость `@silurus/ooxml` (pin, лицензия, размер), фолбэк на external.
 - `packages/module-admin/docs/reference/storage.md`: в таблицу HTTP API добавить `PUT /storage/objects?key=`; из «Ограничения» убрать «Правки файлов нет».
 
-- [ ] **Step 4: Планы и контекст**
+- [x] **Step 4: Планы и контекст**
 
 - `ref/plans/2026-09-19-storage-preview-editor.md`: в шапке и блоке «Реализовано» отметить правку и Office; при необходимости `status: superseded` с указанием на roadmap.
 - `ref/plans/2026-09-29-admin-storage-roadmap.md`: отметить галочками пункты итерации 1.
 - `ref/context.md`: в таблицу ключевиков добавить строку про `PUT /storage/objects`, правку текста и Office-рендереры `@silurus/ooxml`.
 - `ref/README.md`: обновить статусы строк `file-viewer`/`module-admin`/планов при необходимости.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ref packages/file-viewer/docs packages/module-admin/docs

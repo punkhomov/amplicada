@@ -80,6 +80,14 @@ export function AdminStorage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: STORAGE_OBJECTS_QUERY_KEY });
 
+  // Стабильный объект источника: `FilePreview` пересоздаёт `readText`/`edit` на каждый рендер,
+  // а новый `source` каждый рендер заставлял бы превью перечитывать файл.
+  const previewSource = useMemo(
+    () =>
+      preview ? { type: 'url' as const, url: storageViewUrl(api, preview.key), name: objectName(preview.key), size: preview.size } : null,
+    [api, preview],
+  );
+
   const navigateTo = (next: string) => {
     setSearch('');
     setSearchParams(next ? { prefix: next } : {});
@@ -284,7 +292,7 @@ export function AdminStorage() {
       <FilePreviewDialog
         open={preview !== null}
         onOpenChange={open => !open && setPreview(null)}
-        source={preview ? { type: 'url', url: storageViewUrl(api, preview.key), name: objectName(preview.key), size: preview.size } : null}
+        source={previewSource}
         description={preview ? `${formatBytes(preview.size)} · ${formatDate(preview.lastModified)}` : undefined}
         mode="edit"
         onSave={async content => {

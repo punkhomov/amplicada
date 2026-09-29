@@ -1,19 +1,32 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import Fastify from 'fastify';
 import type { BackendSetupContext, BackendStorageService } from '@amplicada/platform-core/contracts/backend';
+import Fastify from 'fastify';
 import { createStorageRoutes } from './storage.js';
 
-interface PutCall { key: string; body: unknown; contentType?: string }
+interface PutCall {
+  key: string;
+  body: unknown;
+  contentType?: string;
+}
 
-function appWith() {
+interface HeadResult {
+  key: string;
+  size: number;
+  contentType?: string;
+}
+
+/** `head` — переопределение ответа `headObject` (в т.ч. `null`); без него `notes/a.json` существует, остальное нет. */
+function appWith(head?: HeadResult | null) {
   const puts: PutCall[] = [];
   const storage = {
     putObject: async (key: string, body: unknown, options?: { contentType?: string }) => {
       puts.push({ key, body, contentType: options?.contentType });
     },
-    headObject: async (key: string) =>
-      key === 'notes/a.json' ? { key, size: 1, contentType: 'application/json' } : null,
+    headObject: async (key: string) => {
+      if (head !== undefined) return head;
+      return key === 'notes/a.json' ? { key, size: 1, contentType: 'application/json' } : null;
+    },
   } as unknown as BackendStorageService;
   const context = { services: { resolve: () => storage } } as unknown as BackendSetupContext;
   const app = Fastify();
@@ -63,8 +76,25 @@ test('PUT текста крупнее дефолтного лимита Fastify 
   assert.equal(res.statusCode, 200);
 });
 
+test('PUT текста почти 8 МБ сохраняется, не 413', async () => {
+  const { app, puts } = appWith();
+  const content = 'x'.repeat(8 * 1024 * 1024 - 1024);
+  const res = await app.inject({ method: 'PUT', url: '/storage/objects?key=notes/a.json', payload: { content } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(puts[0].body, content);
+});
+
+test('PUT подставляет text/plain, когда у объекта нет contentType', async () => {
+  const { app, puts } = appWith({ key: 'notes/a.json', size: 1, contentType: undefined });
+  const res = await app.inject({ method: 'PUT', url: '/storage/objects?key=notes/a.json', payload: { content: 'x' } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(puts[0].contentType, 'text/plain; charset=utf-8');
+});
+
 test('PUT сохраняет кириллицу без искажений', async () => {
   const { app, puts } = appWith();
   await app.inject({ method: 'PUT', url: '/storage/objects?key=notes/a.json', payload: { content: 'привет' } });
   assert.equal(puts[0].body, 'привет');
+  assert.equal((puts[0].body as string).length, 6);
+  assert.equal(Buffer.byteLength(puts[0].body as string, 'utf8'), 12);
 });
