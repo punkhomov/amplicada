@@ -75,7 +75,18 @@ export interface BackendStorageService {
    * Диапазон вне размера объекта → ошибка со `statusCode = 416`.
    */
   getObjectStream(key: string, options?: StorageGetStreamOptions): Promise<StorageObjectStream>;
+  /**
+   * Копирование на стороне S3: тело не проходит через процесс. `move` в файловом менеджере
+   * собирается как copy + delete, а прогонять большой файл через память ради этого не нужно.
+   * `CopySource` кодируется — ключи с кириллицей или пробелами иначе S3 не находит.
+   */
+  copyObject(fromKey: string, toKey: string): Promise<void>;
   deleteObject(key: string): Promise<void>;
+  /**
+   * Удаляет ключи пачками по 1000 (лимит `DeleteObjects`) и возвращает их число. Пустой список —
+   * no-op: батчинг и защита от пустого запроса живут в одном месте, в том числе для `deletePrefix`.
+   */
+  deleteObjects(keys: string[]): Promise<number>;
   /**
    * Удаляет всё под префиксом пачками по 1000 (лимит `DeleteObjects`) и возвращает число ключей.
    * Поштучное удаление распакованного пакета — это тысячи round-trip'ов.

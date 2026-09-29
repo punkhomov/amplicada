@@ -174,6 +174,35 @@ test('deletePrefix не соглашается снести бакет цели�
   assert.equal(sent.length, 0, 'до S3 такой вызов доходить не должен');
 });
 
+test('copyObject шлёт CopyObject с ключом и URL-encoded источником', async () => {
+  const { client, sent } = fakeClient([{}]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  await storage.copyObject('a/конспект 1.txt', 'b/конспект 1.txt');
+  assert.equal(sent[0].constructorName, 'CopyObjectCommand');
+  assert.deepEqual(sent[0].input, {
+    Bucket: 'bucket',
+    Key: 'b/конспект 1.txt',
+    CopySource: `bucket/${encodeURIComponent('a/конспект 1.txt')}`,
+  });
+});
+
+test('deleteObjects режет ключи на пачки по 1000', async () => {
+  const { client, sent } = fakeClient([{}, {}]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  const keys = Array.from({ length: 1500 }, (_, i) => `k${i}.txt`);
+  assert.equal(await storage.deleteObjects(keys), 1500);
+  assert.equal(sent.length, 2);
+  assert.equal((sent[0].input.Delete as { Objects: unknown[] }).Objects.length, 1000);
+  assert.equal((sent[1].input.Delete as { Objects: unknown[] }).Objects.length, 500);
+});
+
+test('deleteObjects с пустым списком не ходит в S3', async () => {
+  const { client, sent } = fakeClient([]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  assert.equal(await storage.deleteObjects([]), 0);
+  assert.equal(sent.length, 0);
+});
+
 test('прочие ошибки S3 не превращаются в 416', async () => {
   const { client } = fakeClient([Object.assign(new Error('boom'), { name: 'NoSuchKey' })]);
   const storage = new StorageServiceImpl(client, 'bucket');

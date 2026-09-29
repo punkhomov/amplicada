@@ -1,5 +1,6 @@
 import type { Readable } from 'node:stream';
 import {
+  CopyObjectCommand,
   CreateBucketCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
@@ -83,8 +84,33 @@ export class StorageServiceImpl implements BackendStorageService {
     };
   }
 
+  async copyObject(fromKey: string, toKey: string): Promise<void> {
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        Key: toKey,
+        // S3 разбирает CopySource как путь, поэтому источник кодируется целиком: иначе пробелы и
+        // кириллица в ключе делают строку неоднозначной и объект «не находится».
+        CopySource: `${this.bucket}/${encodeURIComponent(fromKey)}`,
+      }),
+    );
+  }
+
   async deleteObject(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  async deleteObjects(keys: string[]): Promise<number> {
+    // DeleteObjects принимает не больше 1000 ключей за раз. Пакет курса легко больше — без
+    // разбиения на пачки запрос просто отвергается. Пустой список цикл пропускает: сюда его
+    // приводит в том числе deletePrefix, а пустой DeleteObjects — гарантированная ошибка.
+    for (let i = 0; i < keys.length; i += 1000) {
+      const batch = keys.slice(i, i + 1000);
+      await this.client.send(
+        new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true } }),
+      );
+    }
+    return keys.length;
   }
 
   async deletePrefix(prefix: string): Promise<number> {
@@ -93,20 +119,13 @@ export class StorageServiceImpl implements BackendStorageService {
     if (!prefix) throw new Error('deletePrefix требует непустой префикс');
 
     const keys = (await this.listObjects(prefix)).objects.map(object => object.key).filter(Boolean);
-    // DeleteObjects принимает не больше 1000 ключей за раз. Пакет курса легко больше — без
-    // разбиения на пачки запрос просто отвергается.
-    for (let i = 0; i < keys.length; i += 1000) {
-      const batch = keys.slice(i, i + 1000);
-      await this.client.send(
-        new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true } }),
-      );
-    }
+    const deleted = await this.deleteObjects(keys);
     // Маркер папки листингом не достать: SeaweedFS filer держит пустую директорию отдельной
     // записью, которой нет среди объектов, — без этого удалённая «папка» так и висела бы
     // пустой в листинге. В настоящем S3 это no-op (DeleteObject на отсутствующий ключ → 204),
     // а если маркер там правда был объектом — добьёт и его.
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: prefix }));
-    return keys.length;
+    return deleted;
   }
 
   async headObject(key: string): Promise<StorageObjectInfo | null> {
