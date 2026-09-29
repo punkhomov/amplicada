@@ -20,6 +20,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch --preserveWatchOutput",
+    "test": "node --test \"dist/**/*.test.js\"",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {

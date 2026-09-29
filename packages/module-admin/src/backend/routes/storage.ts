@@ -45,6 +45,17 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
     return storage.headObject(key);
   });
 
+  fastify.put('/storage/objects', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
+    const key = objectKey(request);
+    if (!key) return reply.code(400).send({ error: 'Не указан ключ объекта' });
+    const { content } = (request.body ?? {}) as { content?: unknown };
+    if (typeof content !== 'string') return reply.code(400).send({ error: 'Не передано содержимое' });
+    const info = await storage.headObject(key);
+    if (!info) return reply.code(404).send({ error: 'Объект не найден' });
+    await storage.putObject(key, content, { contentType: info.contentType ?? 'text/plain; charset=utf-8' });
+    return storage.headObject(key);
+  });
+
   fastify.delete('/storage/objects', async (request, reply) => {
     const key = objectKey(request);
     if (!key) return reply.code(400).send({ error: 'Не указан ключ объекта' });
