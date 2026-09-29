@@ -34,6 +34,18 @@ const textRenderer: RendererPlugin = {
   capabilities: { edit: true },
 };
 
+const wordRenderer: RendererPlugin = {
+  id: 'word',
+  match: descriptor => fileKindOf(descriptor) === 'word',
+  component: lazy(() => import('./word.js')),
+};
+
+const spreadsheetRenderer: RendererPlugin = {
+  id: 'spreadsheet',
+  match: descriptor => fileKindOf(descriptor) === 'spreadsheet',
+  component: lazy(() => import('./spreadsheet.js')),
+};
+
 /** Ловит всё остальное — с самым низким приоритетом, поэтому проверяется последним. */
 export const externalRenderer: RendererPlugin = {
   id: 'external',
@@ -48,5 +60,7 @@ export const defaultRenderers: RendererPlugin[] = [
   audioRenderer,
   pdfRenderer,
   textRenderer,
+  wordRenderer,
+  spreadsheetRenderer,
   externalRenderer,
 ];

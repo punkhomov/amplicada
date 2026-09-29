@@ -333,6 +333,9 @@ importers:
 
   packages/file-viewer:
     dependencies:
+      '@silurus/ooxml':
+        specifier: 0.88.0
+        version: 0.88.0
       monaco-editor:
         specifier: ^0.56.0
         version: 0.56.0
@@ -1763,6 +1766,9 @@ packages:
         optional: true
       react:
         optional: true
+
+  '@silurus/ooxml@0.88.0':
+    resolution: {integrity: sha512-dhMs1/U5fB5bh/Hv8BNTgCsHVNOl+qkquohsROblku7jghsmd1BZAE//LR6omB7aCVLGJ3sp4IqzqdkgT5wicQ==}
 
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
@@ -5315,6 +5321,8 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.18
       react: 19.2.8
+
+  '@silurus/ooxml@0.88.0': {}
 
   '@sindresorhus/merge-streams@4.0.0': {}
 

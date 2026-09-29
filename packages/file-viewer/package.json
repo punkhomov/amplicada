@@ -29,6 +29,7 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
+    "@silurus/ooxml": "0.88.0",
     "monaco-editor": "^0.56.0"
   },
   "devDependencies": {
