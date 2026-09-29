@@ -21,7 +21,7 @@ export interface StorageListProps {
   editing: StorageEditing;
   onSort: (key: StorageSortKey) => void;
   /** Ctrl/Cmd- или Shift-клик: страница решает, как перестроить выбор. */
-  onRowClick: (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => void;
+  onRowClick: (entry: StorageEntry, event: ReactMouseEvent<HTMLElement>) => void;
   onCheck: (key: string, checked: boolean) => void;
   onCheckAll: (checked: boolean) => void;
   onOpen: (entry: StorageEntry) => void;
@@ -33,50 +33,25 @@ export interface StorageListProps {
   onPreview: (entry: StorageEntry) => void;
 }
 
-/**
- * Пауза перед открытием строки. Она же — окно, в котором второй клик успевает стать двойным:
- * без паузы первый клик уже открыл бы превью/папку, и переименовать двойным кликом было бы нельзя.
- */
-const OPEN_DELAY_MS = 250;
-
 export function StorageList(props: StorageListProps) {
   const { t } = useTranslation('admin');
   const { entries, sort, selection, editing } = props;
-  const pendingOpen = useRef<number | null>(null);
 
   const selected = new Set(selection.keys);
   const allSelected = entries.length > 0 && entries.every(entry => selected.has(entry.key));
   const someSelected = entries.some(entry => selected.has(entry.key));
-
-  // Таймер может пережить размонтирование списка (например, поиск ушёл в «ничего не найдено»).
-  useEffect(
-    () => () => {
-      if (pendingOpen.current !== null) window.clearTimeout(pendingOpen.current);
-    },
-    [],
-  );
-
-  const cancelPendingOpen = () => {
-    if (pendingOpen.current !== null) {
-      window.clearTimeout(pendingOpen.current);
-      pendingOpen.current = null;
-    }
-  };
 
   const handleRowClick = (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => {
     if (event.ctrlKey || event.metaKey || event.shiftKey) {
       props.onRowClick(entry, event);
       return;
     }
-    cancelPendingOpen();
-    pendingOpen.current = window.setTimeout(() => {
-      pendingOpen.current = null;
-      props.onOpen(entry);
-    }, OPEN_DELAY_MS);
+    // Задержку «клик vs двойной клик» держит страница: таймер общий со плиткой, и его гасят
+    // F2/Delete/чекбоксы, чтобы превью не всплыло поверх правки или удалённого ключа.
+    props.onOpen(entry);
   };
 
   const handleRowDoubleClick = (entry: StorageEntry) => {
-    cancelPendingOpen();
     props.onRenameStart(entry.key);
   };
 
@@ -215,14 +190,16 @@ function SortableHead({
   );
 }
 
-function InlineNameInput({
+export function InlineNameInput({
   initial,
   placeholder,
+  className = 'h-7 max-w-64 text-xs',
   onCommit,
   onCancel,
 }: {
   initial: string;
   placeholder?: string;
+  className?: string;
   onCommit: (name: string) => void;
   onCancel: () => void;
 }) {
@@ -239,7 +216,7 @@ function InlineNameInput({
       ref={inputRef}
       value={value}
       placeholder={placeholder}
-      className="h-7 max-w-64 text-xs"
+      className={className}
       onChange={event => setValue(event.target.value)}
       // Клик по инпуту не должен засчитываться строке: иначе открытие строки сработает поверх правки.
       onClick={event => event.stopPropagation()}
@@ -259,8 +236,7 @@ function InlineNameInput({
   );
 }
 
-function FileKindIcon({ kind }: { kind: FileKind }) {
-  const className = 'size-4 text-muted-foreground';
+export function FileKindIcon({ kind, className = 'size-4 text-muted-foreground' }: { kind: FileKind; className?: string }) {
   switch (kind) {
     case 'image':
       return <FileImage className={className} />;
