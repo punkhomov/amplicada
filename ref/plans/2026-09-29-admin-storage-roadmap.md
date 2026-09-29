@@ -14,18 +14,17 @@ date: 2026-09-29
 в core. Ниже — что делаем дальше по этой линии. Не пул «вообще всего проекта», а
 непосредственно storage + file-viewer + потребители.
 
-## Итерация 1 — закрыть текущую ветку
+## Итерация 1 — закрыть текущую ветку ✔ (2026-09-29)
 
-- [ ] **Правка текста.** `PUT /storage/objects?key=` (JSON `{ content }`, `bodyLimit` 8 МБ,
+- [x] **Правка текста.** `PUT /storage/objects?key=` (JSON `{ content }`, `bodyLimit` 8 МБ,
       проверка существования, сохранение `contentType`) + `mode="edit"`/`onSave` в
       превью-диалоге. Закрывает пробел `ref/notes/file-viewer.md` (правка не подключена).
-- [ ] **Office-превью docx/xlsx.** `@silurus/ooxml` (Rust/WASM + Canvas, MIT, 0 deps),
-      точный pin. Отдельные entry `/docx`, `/xlsx`, ленивые; `readBytes()` в контракте
-      рендерера; фолбэк на external-карточку. Заменяет запрет клиентской конвертации
-      из D-002 (оформить новым решением). Спайк проведён: качество проверено живьём,
-      см. «Заметки».
-- [ ] **Docs/notes/plan.** `ref/notes/file-viewer.md` (D-005 Office, D-006 правка),
-      дописать D-004 в `module-admin`, `packages/*/docs`, ключевики в `ref/context.md`.
+- [x] **Office-превью docx/xlsx.** `@silurus/ooxml` (Rust/WASM + Canvas, MIT, 0 deps),
+      точный pin `0.88.0` (в итоге). Отдельные entry `/docx`, `/xlsx`, ленивые; `readBytes()`
+      в контракте рендерера; фолбэк на external-карточку. Заменил запрет клиентской
+      конвертации из D-002 новым решением D-005. Качество и фолбэк проверены живьём.
+- [x] **Docs/notes/plan.** `ref/notes/file-viewer.md` (D-005 Office, D-006 правка),
+      дописан D-004 в `module-admin`, `packages/*/docs`, ключевики в `ref/context.md`.
 
 ## Итерация 2 — Explorer UI и операции
 

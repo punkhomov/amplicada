@@ -2,8 +2,8 @@
 title: "file-viewer — обзор"
 type: index
 package: file-viewer
-updated: 2026-09-19
-verified_commit: 56aa450c
+updated: 2026-09-29
+verified_commit: 74e82866
 ---
 
 # file-viewer
@@ -23,7 +23,8 @@ verified_commit: 56aa450c
 | Готовый диалог | `<FilePreviewDialog open onOpenChange source={...} />` |
 | Редактор текста | `<TextEditor value language readOnly onChange onSave />` |
 | Определение типа | `fileKindOf(descriptor)`, `fileExtension(name)`, `monacoLanguageOf(descriptor)` |
-| Реестр рендереров | `defaultRenderers`, `externalRenderer`; свой — проп `renderers` |
+| Реестр рендереров | `defaultRenderers` (image, video, audio, pdf, text, word, spreadsheet, external), `externalRenderer`; свой — проп `renderers` |
+| Байты для рендерера | `RendererProps.readBytes(): Promise<ArrayBuffer>`; свободная `readSourceBytes(source)` |
 | Источник | типы `FileSource`, `FileDescriptor` из `@amplicada/file-viewer/contracts` |
 | Формат размера | `formatBytes(bytes)` |
 
@@ -52,8 +53,11 @@ verified_commit: 56aa450c
 
 ## Freshness
 
-- Сверено с кодом: `2026-09-19`, коммит `56aa450c` (рабочее дерево грязное, `feat/admin-storage-explorer`).
+- Сверено с кодом: `2026-09-29`, коммит `74e82866` (ветка `feat/admin-storage-explorer`).
 - Проверено живым прогоном через `module-admin` `/admin/storage` в Playwright (headless Chromium):
-  предпросмотр текста в Monaco, картинки с зумом/панорамированием, скачивание, навигация.
-- Production-сборка `apps/web` подтверждает ленивые чанки Monaco и работу `?worker`.
-- Не проверено вживую: режим правки (`mode="edit"`) — ни один потребитель пока не подключён.
+  предпросмотр текста в Monaco, **правка текста с сохранением** (`mode="edit"`), **Office
+  docx/xlsx** (Canvas-рендер), картинки с зумом/панорамированием, скачивание, навигация.
+- Production-сборка `apps/web` подтверждает ленивые чанки Monaco и Office (WASM вынесен
+  отдельно, в основной бандл не попадает) и работу `?worker`.
+- Фолбэк Office на external-карточку проверен битым `.docx`; битый `.xlsx` библиотека
+  обрабатывает своей error-surface (см. `ref/notes/file-viewer.md`, D-005).

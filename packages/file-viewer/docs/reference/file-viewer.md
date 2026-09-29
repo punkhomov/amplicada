@@ -1,8 +1,8 @@
 ---
 title: file-viewer — справочник
 type: reference
-updated: 2026-09-19
-verified_commit: 56aa450c
+updated: 2026-09-29
+verified_commit: 74e82866
 order: 10
 ---
 
@@ -43,8 +43,8 @@ type FileSource =
 ```
 
 `url` — готовый адрес; авторизация на стороне потребителя (сессионная кука уходит на
-same-origin автоматически, `readText` идёт с `credentials: 'include'`). `file`/`blob` живут
-в object URL, который создаёт и отзывает `useResolvedSource`.
+same-origin автоматически; `readText` и `readBytes` ходят с `credentials: 'include'`).
+`file`/`blob` живут в object URL, который создаёт и отзывает `useResolvedSource`.
 
 `FileDescriptor` (`{ name, mime?, size? }`) — минимум для выбора рендерера и шапки; из
 `FileSource` выводится автоматически.
@@ -103,12 +103,25 @@ Monaco грузится динамически при первом монтир�
 | `audio` | mp3/wav/ogg/flac/m4a/aac | `<audio controls>` |
 | `pdf` | pdf | `<iframe>` (вьюер браузера) |
 | `text` | txt/json/csv/log/md/yml/xml/html/css/js/… | Monaco (view/edit) |
+| `word` | docx/docm | Canvas-рендер `DocxScrollViewer`, read-only |
+| `spreadsheet` | xlsx/xlsm | Canvas-сетка `XlsxViewer`, вкладки листов, read-only |
 | `external` | всё остальное | карточка + «открыть в новой вкладке» |
 
 Определение типа: `mime` главнее расширения; при отсутствии `mime` (листинг S3) — расширение.
 `html`/`js` показываются текстом, а не исполняются.
 
-Тип можно вычислить отдельно: `fileKindOf({ name, mime })` → `'image' | 'video' | 'audio' | 'pdf' | 'text' | 'other'`.
+Тип можно вычислить отдельно: `fileKindOf({ name, mime })` →
+`'image' | 'video' | 'audio' | 'pdf' | 'text' | 'word' | 'spreadsheet' | 'other'`.
+
+### Office (`@silurus/ooxml`)
+
+Рендереры `word`/`spreadsheet` построены на `@silurus/ooxml` — Rust/WASM-парсер OOXML и
+Canvas-отрисовка (без инъекции DOM, read-only). Зависимость — точный пин `0.88.0` (лицензия
+MIT, ноль собственных зависимостей, пакет pre-1.0). WASM и код вьюеров (~1.3 МБ gzip docx /
+~1.0 МБ xlsx) грузятся только при первом открытии файла отдельными чанками и в основной бандл
+не попадают. Если динамический импорт, чтение байтов или загрузка падают — рендерер отдаёт
+external-карточку (исключение: невалидный xlsx `XlsxViewer` рисует своей error-surface).
+Поддержан только OOXML: `.doc`/`.xls`, PPTX и прочее уходят в `external`.
 
 ## Свой рендерер
 
@@ -124,7 +137,8 @@ const officeRenderer: RendererPlugin = {
 ```
 
 `RendererProps`: `descriptor`, `url` (`string | null`), `readText({ limitBytes })`,
-`openExternal()`, `edit?`.
+`readBytes()` (`Promise<ArrayBuffer>` — файл целиком, для Office/архивов), `openExternal()`,
+`edit?`.
 
 ## Подписи
 
@@ -138,4 +152,5 @@ const officeRenderer: RendererPlugin = {
 - Текст читается с потолком (512 КБ просмотр / 5 МБ правка); обрезанный в режиме правки
   открывается только для чтения.
 - Пагинации/потока в просмотре нет.
-- Office не рендерится: `<img>`/`<iframe>`/«открыть в браузере».
+- Office: только OOXML (docx/docm/xlsx/xlsm), read-only; `.doc`/`.xls`, PPTX и прочее —
+  external-карточка. Первое открытие Office подтягивает крупный WASM-чанк.

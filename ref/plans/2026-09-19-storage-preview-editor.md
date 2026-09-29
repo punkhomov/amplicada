@@ -2,7 +2,8 @@
 title: Storage — превью текста (Monaco/Shiki) и multi-format решения
 type: plan
 tier: 3
-status: in-progress
+status: superseded
+superseded_by: 2026-09-29-admin-storage-roadmap.md
 date: 2026-09-19
 ---
 
@@ -11,8 +12,12 @@ date: 2026-09-19
 > **Реализовано 2026-09-19:** общий пакет `@amplicada/file-viewer` (D-001…D-004 в
 > `ref/notes/file-viewer.md`): рендереры image (зум/панорамирование), video, audio, pdf,
 > text (Monaco lazy, view/edit), external (браузер), реестр + `FileSource`.
-> `module-admin /admin/storage` переведён на него. Следующее: support-chat на lib,
-> `PUT`-роут в storage + правка текста, при необходимости точечные Office-плагины.
+> `module-admin /admin/storage` переведён на него.
+>
+> **Дозакрыто 2026-09-29 (итерация 1 roadmap):** `PUT`-роут в storage + правка текста в UI
+> (D-006), клиентские Office-рендереры docx/xlsx через `@silurus/ooxml` (D-005) вместо
+> «открыть в браузере». Направление дальше (Explorer-UI, поддержка-chat, enabler'ы) ведёт
+> `ref/plans/2026-09-29-admin-storage-roadmap.md`; этот план — историческая рамка, заменён им.
 > См. `packages/file-viewer/docs/reference/file-viewer.md`.
 
 Направление на будущее: чем усилить диалог предпросмотра `/admin/storage`. Текущий вариант —

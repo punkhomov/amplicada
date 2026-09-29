@@ -32,8 +32,8 @@
 |------|--------|----------|
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
-| `notes/file-viewer.md` | `implemented` | D-001…D-004: общая либа превью, делегирование сложных форматов браузеру, ленивый Monaco, реестр рендереров |
-| `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar; D-002: режим «Приложения»; D-004: файловый менеджер хранилища |
+| `notes/file-viewer.md` | `implemented` | D-001…D-006: общая либа превью, делегирование сложных форматов браузеру, ленивый Monaco, реестр рендереров; D-005: Office-WASM-рендерер `@silurus/ooxml`; D-006: правка текста через `PUT` потребителя |
+| `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar; D-002: режим «Приложения»; D-004: файловый менеджер хранилища и `PUT`-правка текста |
 | `notes/module-support-chat.md` | `implemented` | D-001…D-008: таблицы вместо документов, SSE + Redis, приложения админки через общий хост, вложения через storage, карточка-виджет и композер на ките, несколько обращений и портал |
 | `notes/platform-core.md` | `implemented` | D-001…D-006: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней, `delimiter` в `listObjects` |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
@@ -50,7 +50,7 @@
 | Пакет | Docs (потребителям) |
 |-------|---------------------|
 | `application-tools` | [`packages/application-tools/docs/`](../packages/application-tools/docs/index.md) — справочник, модель композиции и инструкция optional-интеграции |
-| `file-viewer` | [`packages/file-viewer/docs/`](../packages/file-viewer/docs/index.md) — справочник: источники, компоненты, рендереры, подключение |
+| `file-viewer` | [`packages/file-viewer/docs/`](../packages/file-viewer/docs/index.md) — справочник: источники, компоненты, рендереры (включая Office `@silurus/ooxml`), правка, подключение |
 | `module-admin` | [`packages/module-admin/docs/`](../packages/module-admin/docs/index.md) — сервис действий, режим приложений и страница хранилища |
 | `module-auth-password` | [`packages/module-auth-password/docs/`](../packages/module-auth-password/docs/index.md) — optional-интеграция admin |
 | `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
@@ -77,9 +77,9 @@
 | `plans/2026-09-14-module-lifecycle-review.md` | `draft` | Первый архитектурный разбор: зависимости и порядок загрузки, дефект shutdown, владение ресурсами и удаление модулей; предложения и следующие итерации, без изменения runtime |
 | `plans/2026-09-15-auth-node-method.md` | `implemented` | Метод аутентификации — свойство узла: `auth-node` + `GET /api/auth/context`, платформа редиректит на `loginUrl` метода и не содержит страницы логина; парольный логин — `/auth/password/login`, `/me` и `/logout` переехали в core |
 | `plans/2026-09-15-notifications/` | `draft` | Уведомления: core-сервис `notification` + outbox с ретраями, канальные модули (`module-notification-email` — SMTP + адресная книга), админ-лог доставок, Mailpit в dev, ADR-04. Подпланы `01`–`04`; разблокирует регистрацию/сброс пароля/2FA в auth |
-| `plans/2026-09-19-storage-preview-editor.md` | `in-progress` | Превью файлов: Shiki vs Monaco, обзор multi-format вьюеров, ограничения auth/CORS. Реализована общая либа `file-viewer`, storage переведён; чат и правка — дальше |
-| `plans/2026-09-29-admin-storage-roadmap.md` | `in-progress` | Ближайшие итерации линии admin storage + file-viewer: правка текста и Office-WASM (`@silurus/ooxml`) в текущую ветку, Explorer-UI и операции (папки, rename/move, мультивыбор, контекстное меню, плитка), поддержка-chat и enabler'ы (права, `nextToken`) |
-| `plans/2026-09-29-storage-text-edit-office-preview.md` | `in-progress` | Реализация итерации 1: `PUT /storage/objects` + правка в UI, `readBytes`/Office-kinds и ленивые docx/xlsx-рендереры в `file-viewer`, docs |
+| `plans/2026-09-19-storage-preview-editor.md` | `superseded` | Превью файлов: Shiki vs Monaco, обзор multi-format вьюеров, ограничения auth/CORS. Реализована общая либа `file-viewer`, storage переведён; правка и Office дозакрыты в итерации 1 roadmap. Заменён `2026-09-29-admin-storage-roadmap.md` |
+| `plans/2026-09-29-admin-storage-roadmap.md` | `in-progress` | Ближайшие итерации линии admin storage + file-viewer. **Итерация 1 закрыта 2026-09-29**: правка текста (`PUT`) и Office-WASM (`@silurus/ooxml`) влиты. Дальше: Explorer-UI и операции (папки, rename/move, мультивыбор, контекстное меню, плитка), поддержка-chat и enabler'ы (права, `nextToken`) |
+| `plans/2026-09-29-storage-text-edit-office-preview.md` | `implemented` | Реализация итерации 1: `PUT /storage/objects` + правка в UI, `readBytes`/Office-kinds и ленивые docx/xlsx-рендереры в `file-viewer`, docs. Код написан, собран и проверен живьём (Playwright) |
 | `plans/2026-09-18-support-chat-ai-first.md` | `in-progress` | Support chat AI-first: исследование практик (Fin, Zendesk, ITIL/JSM, handoff-пакеты, доступ агента к данным) и направление — ассистент отвечает по данным платформы, эскалирует структурированным брифом, инцидент как отдельный вид, пользователь закрывает сам. Без AI реализованы этап 0 (статусы, закрытие пользователем) и инциденты (вид, серьёзность, привязка дублей, рассылка); автозакрытие/метрики — нет |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |
 | `plans/2026-07-13-frontend-core-reorg.md` | `implemented` | Реорганизация core/sdk (выполнен) |
