@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream';
 import type { BackendSetupContext, BackendStorageService } from '@amplicada/platform-core/contracts/backend';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { StorageCreateFolderRequest, StorageDeleteRequest, StorageMoveRequest } from '../../contracts/storage.js';
 
 interface MultipartFile {
   filename: string;
@@ -12,8 +13,18 @@ interface MultipartRequest extends FastifyRequest {
   file(): Promise<MultipartFile | undefined>;
 }
 
+interface MovePlan {
+  key: string;
+  target: string;
+  isFolder: boolean;
+}
+
 const FOLDER_DELIMITER = '/';
 const ACTIVE_CONTENT_TYPES = new Set(['image/svg+xml', 'text/html', 'application/xhtml+xml', 'text/xml', 'application/xml']);
+/** Маркер папки: в S3 директорий нет, папка — пустой объект с ключом на `/`. */
+const DIRECTORY_CONTENT_TYPE = 'application/x-directory';
+/** Лимит S3 на имя сегмента: длиннее — уже не имя папки, а склеенный путь. */
+const MAX_FOLDER_NAME_LENGTH = 255;
 
 export function createStorageRoutes(fastify: FastifyInstance, context: BackendSetupContext): void {
   const storage = context.services.resolve<BackendStorageService>('storage');
@@ -51,6 +62,21 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
     return storage.headObject(key);
   });
 
+  /** Создание папки: кладём пустой объект-маркер, иначе в листинге папка не появится. */
+  fastify.post('/storage/folder', async (request, reply) => {
+    const prefix = folderPrefix((request.query as { prefix?: unknown }).prefix);
+    const { name: rawName } = (request.body ?? {}) as Partial<StorageCreateFolderRequest>;
+    const name = folderName(rawName);
+    if (!name) return reply.code(400).send({ error: 'Недопустимое имя папки' });
+
+    const key = folderKey(prefix, name);
+    // Одного `headObject` мало: папка без маркера существует, пока под префиксом есть объекты.
+    if (await folderExists(storage, key)) return reply.code(409).send({ error: 'Папка уже существует' });
+
+    await storage.putObject(key, '', { contentType: DIRECTORY_CONTENT_TYPE });
+    return storage.headObject(key);
+  });
+
   if (editEnabled) {
     fastify.put('/storage/objects', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
       const key = objectKey(request);
@@ -64,11 +90,73 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
     });
   }
 
+  /**
+   * Перемещение в S3 — это copy + delete: переименовать префикс одним запросом нельзя.
+   * Ответ `moved` считает верхнеуровневые элементы, а не объекты поддерева.
+   */
+  fastify.post('/storage/move', async (request, reply) => {
+    const { keys: rawKeys, destination: rawDestination } = (request.body ?? {}) as Partial<StorageMoveRequest>;
+    const keys = bodyKeys(rawKeys);
+    if (!keys.length) return reply.code(400).send({ error: 'Не указаны ключи для перемещения' });
+    if (typeof rawDestination !== 'string' || !rawDestination.trim()) {
+      return reply.code(400).send({ error: 'Не указана папка назначения' });
+    }
+    // `/` нормализуется в корень бакета (`''`) — явная корневая папка валидна, пустая строка нет.
+    const destination = folderPrefix(rawDestination.trim());
+    if (hasParentSegment(destination)) return reply.code(400).send({ error: 'Недопустимый путь назначения' });
+
+    const plans: MovePlan[] = [];
+    for (const key of keys) {
+      const isFolder = key.endsWith(FOLDER_DELIMITER);
+      const target = moveTargetOf(key, destination);
+      if (!target) return reply.code(400).send({ error: 'Недопустимый ключ' });
+      if (isFolder && (target === key || isDescendant(target, key))) {
+        return reply.code(400).send({ error: 'Папку нельзя переместить в себя или в свою подпапку' });
+      }
+      plans.push({ key, target, isFolder });
+    }
+
+    // Сначала проверяем все источники и коллизии, потом двигаем: транзакций в S3 нет, и частично
+    // выполненный перенос из-за ошибки в середине списка хуже, чем отказ до первого копирования.
+    for (const plan of plans) {
+      if (plan.isFolder) {
+        if (!(await folderExists(storage, plan.key))) return reply.code(400).send({ error: 'Папка не найдена' });
+        if (await folderExists(storage, plan.target)) return reply.code(409).send({ error: 'Папка уже существует' });
+      } else {
+        if (!(await storage.headObject(plan.key))) return reply.code(400).send({ error: 'Объект не найден' });
+        if (await storage.headObject(plan.target)) return reply.code(409).send({ error: 'Объект уже существует' });
+      }
+    }
+
+    for (const plan of plans) {
+      if (!plan.isFolder) {
+        await storage.copyObject(plan.key, plan.target);
+        await storage.deleteObject(plan.key);
+        continue;
+      }
+      const { objects } = await storage.listObjects(plan.key);
+      // Маркер самой папки не среди содержимого: его копировать не нужно, у цели будет свой.
+      const children = objects.filter(object => object.key !== plan.key);
+      for (const child of children) {
+        await storage.copyObject(child.key, `${plan.target}${child.key.slice(plan.key.length)}`);
+      }
+      // Пустая папка на новом месте должна остаться папкой — ставим маркер цели.
+      await storage.putObject(plan.target, '', { contentType: DIRECTORY_CONTENT_TYPE });
+      // Старое поддерево сносим пачками: поштучно на большом пакете — тысячи round-trip'ов.
+      await storage.deleteObjects(children.map(child => child.key));
+      await storage.deleteObject(plan.key);
+    }
+
+    return { moved: plans.length };
+  });
+
+  /** Пакетное удаление: ключи приходят из мультивыбора в UI, по одному ходить незачем. */
   fastify.delete('/storage/objects', async (request, reply) => {
-    const key = objectKey(request);
-    if (!key) return reply.code(400).send({ error: 'Не указан ключ объекта' });
-    await storage.deleteObject(key);
-    return reply.code(204).send();
+    const { keys: rawKeys } = (request.body ?? {}) as Partial<StorageDeleteRequest>;
+    const keys = bodyKeys(rawKeys);
+    if (!keys.length) return reply.code(400).send({ error: 'Не указаны ключи для удаления' });
+    const deleted = await storage.deleteObjects(keys);
+    return { deleted };
   });
 
   /** Рекурсивное удаление папки. Возвращает число снесённых объектов — его показывает UI. */
@@ -141,4 +229,58 @@ function folderPrefix(raw: unknown): string {
 function fileName(raw: string): string {
   const name = raw.split(/[\\/]/).pop()?.trim() ?? '';
   return name === '.' || name === '..' ? '' : name;
+}
+
+/** Ключи из тела запроса: не-массив, пустой элемент или сегмент `..` — сигнал невалидного запроса. */
+function bodyKeys(raw: unknown): string[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const keys: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') return [];
+    const key = item.trim().replace(/^\/+/, '');
+    if (!key || hasParentSegment(key)) return [];
+    keys.push(key);
+  }
+  return keys;
+}
+
+/** `..` отдельным сегментом: наружу из папки S3-ключом не выйти, и UI такого не генерирует. */
+function hasParentSegment(path: string): boolean {
+  return path.split(FOLDER_DELIMITER).includes('..');
+}
+
+/** Имя новой папки — ровно один сегмент: разделители пути превратили бы его в чужую папку. */
+function folderName(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const name = raw.trim();
+  if (!name || name === '.' || name === '..') return '';
+  if (name.includes(FOLDER_DELIMITER) || name.includes('\\')) return '';
+  return name.length > MAX_FOLDER_NAME_LENGTH ? '' : name;
+}
+
+/** Ключ-маркер папки: `folderKey('a/', 'docs')` → `'a/docs/'`. */
+export function folderKey(prefix: string, name: string): string {
+  return `${prefix}${name}${FOLDER_DELIMITER}`;
+}
+
+/** Целевой ключ перемещения: к папке назначения добавляется последний сегмент исходного ключа. */
+export function moveTargetOf(key: string, destination: string): string {
+  if (key.endsWith(FOLDER_DELIMITER)) {
+    const name = key.slice(0, -1).split(FOLDER_DELIMITER).pop() ?? '';
+    return name ? folderKey(destination, name) : '';
+  }
+  const name = fileName(key);
+  return name ? `${destination}${name}` : '';
+}
+
+/** Цель лежит внутри папки; сама папка потомком не считается. */
+export function isDescendant(target: string, folder: string): boolean {
+  return target !== folder && target.startsWith(folder);
+}
+
+/** Папка «есть», если найден маркер или хоть один объект (префикс) под ним. */
+async function folderExists(storage: BackendStorageService, key: string): Promise<boolean> {
+  if (await storage.headObject(key)) return true;
+  const { objects, prefixes } = await storage.listObjects(key, { delimiter: FOLDER_DELIMITER });
+  return objects.length > 0 || prefixes.length > 0;
 }
