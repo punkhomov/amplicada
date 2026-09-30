@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { getTableColumns } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { BackendDbService } from '../../contracts/backend/db.js';
 import type { EventBus } from '../../contracts/event-bus.js';
-import type { NotificationChannel } from '../../contracts/notification.js';
+import type { NotificationChannel, ResolvedNotification } from '../../contracts/notification.js';
+import { notificationOutbox } from '../schemas/index.js';
 import { BACKOFF_CAP_MS, backoffDelayMs, countBatchOutcomes, NotificationServiceImpl, pickChannel } from './notification-service.js';
 
 function channel(id: string, address: string | null): NotificationChannel {
@@ -174,4 +176,139 @@ test('retryBatch переводит failed-строки батча в pending и
   // SET-параметры идут перед WHERE: batch_id и 'failed' — в хвосте значений.
   assert.ok(queries[0].values.includes('00000000-0000-0000-0000-0000000000aa'));
   assert.ok(queries[0].values.includes('failed'));
+});
+
+/** Полная строка outbox в порядке колонок — для `.returning()` в claim'е deliver. */
+function outboxRow(over: Record<string, unknown> = {}): unknown[] {
+  const values: Record<string, unknown> = {
+    id: ID,
+    userId: ID,
+    channel: 'test',
+    kind: 'test.kind',
+    address: 'user@example.com',
+    subject: 'Тема',
+    body: 'Тело',
+    html: null,
+    locale: null,
+    batchId: null,
+    dedupeKey: null,
+    sender: null,
+    replyTo: null,
+    cc: null,
+    bcc: null,
+    headers: null,
+    attachments: [],
+    status: 'pending',
+    attempts: 0,
+    maxAttempts: 5,
+    nextAttemptAt: new Date(),
+    lastError: null,
+    sentAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...over,
+  };
+  return Object.keys(getTableColumns(notificationOutbox)).map(key => values[key]);
+}
+
+function captureService(responses: unknown[][][] = []): {
+  service: NotificationServiceImpl;
+  queries: RecordedQuery[];
+  captured: ResolvedNotification[];
+  events: Array<{ type: string; payload: unknown }>;
+} {
+  const { db, queries } = recordingDb(responses);
+  const captured: ResolvedNotification[] = [];
+  const events: Array<{ type: string; payload: unknown }> = [];
+  const eventBus = {
+    emit: (type: string, payload: unknown) => {
+      events.push({ type, payload });
+    },
+  } as unknown as EventBus;
+  const service = new NotificationServiceImpl({ db, eventBus });
+  service.registerChannel({
+    id: 'test',
+    resolveAddress: async () => 'user@example.com',
+    send: async message => {
+      captured.push(message);
+    },
+  });
+  return { service, queries, captured, events };
+}
+
+test('deliver: claim не задел строку — письмо не отправляется', async () => {
+  const { service, queries, captured } = captureService([[]]);
+
+  await service.deliver(ID);
+
+  assert.equal(queries.length, 1);
+  assert.equal(captured.length, 0);
+});
+
+test('deliver: конверты уходят каналу, строка помечается sent, событие эмитится', async () => {
+  const row = outboxRow({ sender: 'no-reply', replyTo: 'r@b', cc: ['c@b'], bcc: ['h@b'], headers: { 'X-Test': '1' } });
+  const { service, queries, captured, events } = captureService([[row]]);
+
+  await service.deliver(ID);
+
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].sender, 'no-reply');
+  assert.equal(captured[0].replyTo, 'r@b');
+  assert.deepEqual(captured[0].cc, ['c@b']);
+  assert.deepEqual(captured[0].bcc, ['h@b']);
+  assert.deepEqual(captured[0].headers, { 'X-Test': '1' });
+  assert.match(queries[1].text, /^update "core"\."notification_outbox" set "status"/);
+  assert.ok(queries[1].values.includes('sent'));
+  assert.deepEqual(events.map(e => e.type), ['notification.delivery.sent']);
+});
+
+test('deliver: ошибка канала на последней попытке → failed и событие', async () => {
+  const row = outboxRow({ attempts: 4, maxAttempts: 5 });
+  const { db, queries } = recordingDb([[row], []]);
+  const events: Array<{ type: string; payload: unknown }> = [];
+  const eventBus = {
+    emit: (type: string, payload: unknown) => {
+      events.push({ type, payload });
+    },
+  } as unknown as EventBus;
+  const service = new NotificationServiceImpl({ db, eventBus });
+  service.registerChannel({
+    id: 'test',
+    resolveAddress: async () => 'user@example.com',
+    send: async () => {
+      throw new Error('SMTP отбил');
+    },
+  });
+
+  await service.deliver(ID);
+
+  assert.ok(queries[1].values.includes('failed'));
+  assert.deepEqual(events.map(e => e.type), ['notification.delivery.failed']);
+});
+
+test('requeueStaleSending чинит зависшие sending двумя ветками', async () => {
+  const { service, queries } = captureService([[], []]);
+
+  await service.requeueStaleSending();
+
+  assert.equal(queries.length, 2);
+  assert.match(queries[0].text, /^update "core"\."notification_outbox"/);
+  assert.ok(queries[0].values.includes('pending'));
+  assert.ok(queries[1].values.includes('failed'));
+});
+
+test('retry: false без failed-строки, true когда строка переведена', async () => {
+  const miss = captureService([[]]);
+  assert.equal(await miss.service.retry(ID), false);
+
+  const hit = captureService([[[ID]]]);
+  assert.equal(await hit.service.retry(ID), true);
+});
+
+test('cleanupOld(force) удаляет старые sent/failed', async () => {
+  const { service, queries } = captureService([[[ID]]]);
+
+  await service.cleanupOld(true);
+
+  assert.match(queries[0].text, /^delete from "core"\."notification_outbox"/);
 });
