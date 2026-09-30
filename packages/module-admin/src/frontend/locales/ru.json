@@ -47,6 +47,7 @@
   "admin_storage_preview_unsupported_description": "Для этого типа файлов предпросмотра нет — скачайте его, чтобы открыть",
   "admin_storage_preview_failed": "Не удалось прочитать файл",
   "admin_storage_preview_truncated": "Показаны первые {{size}} — полный файл доступен скачиванием",
+  "admin_storage_load_more": "Показать ещё",
   "admin_storage_col_type": "Тип",
   "admin_storage_new_folder": "Новая папка",
   "admin_storage_rename": "Переименовать",

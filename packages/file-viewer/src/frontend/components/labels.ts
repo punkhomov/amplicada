@@ -13,6 +13,7 @@ export const DEFAULT_LABELS: FileViewerLabels = {
   unavailableDescription: 'This file type has no inline viewer — open it in a new tab or download it.',
   failed: 'Failed to load the preview',
   textTruncated: 'Showing the first {{size}} — download for the full file',
+  loadMore: 'Load more',
   edit: 'Edit',
   save: 'Save',
   saved: 'Saved',

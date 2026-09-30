@@ -23,6 +23,11 @@ export interface TextReadResult {
   text: string;
   /** Текст обрезан по лимиту — в редакторе такое сохранять нельзя. */
   truncated: boolean;
+  /**
+   * Смещение в байтах, с которого начинается следующее окно: сразу после последней
+   * целой кодовой точки этого окна. Не задано, когда файл прочитан до конца.
+   */
+  nextOffsetBytes?: number;
 }
 
 export interface TextEditOptions {
@@ -36,8 +41,8 @@ export interface RendererProps {
   descriptor: FileDescriptor;
   /** Уже разрешённый URL: для `file`/`blob` — object URL. `null`, пока создаётся. */
   url: string | null;
-  /** Читает текст (для URL — с `Range` и лимитом). */
-  readText(options?: { limitBytes?: number }): Promise<TextReadResult>;
+  /** Читает текст (для URL — с `Range` и лимитом). `offsetBytes` — начало окна для догрузки. */
+  readText(options?: { limitBytes?: number; offsetBytes?: number }): Promise<TextReadResult>;
   /** Читает файл целиком в память (для рендереров, которым нужны байты: Office, архивы). */
   readBytes(): Promise<ArrayBuffer>;
   /** Открыть файл в новой вкладке — браузер решает, отрисовать или скачать. */
@@ -65,6 +70,8 @@ export interface FileViewerLabels {
   unavailableDescription: string;
   failed: string;
   textTruncated: string;
+  /** Кнопка догрузки следующего окна текста в режиме просмотра. */
+  loadMore: string;
   edit: string;
   save: string;
   saved: string;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FileDescriptor, FileSource, TextReadResult } from '../../contracts/index.js';
-import { readSourceBytes } from './read-source.js';
+import { readSourceBytes, readSourceText } from './read-source.js';
 
 export const DEFAULT_TEXT_PREVIEW_LIMIT = 512 * 1024;
 
@@ -8,7 +8,7 @@ export interface ResolvedSource {
   descriptor: FileDescriptor;
   /** `null`, пока object URL для `file`/`blob` ещё не создан. */
   url: string | null;
-  readText(options?: { limitBytes?: number }): Promise<TextReadResult>;
+  readText(options?: { limitBytes?: number; offsetBytes?: number }): Promise<TextReadResult>;
   readBytes(): Promise<ArrayBuffer>;
   openExternal(): void;
 }
@@ -64,27 +64,19 @@ export function useResolvedSource(source: FileSource | null): ResolvedSource | n
   const url = source?.type === 'url' ? source.url : objectUrl;
 
   const readText = useCallback(
-    async ({ limitBytes = DEFAULT_TEXT_PREVIEW_LIMIT }: { limitBytes?: number } = {}): Promise<TextReadResult> => {
-      if (!source) throw new Error('Источник не задан');
-
-      if (source.type === 'url') {
-        const response = await fetch(source.url, {
-          credentials: 'include',
-          headers: { Range: `bytes=0-${Math.max(0, limitBytes - 1)}` },
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const text = await response.text();
-        const total = contentRangeTotal(response.headers.get('content-range')) ?? descriptor.size;
-        return { text, truncated: total !== undefined ? total > limitBytes : text.length >= limitBytes };
-      }
-
-      const local = source.type === 'file' ? source.file : source.blob;
-      if (local.size > limitBytes) {
-        return { text: await local.slice(0, limitBytes).text(), truncated: true };
-      }
-      return { text: await local.text(), truncated: false };
+    ({
+      limitBytes = DEFAULT_TEXT_PREVIEW_LIMIT,
+      offsetBytes = 0,
+    }: {
+      limitBytes?: number;
+      offsetBytes?: number;
+    } = {}): Promise<TextReadResult> => {
+      if (!source) return Promise.reject(new Error('Источник не задан'));
+      // Оконное чтение и UTF-8-склейку делает чистый хелпер: хук отвечает только за
+      // привязку к источнику, поэтому его логика тестируется без React.
+      return readSourceText(source, { limitBytes, offsetBytes });
     },
-    [source, descriptor.size],
+    [source],
   );
 
   const readBytes = useCallback((): Promise<ArrayBuffer> => {
@@ -139,12 +131,4 @@ export function openSourceExternal(source: FileSource | null): void {
   const temp = URL.createObjectURL(blob);
   window.open(temp, '_blank', 'noopener,noreferrer');
   setTimeout(() => URL.revokeObjectURL(temp), 60_000);
-}
-
-/** `Content-Range: bytes 0-1023/98765` → 98765. */
-function contentRangeTotal(header: string | null): number | undefined {
-  const total = header?.split('/')[1];
-  if (!total || total === '*') return undefined;
-  const parsed = Number(total);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }

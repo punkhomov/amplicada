@@ -5,16 +5,26 @@ import ExternalRenderer from './external.js';
 
 type Status = 'loading' | 'ready' | 'error';
 
+/** Потолок предпросмотра Office: выше — WASM-парсер и файл в памяти того не стоят, отдаём браузеру. */
+const OFFICE_MAX_PREVIEW_BYTES = 50 * 1024 * 1024;
+
 /** Ленивый рендерер DOCX: Rust/WASM-парсер, Canvas-отрисовка, read-only. */
 export default function WordRenderer(props: RendererProps) {
-  const { readBytes, url } = props;
+  const { descriptor, readBytes, url } = props;
+  const oversize = descriptor.size !== undefined && descriptor.size > OFFICE_MAX_PREVIEW_BYTES;
   const hostRef = useRef<HTMLDivElement>(null);
   const readRef = useRef(readBytes);
   readRef.current = readBytes;
-  const [status, setStatus] = useState<Status>('loading');
+  const [status, setStatus] = useState<Status>(oversize ? 'error' : 'loading');
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: url — ключ перезагрузки, а readBytes берём из ref, чтобы новая ссылка на source не перезапускала загрузку
   useEffect(() => {
+    // Потолок проверяем по метаданным до импорта WASM и readBytes: превышение — не ошибка
+    // парсера, а решение не тянуть файл в браузер вовсе.
+    if (oversize) {
+      setStatus('error');
+      return;
+    }
     let alive = true;
     let viewer: { destroy(): void } | null = null;
     setStatus('loading');
@@ -37,9 +47,9 @@ export default function WordRenderer(props: RendererProps) {
       alive = false;
       viewer?.destroy();
     };
-  }, [url]);
+  }, [url, oversize]);
 
-  if (status === 'error') return <ExternalRenderer {...props} />;
+  if (oversize || status === 'error') return <ExternalRenderer {...props} />;
 
   return (
     <div className="relative h-full w-full">

@@ -47,6 +47,7 @@
   "admin_storage_preview_unsupported_description": "This file type has no preview — download it to open",
   "admin_storage_preview_failed": "Failed to read the file",
   "admin_storage_preview_truncated": "Showing the first {{size}} — download for the full file",
+  "admin_storage_load_more": "Load more",
   "admin_storage_col_type": "Type",
   "admin_storage_new_folder": "New folder",
   "admin_storage_rename": "Rename",

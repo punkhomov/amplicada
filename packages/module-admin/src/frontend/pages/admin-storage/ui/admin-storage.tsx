@@ -36,7 +36,7 @@ import type { StorageDeleteResult, StorageMoveResult, StorageObject } from '../.
 import { type StorageEntry, toEntries } from '../lib/entries.js';
 import { formatDate } from '../lib/format.js';
 import { folderName, folderTrail, objectName, parentPrefix, storageDownloadUrl, storageViewUrl } from '../lib/paths.js';
-import { adminStorageConfigQueryOptions, storageObjectsInfiniteQueryOptions, STORAGE_OBJECTS_QUERY_KEY } from '../lib/queries.js';
+import { adminStorageConfigQueryOptions, STORAGE_OBJECTS_QUERY_KEY, storageObjectsInfiniteQueryOptions } from '../lib/queries.js';
 import { selectionReducer } from '../lib/selection.js';
 import { type StorageSort, type StorageSortKey, sortEntries } from '../lib/sort.js';
 import { StorageContextMenu, type StorageContextMenuState } from './storage-context-menu.js';
@@ -69,6 +69,7 @@ export function AdminStorage() {
     unavailableDescription: t('admin_storage_preview_unsupported_description'),
     failed: t('admin_storage_preview_failed'),
     textTruncated: t('admin_storage_preview_truncated'),
+    loadMore: t('admin_storage_load_more'),
     edit: t('admin_storage_edit'),
     save: t('admin_storage_save'),
     saved: t('admin_storage_saved'),
