@@ -25,6 +25,7 @@
 | `adr/04-notifications.md` | `implemented` | Уведомления: маршрутизация и надёжность (outbox, ретраи) — core-сервис `notification`; транспорт и адресные книги — канальные модули |
 | `adr/05-application-composition.md` | `implemented` | Единый состав приложения, генерация статических подключений и проверяемые зависимости обеих сторон; заменяет декларативный-only порядок из ADR-02 |
 | `adr/06-module-conventions.md` | `implemented` | amplicada: true, экспорт module, стороны/CSS из exports, порядок обязательных и выбранных optional peers; дополняет ADR-02/05 |
+| `adr/07-notification-contract-v2.md` | `accepted` | Контракт уведомлений v2: шаблоны-документы ядра с code-fixtures (`fixtureReadonly`), `sendMany` без eager (worker-trade-off), `dedupeKey`, `scheduledAt`, вложения 10/20 МиБ с `headObject`, именованные отправители; частично заменяет ADR-04 |
 
 | `context.md` | `implemented` | Актуальный контекст проекта |
 
@@ -88,6 +89,7 @@
 | `plans/2026-09-29-storage-pagination-streaming.md` | `implemented` | Итерация пагинации и стриминга: постраничный `listObjects` (`maxKeys`/`continuationToken`/`nextToken`, дефолт «дочитать всё» сохранён) и `cursor`/`limit` в листинге, бесконечный скролл списка, оконное чтение текста с безопасными границами UTF-8 («Показать ещё»), потолок 50 МиБ для Office-превью. Живые прогоны: 250 файлов, текст 1.5 МБ, `.docx` 51 МБ |
 | `plans/2026-09-18-support-chat-ai-first.md` | `in-progress` | Support chat AI-first: исследование практик (Fin, Zendesk, ITIL/JSM, handoff-пакеты, доступ агента к данным) и направление — ассистент отвечает по данным платформы, эскалирует структурированным брифом, инцидент как отдельный вид, пользователь закрывает сам. Без AI реализованы этап 0 (статусы, закрытие пользователем) и инциденты (вид, серьёзность, привязка дублей, рассылка); автозакрытие/метрики — нет |
 | `plans/2026-09-17-notification-contract-v2.md` | `in-progress` | Notification API v2: ломающий контракт под auth/workflow/learning/рассылки — `sendMany` с batch, шаблоны-документы ядра с code-fixtures (read-only через `fixtureReadonly`), именованные отправители, `dedupeKey`, `scheduledAt`, вложения, `cc/bcc/replyTo/headers`; миграция `core/0007`, переезд типа из `module-admin`. Решения приняты 2026-09-30 |
+| `plans/2026-09-30-notification-v2-implementation.md` | `in-progress` | План реализации v2 (20 задач, фазы 0–6): rebase и политика pnpm, ADR-07, контракт, миграция `0007`, рендер и резолв шаблонов, `sendMany`/dedupe/`scheduledAt`, документ-тип `notification-template` с read-only фикстурами, вложения, админка, docs/notes и живой прогон Mailpit |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |
 | `plans/2026-07-13-frontend-core-reorg.md` | `implemented` | Реорганизация core/sdk (выполнен) |
 | `plans/2026-07-13-server-sessions.md` | `implemented` | Безопасные серверные сессии (Redis + @fastify/session + bcrypt) |

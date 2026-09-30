@@ -191,7 +191,9 @@ export interface BackendNotificationService {
   (`document-runtime.ts`, reconcileFixtures) — это и есть семантика «источник истины в коде».
   Чтобы админ не терял правки молча:
   - флаг `fixture` добавляется в `INDEX_STATE_COLUMNS`, `DocumentObject` и ответ карточки;
-  - `update`/`delete`/`bulkDelete` отклоняют fixture-документы (`DocumentRuntimeError`);
+  - `update`/`delete`/`bulkDelete` отклоняют fixture-документы **типов с `fixtureReadonly: true`**
+    (`DocumentRuntimeError`, 409) — у `notification-template` флаг включён; `scheduled-task`
+    не затронут (его фикстуры редактируются);
   - UI показывает бейдж «из кода» и блокирует Save/Delete.
 
 ## Канал email
@@ -255,8 +257,9 @@ export interface BackendNotificationService {
 - `sendMany` без eager меняет наблюдаемость: статус в ответе `queued`, а не `sent`; на узле без
   worker-роли строки остаются `pending`. Компенсация — лог доставок; trade-off фиксируется
   в docs/notes.
-- Read-only fixtures — первое место, где Document System ограничивает правку по признаку индекса;
-  если guard окажется неудобен для других fixture-типов, вынести в опциональный флаг типа.
+- Read-only fixtures — первое место, где Document System ограничивает правку по признаку индекса.
+  **Закрыто 2026-09-30:** guard сделан opt-in флагом `fixtureReadonly`, поэтому редактируемые
+  фикстуры (`scheduled-task`) не затронуты; флаг включён только у `notification-template`.
 
 ## Что дальше
 
