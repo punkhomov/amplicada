@@ -254,13 +254,16 @@
   "admin_notifications_filter_status": "Status",
   "admin_notifications_filter_kind": "Kind",
   "admin_notifications_filter_user": "User ID",
+  "admin_notifications_filter_batch": "Batch ID",
   "admin_notifications_filter_apply": "Search",
   "admin_notifications_prev": "Previous",
   "admin_notifications_next": "Next",
   "admin_notifications_retry": "Retry",
+  "admin_notifications_retry_batch": "Retry batch",
   "admin_notifications_col_created": "Created",
   "admin_notifications_col_channel": "Channel",
   "admin_notifications_col_kind": "Kind",
+  "admin_notifications_col_batch": "Batch",
   "admin_notifications_col_recipient": "Recipient",
   "admin_notifications_col_status": "Status",
   "admin_notifications_col_attempts": "Attempts",
@@ -298,5 +301,6 @@
   "template_send_pending": "Sending…",
   "template_send_error": "Sending failed",
   "template_send_result": "Queued {{queued}} of {{total}}. Skipped: {{skipped}}, failed: {{failed}}.",
-  "template_send_skipped_hint": "Skipped users have no channel or no verified address."
+  "template_send_skipped_hint": "Skipped users have no channel or no verified address.",
+  "template_send_result_deduped": "Matched existing deliveries (dedupe): {{count}}."
 }

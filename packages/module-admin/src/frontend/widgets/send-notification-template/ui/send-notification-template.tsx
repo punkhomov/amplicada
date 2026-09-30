@@ -104,6 +104,9 @@ export function SendNotificationTemplateAction({ documentType, editData, isNew }
               })}
             </AlertTitle>
             {result.skipped > 0 && <AlertDescription>{t('template_send_skipped_hint')}</AlertDescription>}
+            {result.deduped > 0 && (
+              <AlertDescription>{t('template_send_result_deduped', { count: result.deduped })}</AlertDescription>
+            )}
           </Alert>
         )}
 

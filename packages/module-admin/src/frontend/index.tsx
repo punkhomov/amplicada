@@ -69,7 +69,7 @@ const adminFrontendModule: FrontendModule = {
     context.routes.register('/admin/notifications', <AdminNotifications />, {
       layout: 'admin',
       loader: async () => {
-        await context.queryClient.ensureQueryData(adminNotificationsQueryOptions(api, { status: 'all', kind: '', userId: '' }, 0));
+        await context.queryClient.ensureQueryData(adminNotificationsQueryOptions(api, { status: 'all', kind: '', userId: '', batchId: '' }, 0));
         return null;
       },
     });

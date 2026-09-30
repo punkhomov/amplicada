@@ -37,6 +37,7 @@ interface AppliedFilters {
   status: NotificationStatus | 'all';
   kind: string;
   userId: string;
+  batchId: string;
 }
 
 const STATUS_VARIANT: Record<NotificationStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -55,6 +56,7 @@ export function adminNotificationsQueryOptions(api: ApiClient, filters: AppliedF
           status: filters.status === 'all' ? undefined : filters.status,
           kind: filters.kind || undefined,
           userId: filters.userId || undefined,
+          batchId: filters.batchId || undefined,
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         },
@@ -72,9 +74,10 @@ export function AdminNotifications() {
   const { t } = useTranslation('admin');
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<AppliedFilters>({ status: 'all', kind: '', userId: '' });
+  const [filters, setFilters] = useState<AppliedFilters>({ status: 'all', kind: '', userId: '', batchId: '' });
   const [kindDraft, setKindDraft] = useState('');
   const [userDraft, setUserDraft] = useState('');
+  const [batchDraft, setBatchDraft] = useState('');
   const [page, setPage] = useState(0);
 
   const queryOptions = adminNotificationsQueryOptions(api, filters, page);
@@ -87,10 +90,15 @@ export function AdminNotifications() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] }),
   });
 
+  const retryBatchMutation = useMutation({
+    mutationFn: (batchId: string) => api.post(`/admin/notifications/batch/${batchId}/retry`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] }),
+  });
+
   const applyFilters = (event: FormEvent) => {
     event.preventDefault();
     setPage(0);
-    setFilters(current => ({ ...current, kind: kindDraft.trim(), userId: userDraft.trim() }));
+    setFilters(current => ({ ...current, kind: kindDraft.trim(), userId: userDraft.trim(), batchId: batchDraft.trim() }));
   };
 
   const changeStatus = (status: NotificationStatus | 'all') => {
@@ -133,6 +141,12 @@ export function AdminNotifications() {
             value={userDraft}
             onChange={event => setUserDraft(event.target.value)}
           />
+          <Input
+            className="w-64"
+            placeholder={t('admin_notifications_filter_batch')}
+            value={batchDraft}
+            onChange={event => setBatchDraft(event.target.value)}
+          />
           <Button type="submit" variant="outline" size="sm">
             <Search />
             {t('admin_notifications_filter_apply')}
@@ -158,6 +172,7 @@ export function AdminNotifications() {
                   <TableHead>{t('admin_notifications_col_created')}</TableHead>
                   <TableHead>{t('admin_notifications_col_channel')}</TableHead>
                   <TableHead>{t('admin_notifications_col_kind')}</TableHead>
+                  <TableHead>{t('admin_notifications_col_batch')}</TableHead>
                   <TableHead>{t('admin_notifications_col_recipient')}</TableHead>
                   <TableHead>{t('admin_notifications_col_status')}</TableHead>
                   <TableHead>{t('admin_notifications_col_attempts')}</TableHead>
@@ -171,6 +186,9 @@ export function AdminNotifications() {
                     <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(row.createdAt)}</TableCell>
                     <TableCell>{row.channel}</TableCell>
                     <TableCell>{row.kind}</TableCell>
+                    <TableCell className="max-w-32 truncate font-mono text-xs" title={row.batchId ?? undefined}>
+                      {row.batchId ? row.batchId.slice(0, 8) : '—'}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span>{row.address}</span>
@@ -187,12 +205,25 @@ export function AdminNotifications() {
                       {row.lastError ?? '—'}
                     </TableCell>
                     <TableCell>
-                      {row.status === 'failed' && (
-                        <Button size="sm" variant="outline" disabled={retryMutation.isPending} onClick={() => retryMutation.mutate(row.id)}>
-                          <RotateCw />
-                          {t('admin_notifications_retry')}
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {row.status === 'failed' && (
+                          <Button size="sm" variant="outline" disabled={retryMutation.isPending} onClick={() => retryMutation.mutate(row.id)}>
+                            <RotateCw />
+                            {t('admin_notifications_retry')}
+                          </Button>
+                        )}
+                        {row.batchId && row.status === 'failed' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={retryBatchMutation.isPending}
+                            onClick={() => retryBatchMutation.mutate(row.batchId ?? '')}
+                          >
+                            <RotateCw />
+                            {t('admin_notifications_retry_batch')}
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
