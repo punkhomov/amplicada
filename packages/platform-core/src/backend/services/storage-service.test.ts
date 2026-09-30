@@ -24,9 +24,10 @@ function fakeClient(responses: unknown[]): { client: S3Client; sent: SentCommand
   return { client, sent };
 }
 
-function page(keys: string[], nextToken?: string) {
+function page(keys: string[], nextToken?: string, prefixes: string[] = []) {
   return {
     Contents: keys.map(key => ({ Key: key, Size: 1 })),
+    CommonPrefixes: prefixes.map(prefix => ({ Prefix: prefix })),
     IsTruncated: nextToken !== undefined,
     NextContinuationToken: nextToken,
   };
@@ -36,7 +37,7 @@ test('listObjects дочитывает все страницы, а не толь
   const { client, sent } = fakeClient([page(['a', 'b'], 'token-1'), page(['c', 'd'], 'token-2'), page(['e'])]);
   const storage = new StorageServiceImpl(client, 'bucket');
 
-  const objects = await storage.listObjects('prefix/');
+  const { objects } = await storage.listObjects('prefix/');
 
   assert.deepEqual(
     objects.map(o => o.key),
@@ -51,11 +52,29 @@ test('listObjects дочитывает все страницы, а не толь
   assert.ok(sent.every(s => s.input.Prefix === 'prefix/'));
 });
 
+test('listObjects с delimiter отдаёт папки отдельно и собирает их со всех страниц', async () => {
+  const { client, sent } = fakeClient([
+    page(['a.txt'], 'token-1', ['folder-a/', 'folder-b/']),
+    page(['b.txt'], 'token-2', ['folder-c/']),
+    page([], undefined, ['folder-d/']),
+  ]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+
+  const { objects, prefixes } = await storage.listObjects('', { delimiter: '/' });
+
+  assert.deepEqual(
+    objects.map(o => o.key),
+    ['a.txt', 'b.txt'],
+  );
+  assert.deepEqual(prefixes, ['folder-a/', 'folder-b/', 'folder-c/', 'folder-d/']);
+  assert.ok(sent.every(s => s.input.Delimiter === '/'));
+});
+
 test('listObjects не зацикливается, если S3 прислал токен при IsTruncated=false', async () => {
   const { client, sent } = fakeClient([{ Contents: [{ Key: 'a', Size: 1 }], IsTruncated: false, NextContinuationToken: 'ignored' }]);
   const storage = new StorageServiceImpl(client, 'bucket');
 
-  const objects = await storage.listObjects();
+  const { objects } = await storage.listObjects();
 
   assert.equal(objects.length, 1);
   assert.equal(sent.length, 1);
@@ -65,7 +84,26 @@ test('listObjects переживает пустой ответ без Contents',
   const { client } = fakeClient([{ IsTruncated: false }]);
   const storage = new StorageServiceImpl(client, 'bucket');
 
-  assert.deepEqual(await storage.listObjects(), []);
+  assert.deepEqual(await storage.listObjects(), { objects: [], prefixes: [] });
+});
+
+test('listObjects с maxKeys отдаёт одну страницу и nextToken', async () => {
+  const { client, sent } = fakeClient([page(['a'], 'tok-2')]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  const result = await storage.listObjects('p/', { maxKeys: 2, continuationToken: 'tok-1' });
+  assert.deepEqual(result.objects.map(o => o.key), ['a']);
+  assert.equal(result.nextToken, 'tok-2');
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].input, { Bucket: 'bucket', Prefix: 'p/', Delimiter: undefined, ContinuationToken: 'tok-1', MaxKeys: 2 });
+});
+
+test('listObjects без maxKeys дочитывает всё, nextToken не выставлен', async () => {
+  const { client, sent } = fakeClient([page(['a'], 'tok-2'), page(['b'])]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  const result = await storage.listObjects('p/');
+  assert.deepEqual(result.objects.map(o => o.key), ['a', 'b']);
+  assert.equal(result.nextToken, undefined);
+  assert.equal(sent.length, 2);
 });
 
 test('getObjectStream пробрасывает Range в S3 и отдаёт Content-Range наружу', async () => {
@@ -125,7 +163,7 @@ test('putObjectStream передаёт длину — иначе SDK вычит�
 
 test('deletePrefix удаляет пачками по 1000, а не по одному ключу', async () => {
   const keys = Array.from({ length: 1500 }, (_, i) => `learning/pkg/file-${i}.html`);
-  const { client, sent } = fakeClient([page(keys), {}, {}]);
+  const { client, sent } = fakeClient([page(keys), {}, {}, {}]);
   const storage = new StorageServiceImpl(client, 'bucket');
 
   assert.equal(await storage.deletePrefix('learning/pkg/'), 1500);
@@ -136,12 +174,52 @@ test('deletePrefix удаляет пачками по 1000, а не по одн�
   assert.equal((deletes[1].input.Delete as { Objects: unknown[] }).Objects.length, 500);
 });
 
+test('deletePrefix добивает маркер папки — иначе в SeaweedFS пустая папка остаётся в листинге', async () => {
+  const { client, sent } = fakeClient([page(['learning/pkg/a.txt']), {}, {}]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+
+  await storage.deletePrefix('learning/pkg/');
+
+  const marker = sent.find(s => s.constructorName === 'DeleteObjectCommand');
+  assert.ok(marker, 'после удаления содержимого должен уйти DeleteObject на сам префикс');
+  assert.equal(marker.input.Key, 'learning/pkg/');
+});
+
 test('deletePrefix не соглашается снести бакет целиком', async () => {
   const { client, sent } = fakeClient([]);
   const storage = new StorageServiceImpl(client, 'bucket');
 
   await assert.rejects(() => storage.deletePrefix(''), /непустой префикс/);
   assert.equal(sent.length, 0, 'до S3 такой вызов доходить не должен');
+});
+
+test('copyObject шлёт CopyObject с ключом и URL-encoded источником', async () => {
+  const { client, sent } = fakeClient([{}]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  await storage.copyObject('a/конспект 1.txt', 'b/конспект 1.txt');
+  assert.equal(sent[0].constructorName, 'CopyObjectCommand');
+  assert.deepEqual(sent[0].input, {
+    Bucket: 'bucket',
+    Key: 'b/конспект 1.txt',
+    CopySource: `bucket/${encodeURIComponent('a/конспект 1.txt')}`,
+  });
+});
+
+test('deleteObjects режет ключи на пачки по 1000', async () => {
+  const { client, sent } = fakeClient([{}, {}]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  const keys = Array.from({ length: 1500 }, (_, i) => `k${i}.txt`);
+  assert.equal(await storage.deleteObjects(keys), 1500);
+  assert.equal(sent.length, 2);
+  assert.equal((sent[0].input.Delete as { Objects: unknown[] }).Objects.length, 1000);
+  assert.equal((sent[1].input.Delete as { Objects: unknown[] }).Objects.length, 500);
+});
+
+test('deleteObjects с пустым списком не ходит в S3', async () => {
+  const { client, sent } = fakeClient([]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  assert.equal(await storage.deleteObjects([]), 0);
+  assert.equal(sent.length, 0);
 });
 
 test('прочие ошибки S3 не превращаются в 416', async () => {
@@ -152,4 +230,11 @@ test('прочие ошибки S3 не превращаются в 416', async 
     () => storage.getObjectStream('missing'),
     (err: Error & { statusCode?: number }) => err.statusCode === undefined && err.name === 'NoSuchKey',
   );
+});
+
+test('deleteObjects падает, если S3 вернул частичные ошибки', async () => {
+  const { client } = fakeClient([{ Errors: [{ Key: 'b.txt', Code: 'AccessDenied' }] }]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+
+  await assert.rejects(() => storage.deleteObjects(['a.txt', 'b.txt']), /b\.txt/);
 });

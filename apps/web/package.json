@@ -11,6 +11,7 @@
     "typecheck": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
+    "@amplicada/file-viewer": "workspace:*",
     "@amplicada/module-admin": "workspace:*",
     "@amplicada/module-auth-password": "workspace:*",
     "@amplicada/module-hr": "workspace:*",

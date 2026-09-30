@@ -18,7 +18,7 @@ import {
   readAdminTableSettings,
 } from './pages/admin-document-list/index.js';
 import { AdminModules, adminApiModulesQueryOptions } from './pages/admin-modules/index.js';
-import { AdminStorage, adminStorageObjectsQueryOptions } from './pages/admin-storage/index.js';
+import { AdminStorage, storageObjectsInfiniteQueryOptions } from './pages/admin-storage/index.js';
 import { AdminTaskDetail, adminTaskRunsQueryOptions } from './pages/admin-task-detail/index.js';
 import { AuthLogDisplay } from './widgets/auth-log-display/index.js';
 import { MembersDisplay } from './widgets/members-display/index.js';
@@ -53,8 +53,11 @@ const adminFrontendModule: FrontendModule = {
     });
     context.routes.register('/admin/storage', <AdminStorage />, {
       layout: 'admin',
-      loader: async () => {
-        await context.queryClient.ensureQueryData(adminStorageObjectsQueryOptions(api));
+      loader: async ({ request }) => {
+        // Прогреваем только корень: папка приходит из query-параметра, а без этого
+        // ensureInfiniteQueryData вернул бы данные не той папки и компонент успел бы отрисовать чужой листинг.
+        const prefix = new URL(request.url).searchParams.get('prefix') ?? '';
+        await context.queryClient.ensureInfiniteQueryData(storageObjectsInfiniteQueryOptions(api, prefix));
         return null;
       },
     });

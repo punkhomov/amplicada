@@ -32,9 +32,10 @@
 |------|--------|----------|
 | `notes/README.md` | `implemented` | Формат и правила заметок: статусы, шаблон записи, стоп-лист |
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
-| `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar; D-002: режим «Приложения» |
+| `notes/file-viewer.md` | `implemented` | D-001…D-008: общая либа превью, делегирование сложных форматов браузеру, ленивый Monaco, реестр рендереров; D-005: Office-WASM-рендерер `@silurus/ooxml`; D-006: правка текста через `PUT` потребителя; D-007: accepted risk — недоверенный Office парсится на своём origin; D-008: оконное чтение текста («Показать ещё») и потолок Office 50 МиБ |
+| `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar; D-002: режим «Приложения»; D-004: файловый менеджер хранилища и `PUT`-правка текста; D-006: Explorer-UI — операции (`copyObject`/`deleteObjects`), move = copy + delete; D-007: постраничный листинг `cursor`/`limit` и бесконечный скролл |
 | `notes/module-support-chat.md` | `implemented` | D-001…D-008: таблицы вместо документов, SSE + Redis, приложения админки через общий хост, вложения через storage, карточка-виджет и композер на ките, несколько обращений и портал |
-| `notes/platform-core.md` | `implemented` | D-001…D-005: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней |
+| `notes/platform-core.md` | `implemented` | D-001…D-007: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней, `delimiter` в `listObjects`, постраничный режим `maxKeys`/`nextToken` |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
 
 Перед изменением пакета: `notes/<package>.md` (решения, отвергнутое, пробелы) +
@@ -49,12 +50,13 @@
 | Пакет | Docs (потребителям) |
 |-------|---------------------|
 | `application-tools` | [`packages/application-tools/docs/`](../packages/application-tools/docs/index.md) — справочник, модель композиции и инструкция optional-интеграции |
-| `module-admin` | [`packages/module-admin/docs/`](../packages/module-admin/docs/index.md) — сервис действий и режим приложений |
+| `file-viewer` | [`packages/file-viewer/docs/`](../packages/file-viewer/docs/index.md) — справочник: источники, компоненты, рендереры (включая Office `@silurus/ooxml`), оконное чтение текста, правка, подключение |
+| `module-admin` | [`packages/module-admin/docs/`](../packages/module-admin/docs/index.md) — сервис действий, режим приложений и страница хранилища |
 | `module-auth-password` | [`packages/module-auth-password/docs/`](../packages/module-auth-password/docs/index.md) — optional-интеграция admin |
 | `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
 | `module-support-chat` | [`packages/module-support-chat/docs/`](../packages/module-support-chat/docs/index.md) — API, SSE, встроенное приложение поддержки |
 | `module-workflow` | [`packages/module-workflow/docs/`](../packages/module-workflow/docs/) — пока 4 плоских файла |
-| `platform-core` | [`packages/platform-core/docs/`](../packages/platform-core/docs/index.md) — вендоренный UI-кит: справочник, how-to синка, explanation |
+| `platform-core` | [`packages/platform-core/docs/`](../packages/platform-core/docs/index.md) — вендоренный UI-кит и сервис storage (S3) |
 
 ### Guides (tier 4)
 
@@ -65,6 +67,7 @@
 | `guides/module-structure.md` | `implemented` | Конкретная структура модуля: файлы, package.json, конвенции |
 | `guides/formats.md` | `implemented` | Скелеты всех типов документов — справочник для агента |
 | `guides/docker-dev.md` | `superseded` | Старый Docker dev setup; актуальный запуск описан в корневом README |
+| `guides/playwright-sandbox.md` | `implemented` | UI-смоук в песочнице: глобальный Playwright + headless Chromium, логин, паттерны, грабли |
 | `guides/plan-lifecycle.md` | `draft` | Пайплайн: план → ADR и guides |
 
 ### Plans (tier 3)
@@ -74,6 +77,11 @@
 | `plans/2026-09-14-module-lifecycle-review.md` | `draft` | Первый архитектурный разбор: зависимости и порядок загрузки, дефект shutdown, владение ресурсами и удаление модулей; предложения и следующие итерации, без изменения runtime |
 | `plans/2026-09-15-auth-node-method.md` | `implemented` | Метод аутентификации — свойство узла: `auth-node` + `GET /api/auth/context`, платформа редиректит на `loginUrl` метода и не содержит страницы логина; парольный логин — `/auth/password/login`, `/me` и `/logout` переехали в core |
 | `plans/2026-09-15-notifications/` | `draft` | Уведомления: core-сервис `notification` + outbox с ретраями, канальные модули (`module-notification-email` — SMTP + адресная книга), админ-лог доставок, Mailpit в dev, ADR-04. Подпланы `01`–`04`; разблокирует регистрацию/сброс пароля/2FA в auth |
+| `plans/2026-09-19-storage-preview-editor.md` | `superseded` | Превью файлов: Shiki vs Monaco, обзор multi-format вьюеров, ограничения auth/CORS. Реализована общая либа `file-viewer`, storage переведён; правка и Office дозакрыты в итерации 1 roadmap. Заменён `2026-09-29-admin-storage-roadmap.md` |
+| `plans/2026-09-29-admin-storage-roadmap.md` | `in-progress` | Ближайшие итерации линии admin storage + file-viewer. **Итерация 1 закрыта 2026-09-29**: правка текста (`PUT`) и Office-WASM (`@silurus/ooxml`) влиты. **Итерация 2 закрыта 2026-09-29**: Explorer-UI и операции (папки, rename/move, мультивыбор, контекстное меню, плитка). **Enabler пагинации закрыт 2026-09-30**: `nextToken` в core, `cursor`/`limit` в листинге, бесконечный скролл, оконное чтение текста, потолок Office. Дальше: `support-chat` на `file-viewer` и остальные enabler'ы (права, аудит, share) |
+| `plans/2026-09-29-storage-text-edit-office-preview.md` | `implemented` | Реализация итерации 1: `PUT /storage/objects` + правка в UI, `readBytes`/Office-kinds и ленивые docx/xlsx-рендереры в `file-viewer`, docs. Код написан, собран и проверен живьём (Playwright) |
+| `plans/2026-09-29-admin-storage-explorer-ui.md` | `implemented` | Итерация 2: Explorer-UI и операции `/admin/storage` — core `copyObject`/`deleteObjects`, роуты folder/move/bulk delete, список с мультивыбором, тулбар, дерево, адресная строка, контекстное меню, диалоги перемещения/свойств, плитка. Код влит (`328eb072..45ab313f`); живой e2e — шаг 8 плана |
+| `plans/2026-09-29-storage-pagination-streaming.md` | `implemented` | Итерация пагинации и стриминга: постраничный `listObjects` (`maxKeys`/`continuationToken`/`nextToken`, дефолт «дочитать всё» сохранён) и `cursor`/`limit` в листинге, бесконечный скролл списка, оконное чтение текста с безопасными границами UTF-8 («Показать ещё»), потолок 50 МиБ для Office-превью. Живые прогоны: 250 файлов, текст 1.5 МБ, `.docx` 51 МБ |
 | `plans/2026-09-18-support-chat-ai-first.md` | `in-progress` | Support chat AI-first: исследование практик (Fin, Zendesk, ITIL/JSM, handoff-пакеты, доступ агента к данным) и направление — ассистент отвечает по данным платформы, эскалирует структурированным брифом, инцидент как отдельный вид, пользователь закрывает сам. Без AI реализованы этап 0 (статусы, закрытие пользователем) и инциденты (вид, серьёзность, привязка дублей, рассылка); автозакрытие/метрики — нет |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |
 | `plans/2026-07-13-frontend-core-reorg.md` | `implemented` | Реорганизация core/sdk (выполнен) |

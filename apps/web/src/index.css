@@ -1,3 +1,4 @@
 @import "@amplicada/platform-core/frontend/styles/base.css";
 @import "@amplicada/platform-core/frontend/tailwind.css";
+@import "@amplicada/file-viewer/frontend/tailwind.css";
 @import "./generated/modules.css";

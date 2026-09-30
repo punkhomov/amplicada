@@ -22,6 +22,35 @@ export interface StorageObjectInfo {
   lastModified?: Date;
 }
 
+export interface StorageListOptions {
+  /**
+   * Разделитель «папок». В S3 директорий нет — ключи плоские, а `delimiter: '/'` лишь не даёт
+   * листингу уйти вглубь: объекты текущего уровня приходят в `objects`, а общие префиксы до
+   * следующего разделителя — в `prefixes` (`CommonPrefixes`). Без него листинг рекурсивный.
+   */
+  delimiter?: string;
+  /**
+   * Размер страницы. Если задан — листинг отдаёт ровно одну страницу и токен продолжения:
+   * каталог с десятками тысяч объектов иначе целиком осел бы в памяти роута и ответа.
+   * Без него сохраняется прежнее поведение — дочитать все страницы и вернуть всё сразу.
+   */
+  maxKeys?: number;
+  /** Продолжение с предыдущей страницы (`nextToken`). Осмыслен только вместе с `maxKeys`. */
+  continuationToken?: string;
+}
+
+/** Разделение листинга на уровне «папки»: то, что лежит здесь, и то, что лежит глубже. */
+export interface StorageListResult {
+  objects: StorageObjectInfo[];
+  /** Полные префиксы «папок», включая разделитель на конце: `learning/pkg/`. */
+  prefixes: string[];
+  /**
+   * Токен следующей страницы — только в постраничном режиме (`maxKeys`) и только когда S3
+   * сообщил `IsTruncated`. Отсутствие токена означает, что страница последняя.
+   */
+  nextToken?: string;
+}
+
 export interface StorageGetStreamOptions {
   /**
    * Значение HTTP-заголовка `Range` (RFC 9110), например `bytes=0-1023`. Уходит в S3 как есть —
@@ -59,14 +88,32 @@ export interface BackendStorageService {
    * Диапазон вне размера объекта → ошибка со `statusCode = 416`.
    */
   getObjectStream(key: string, options?: StorageGetStreamOptions): Promise<StorageObjectStream>;
+  /**
+   * Копирование на стороне S3: тело не проходит через процесс. `move` в файловом менеджере
+   * собирается как copy + delete, а прогонять большой файл через память ради этого не нужно.
+   * `CopySource` кодируется — ключи с кириллицей или пробелами иначе S3 не находит.
+   */
+  copyObject(fromKey: string, toKey: string): Promise<void>;
   deleteObject(key: string): Promise<void>;
+  /**
+   * Удаляет ключи пачками по 1000 (лимит `DeleteObjects`) и возвращает их число. Пустой список —
+   * no-op: батчинг и защита от пустого запроса живут в одном месте, в том числе для `deletePrefix`.
+   */
+  deleteObjects(keys: string[]): Promise<number>;
   /**
    * Удаляет всё под префиксом пачками по 1000 (лимит `DeleteObjects`) и возвращает число ключей.
    * Поштучное удаление распакованного пакета — это тысячи round-trip'ов.
    */
   deletePrefix(prefix: string): Promise<number>;
   headObject(key: string): Promise<StorageObjectInfo | null>;
-  /** Дочитывает все страницы листинга: `ListObjectsV2` отдаёт максимум 1000 ключей за вызов. */
-  listObjects(prefix?: string): Promise<StorageObjectInfo[]>;
+  /**
+   * По умолчанию дочитывает все страницы листинга: `ListObjectsV2` отдаёт максимум 1000 ключей
+   * за вызов. С `maxKeys` переключается в постраничный режим — один запрос за вызов, наружу
+   * уходит `nextToken`.
+   * С `delimiter` останавливается на границе «папок» — это листинг одного уровня для файлового
+   * менеджера, а не рекурсивный обход; объекты-маркеры папок (ключи с разделителем на конце)
+   * приходят в `objects` как есть, отсеивать их — дело потребителя.
+   */
+  listObjects(prefix?: string, options?: StorageListOptions): Promise<StorageListResult>;
   getSignedUrl(key: string, expiresInSeconds?: number): Promise<string>;
 }

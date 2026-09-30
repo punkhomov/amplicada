@@ -1,1 +1,1 @@
-export { AdminStorage, adminStorageObjectsQueryOptions } from './ui/admin-storage.js';
+export { AdminStorage, storageObjectsInfiniteQueryOptions } from './ui/admin-storage.js';

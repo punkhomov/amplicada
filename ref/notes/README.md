@@ -27,11 +27,12 @@ date: 2026-09-15
 | Пакет | Notes |
 |---|---|
 | `application-tools` | [Заметки](application-tools.md) — D-004: история перехода и альтернативы |
-| `module-admin` | [Заметки](module-admin.md) |
+| `file-viewer` | [Заметки](file-viewer.md) — общая либа превью: пакет, делегирование браузеру, Monaco, реестр рендереров |
+| `module-admin` | [Заметки](module-admin.md) — D-004: файловый менеджер `/admin/storage`, ключи в query, превью |
 | `module-auth-password` | [Заметки](module-auth-password.md) |
 | `module-hr-poll` | [Заметки](module-hr-poll.md) |
 | `module-support-chat` | [Заметки](module-support-chat.md) — первое приложение админки: таблицы вместо документов, SSE + Redis, вложения через storage, карточка-виджет, портал «Мои обращения» |
-| `platform-core` | [Заметки](platform-core.md) — UI-кит: вендоринг, синк, `cn`, политика возраста |
+| `platform-core` | [Заметки](platform-core.md) — UI-кит: вендоринг, синк, `cn`, политика возраста; D-006: `delimiter` в `listObjects` |
 | `module-hr` | — |
 | `module-workflow` | — |
 | остальные | — |

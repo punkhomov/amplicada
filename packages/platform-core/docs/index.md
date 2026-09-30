@@ -2,8 +2,8 @@
 title: "platform-core — обзор"
 type: index
 package: platform-core
-updated: 2026-09-17
-verified_commit: 5767b800
+updated: 2026-09-30
+verified_commit: 61bed2d7
 ---
 
 # platform-core
@@ -26,6 +26,7 @@ verified_commit: 5767b800
 | Токен `cn` | `export { cn }` из `cn` | `src/frontend/lib/utils.ts`, `src/frontend/index.ts:65` |
 | Синхронизация кита | `pnpm --filter @amplicada/platform-core ui:sync \| ui:check` | `scripts/shadcn-sync.mjs` |
 | Точки расширения UI | `context.extensions.contribute('<id>', { component })` | `src/frontend/registries/extension-point.ts` |
+| Сервис storage | `context.services.resolve<BackendStorageService>('storage')` | `src/backend/services/storage-service.ts` |
 
 ## Карта документации
 
@@ -41,6 +42,7 @@ verified_commit: 5767b800
 | Подсистема | Где описана |
 |---|---|
 | Точки расширения (сервисы, токены) | — нет |
+| Сервис storage (S3) | [reference/storage.md](./reference/storage.md) |
 | HTTP API | — нет |
 | Схема БД и миграции | — нет |
 | Документы, списки, дашборд | — нет |
@@ -53,6 +55,13 @@ verified_commit: 5767b800
 
 ## Freshness
 
-- Сверено с кодом: `2026-09-17`, коммит `5767b800`, рабочее дерево грязное (ветка `feat/support-chat-app`).
+- Сверено с кодом: `2026-09-30`, коммит `61bed2d7`, рабочее дерево чистое (ветка `feat/admin-storage-explorer`).
+- Storage проверен живым прогоном: API (листинг по папкам, `Range`/`206`, `inline`/`attachment`,
+  CSP `sandbox`, загрузка, рекурсивное удаление) и браузерный e2e-смоук страницы `/admin/storage`
+  в Playwright (логин, загрузка, превью текста/изображения, скачивание, навигация по папкам,
+  удаление файла и папки). Найденный дефект SeaweedFS (пустая папка после удаления) закрыт
+  добивкой маркера в `deletePrefix`. `copyObject`/`deleteObjects`, батчинг `deletePrefix` и
+  оба режима `listObjects` (drain-all по умолчанию и постраничный `maxKeys`/`nextToken`)
+  покрыты unit-тестами сервиса.
 - Не проверено вживую: браузерный смоук `message-scroller`, `questionnaire`, `toast`;
   визуальная регрессия остальных компонентов после синка.

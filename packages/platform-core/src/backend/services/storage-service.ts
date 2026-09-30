@@ -1,5 +1,6 @@
 import type { Readable } from 'node:stream';
 import {
+  CopyObjectCommand,
   CreateBucketCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
@@ -16,6 +17,8 @@ import { getSignedUrl as getS3SignedUrl } from '@aws-sdk/s3-request-presigner';
 import type {
   BackendStorageService,
   StorageGetStreamOptions,
+  StorageListOptions,
+  StorageListResult,
   StorageObjectInfo,
   StorageObjectStream,
   StoragePutOptions,
@@ -81,8 +84,37 @@ export class StorageServiceImpl implements BackendStorageService {
     };
   }
 
+  async copyObject(fromKey: string, toKey: string): Promise<void> {
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        Key: toKey,
+        // S3 разбирает CopySource как путь, поэтому источник кодируется целиком: иначе пробелы и
+        // кириллица в ключе делают строку неоднозначной и объект «не находится».
+        CopySource: `${this.bucket}/${encodeURIComponent(fromKey)}`,
+      }),
+    );
+  }
+
   async deleteObject(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  async deleteObjects(keys: string[]): Promise<number> {
+    // DeleteObjects принимает не больше 1000 ключей за раз. Пакет курса легко больше — без
+    // разбиения на пачки запрос просто отвергается. Пустой список цикл пропускает: сюда его
+    // приводит в том числе deletePrefix, а пустой DeleteObjects — гарантированная ошибка.
+    for (let i = 0; i < keys.length; i += 1000) {
+      const batch = keys.slice(i, i + 1000);
+      const result = await this.client.send(
+        new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true } }),
+      );
+      // `Quiet: true` глушит успешные ключи, но частичные отказы (права, блокировка) приходят
+      // в `Errors` при общем 200. Молча вернуть всё как удалённое — соврать вызывающему.
+      const failed = (result.Errors ?? []).map(error => error.Key).filter((key): key is string => Boolean(key));
+      if (failed.length) throw new Error(`Не удалось удалить объекты: ${failed.join(', ')}`);
+    }
+    return keys.length;
   }
 
   async deletePrefix(prefix: string): Promise<number> {
@@ -90,16 +122,14 @@ export class StorageServiceImpl implements BackendStorageService {
     // сборке ключа, а не намерение.
     if (!prefix) throw new Error('deletePrefix требует непустой префикс');
 
-    const keys = (await this.listObjects(prefix)).map(object => object.key).filter(Boolean);
-    // DeleteObjects принимает не больше 1000 ключей за раз. Пакет курса легко больше — без
-    // разбиения на пачки запрос просто отвергается.
-    for (let i = 0; i < keys.length; i += 1000) {
-      const batch = keys.slice(i, i + 1000);
-      await this.client.send(
-        new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true } }),
-      );
-    }
-    return keys.length;
+    const keys = (await this.listObjects(prefix)).objects.map(object => object.key).filter(Boolean);
+    const deleted = await this.deleteObjects(keys);
+    // Маркер папки листингом не достать: SeaweedFS filer держит пустую директорию отдельной
+    // записью, которой нет среди объектов, — без этого удалённая «папка» так и висела бы
+    // пустой в листинге. В настоящем S3 это no-op (DeleteObject на отсутствующий ключ → 204),
+    // а если маркер там правда был объектом — добьёт и его.
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: prefix }));
+    return deleted;
   }
 
   async headObject(key: string): Promise<StorageObjectInfo | null> {
@@ -118,21 +148,38 @@ export class StorageServiceImpl implements BackendStorageService {
     }
   }
 
-  async listObjects(prefix?: string): Promise<StorageObjectInfo[]> {
+  async listObjects(prefix?: string, options?: StorageListOptions): Promise<StorageListResult> {
     const objects: StorageObjectInfo[] = [];
-    // ListObjectsV2 отдаёт максимум 1000 ключей за вызов и не сообщает об этом ничем, кроме
-    // IsTruncated — без дочитывания по токену большой префикс молча виден лишь частично.
-    let continuationToken: string | undefined;
+    const prefixes: string[] = [];
+    // С maxKeys — ровно один запрос за вызов: в память попадает только страница, продолжение
+    // клиент запросит сам по nextToken. Без него сохраняем дочитывание: ListObjectsV2 отдаёт
+    // максимум 1000 ключей за вызов и не сообщает об этом ничем, кроме IsTruncated, — большой
+    // префикс без дочитывания по токену молча виден лишь частично.
+    const singlePage = options?.maxKeys !== undefined;
+    let nextToken: string | undefined;
+    let continuationToken = singlePage ? options?.continuationToken : undefined;
     do {
       const result = await this.client.send(
-        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: continuationToken }),
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          Delimiter: options?.delimiter,
+          ContinuationToken: continuationToken,
+          MaxKeys: options?.maxKeys,
+        }),
       );
       for (const obj of result.Contents ?? []) {
         objects.push({ key: obj.Key ?? '', size: obj.Size ?? 0, etag: obj.ETag, lastModified: obj.LastModified });
       }
-      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+      for (const common of result.CommonPrefixes ?? []) {
+        if (common.Prefix) prefixes.push(common.Prefix);
+      }
+      nextToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+      continuationToken = singlePage ? undefined : nextToken;
     } while (continuationToken);
-    return objects;
+    // Ключ nextToken добавляем только по факту: результат drain-режима должен остаться прежним
+    // по форме — потребители сравнивают его целиком (deepEqual), лишний undefined ломает такое.
+    return nextToken === undefined ? { objects, prefixes } : { objects, prefixes, nextToken };
   }
 
   async getSignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {

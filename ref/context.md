@@ -2,7 +2,7 @@
 title: amplicada — Active Project Context
 type: context
 tier: 2
-date: 2026-09-15
+date: 2026-09-30
 ---
 
 # amplicada — Active Project Context
@@ -47,6 +47,11 @@ Platform for modular business applications. Compile-time modules as npm packages
 | `useRequireAuth`, `redirectToLogin`, `useLogout` | frontend/hooks — гейт и редирект на `loginUrl` метода |
 | `PASSWORD_LOGIN_PATH` | module-auth-password/contracts/paths.ts — `/auth/password/login` |
 | `BackendStorageService`, `StorageServiceImpl` | S3-compatible object storage, service token `storage` — contracts/backend/storage.ts, backend/services/storage-service.ts |
+| `listObjects`, `delimiter`, `CommonPrefixes`, `StorageListResult`, `maxKeys`, `continuationToken`, `nextToken` | листинг «папок» в S3: `listObjects(prefix, { delimiter })` → `{ objects, prefixes }`; постраничный режим `maxKeys`/`continuationToken` → `nextToken`, без `maxKeys` — прежнее «дочитать все страницы» — contracts/backend/storage.ts, backend/services/storage-service.ts |
+| `admin/storage`, файловый менеджер, Explorer UI, `objects/view`, `POST /storage/folder`, `/storage/move`, bulk delete, `STORAGE_EDIT_ENABLED` | `/admin/storage`: Explorer-UI (тулбар, дерево, адресная строка, мультивыбор, сортировка, плитка, контекстное меню, диалоги перемещения/свойств); операции — создать папку (`POST /storage/folder`, маркер), переименовать/переместить (`POST /storage/move`, copy+delete; `400` — в себя/потомка, `409` — коллизия), пакетное удаление (`DELETE /storage/objects { keys }`); листинг папок-префиксов, загрузка, `inline`-превью, рекурсивное удаление папки; ключ объекта — query-параметр `key` (Fastify `:key` не матчит слэши); правка текста `PUT /storage/objects` выключена по умолчанию, включается env `STORAGE_EDIT_ENABLED=true`, состояние отдаёт `GET /storage/config` → `{ editEnabled }`; листинг постраничный (`cursor`/`limit`, `nextToken`, бесконечный скролл; поиск клиентский по загруженному), текст в превью читается окнами («Показать ещё»), Office крупнее 50 МиБ — внешняя карточка — packages/module-admin/src/backend/routes/storage.ts, packages/module-admin/src/frontend/pages/admin-storage/ |
+| `FilePreview`, `FileSource`, `RendererPlugin`, `TextEditor`, `readText`, `nextOffsetBytes` | общая либа превью/редактирования: источник (url/file/blob), реестр рендереров (image/video/audio/pdf/text/word/spreadsheet/external), оконное чтение текста (`readText({ limitBytes, offsetBytes })` → `nextOffsetBytes`, кнопка `loadMore`), ленивый Monaco, `?worker` под Vite; peer-пакет `@amplicada/file-viewer` — packages/file-viewer/src, packages/file-viewer/docs/reference/file-viewer.md |
+| `@silurus/ooxml`, `word`, `spreadsheet`, `readBytes`, `OFFICE_MAX_PREVIEW_BYTES` | Office-превью docx/xlsx в `file-viewer`: ленивые WASM/Canvas-рендереры (`DocxScrollViewer`/`XlsxViewer`), `FileKind` `word`/`spreadsheet`, `RendererProps.readBytes(): Promise<ArrayBuffer>`; файл крупнее 50 МиБ — external-карточка без чтения байтов; точный пин `0.88.0`, фолбэк на external-карточку — packages/file-viewer/src/frontend/renderers/word.tsx, packages/file-viewer/src/frontend/renderers/spreadsheet.tsx |
+| `PUT /storage/objects`, правка текста, `mode="edit"` | сохранение текста из превью: `PUT` (JSON `{content}`, `bodyLimit` 8 МБ, существование через `headObject`, сохранение `contentType`) + `mode="edit"`/`onSave` в `FilePreviewDialog`; не-текстовые типы редактора не получают — packages/module-admin/src/backend/routes/storage.ts, packages/module-admin/src/frontend/pages/admin-storage/ |
 | `allocateDocumentId`, `indexCreated` | document-runtime.ts — резервирование id в `core.document_index` перед вставкой строки |
 | `writeVersion`, `versionWriteMode`, `CARD_CORRECTION` | module-hr: коррекция записи vs новый интервал версии |
 | `getObjectStream`, `StorageGetStreamOptions` | потоковое чтение из S3 с `Range` → `206` |

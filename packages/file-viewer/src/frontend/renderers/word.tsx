@@ -1,0 +1,60 @@
+import { useEffect, useRef, useState } from 'react';
+import type { RendererProps } from '../../contracts/index.js';
+import { PreviewLoader } from '../components/preview-loader.js';
+import ExternalRenderer from './external.js';
+
+type Status = 'loading' | 'ready' | 'error';
+
+/** Потолок предпросмотра Office: выше — WASM-парсер и файл в памяти того не стоят, отдаём браузеру. */
+const OFFICE_MAX_PREVIEW_BYTES = 50 * 1024 * 1024;
+
+/** Ленивый рендерер DOCX: Rust/WASM-парсер, Canvas-отрисовка, read-only. */
+export default function WordRenderer(props: RendererProps) {
+  const { descriptor, readBytes, url } = props;
+  const oversize = descriptor.size !== undefined && descriptor.size > OFFICE_MAX_PREVIEW_BYTES;
+  const hostRef = useRef<HTMLDivElement>(null);
+  const readRef = useRef(readBytes);
+  readRef.current = readBytes;
+  const [status, setStatus] = useState<Status>(oversize ? 'error' : 'loading');
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: url — ключ перезагрузки, а readBytes берём из ref, чтобы новая ссылка на source не перезапускала загрузку
+  useEffect(() => {
+    // Потолок проверяем по метаданным до импорта WASM и readBytes: превышение — не ошибка
+    // парсера, а решение не тянуть файл в браузер вовсе.
+    if (oversize) {
+      setStatus('error');
+      return;
+    }
+    let alive = true;
+    let viewer: { destroy(): void } | null = null;
+    setStatus('loading');
+    (async () => {
+      const { DocxScrollViewer } = await import('@silurus/ooxml/docx');
+      const bytes = await readRef.current();
+      if (!alive || !hostRef.current) return;
+      const instance = new DocxScrollViewer(hostRef.current);
+      viewer = instance;
+      await instance.load(bytes);
+      if (alive) setStatus('ready');
+    })().catch(() => {
+      // Экран уходит на external-карточку, не меняя url, — cleanup тогда не сработает, поэтому
+      // гасим зритель прямо здесь, чтобы не течь WASM-памятью и слушателями.
+      viewer?.destroy();
+      viewer = null;
+      if (alive) setStatus('error');
+    });
+    return () => {
+      alive = false;
+      viewer?.destroy();
+    };
+  }, [url, oversize]);
+
+  if (oversize || status === 'error') return <ExternalRenderer {...props} />;
+
+  return (
+    <div className="relative h-full w-full">
+      <div ref={hostRef} className="h-full w-full" />
+      {status === 'loading' && <PreviewLoader />}
+    </div>
+  );
+}
