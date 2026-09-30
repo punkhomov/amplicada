@@ -4,6 +4,7 @@ import type { EventBus } from '../../contracts/event-bus.js';
 import {
   type BackendNotificationService,
   NOTIFICATION_EVENTS,
+  type NotificationAttachment,
   type NotificationChannel,
   type NotificationDelivery,
   type NotificationDeliveryListParams,
@@ -14,6 +15,8 @@ import {
 } from '../../contracts/notification.js';
 import { logger } from '../logger.js';
 import { notificationOutbox } from '../schemas/index.js';
+import { renderContent } from './notification-render.js';
+import { loadTemplate } from './notification-template-resolver.js';
 
 export const DEFAULT_MAX_ATTEMPTS = 5;
 export const DEFAULT_RETRY_BASE_MS = 30_000;
@@ -84,6 +87,9 @@ export class NotificationServiceImpl implements BackendNotificationService {
   }
 
   async send(message: NotificationMessage): Promise<{ id: string } | null> {
+    const content = await this.resolveContent(message);
+    if (!content) return null;
+
     const resolved = await this.resolveTarget(message);
     if (!resolved) {
       logger.warn(
@@ -93,27 +99,90 @@ export class NotificationServiceImpl implements BackendNotificationService {
       return null;
     }
 
-    const [row] = await this.deps.db
-      .insert(notificationOutbox)
-      .values({
-        userId: message.userId,
-        channel: resolved.channel.id,
-        kind: message.kind,
-        address: resolved.address,
-        subject: message.subject,
-        body: message.body,
-        html: message.html ?? null,
-        locale: message.locale ?? null,
-        maxAttempts: this.maxAttempts,
-      })
-      .returning({ id: notificationOutbox.id });
+    const scheduled = message.scheduledAt !== undefined && message.scheduledAt.getTime() > Date.now();
 
-    // Eager-попытка в своём процессе: ответ вызывающему не ждёт SMTP. Ошибку глотаем — строка уже
-    // в outbox, диспетчер доделает (транспортную ошибку вернуть вызывающему бессмысленно: он её
-    // не решает, а откатывать бизнес-действие из-за недоступности почты нельзя).
-    if (row) void this.deliver(row.id).catch(err => logger.error({ err, deliveryId: row.id }, 'Eager-доставка упала'));
+    const values = {
+      userId: message.userId,
+      channel: resolved.channel.id,
+      kind: message.kind,
+      address: resolved.address,
+      subject: content.subject,
+      body: content.body,
+      html: content.html ?? null,
+      locale: message.locale ?? content.locale ?? null,
+      sender: message.sender ?? content.sender ?? null,
+      replyTo: message.replyTo ?? null,
+      cc: message.cc ?? null,
+      bcc: message.bcc ?? null,
+      headers: message.headers ?? null,
+      attachments: message.attachments ?? content.attachments ?? [],
+      dedupeKey: message.dedupeKey ?? null,
+      nextAttemptAt: scheduled ? message.scheduledAt : new Date(),
+      maxAttempts: this.maxAttempts,
+    };
+
+    const insert = this.deps.db.insert(notificationOutbox).values(values);
+    const [row] = message.dedupeKey
+      ? await insert.onConflictDoNothing().returning({ id: notificationOutbox.id })
+      : await insert.returning({ id: notificationOutbox.id });
+
+    // Конфликт по dedupeKey: доставка уже создана бизнес-действием ранее — возвращаем её id.
+    if (!row && message.dedupeKey) {
+      const [existing] = await this.deps.db
+        .select({ id: notificationOutbox.id })
+        .from(notificationOutbox)
+        .where(
+          and(
+            eq(notificationOutbox.kind, message.kind),
+            eq(notificationOutbox.dedupeKey, message.dedupeKey),
+            eq(notificationOutbox.userId, message.userId),
+          ),
+        )
+        .limit(1);
+      return existing ? { id: existing.id } : null;
+    }
+
+    // Eager-попытка в своём процессе: ответ вызывающему не ждёт SMTP (кроме отложенных). Ошибку
+    // глотаем — строка уже в outbox, диспетчер доделает (транспортную ошибку вернуть вызывающему
+    // бессмысленно: он её не решает, а откатывать бизнес-действие из-за недоступности почты нельзя).
+    if (row && !scheduled) void this.deliver(row.id).catch(err => logger.error({ err, deliveryId: row.id }, 'Eager-доставка упала'));
 
     return row ?? null;
+  }
+
+  /** Контент сообщения: inline — как есть; шаблон — резолв и рендер `{{path}}` со снапшотом. */
+  private async resolveContent(message: NotificationMessage): Promise<{
+    subject: string;
+    body: string;
+    html?: string;
+    sender?: string;
+    attachments?: NotificationAttachment[];
+    locale?: string;
+  } | null> {
+    const content = message.content;
+    if (!('template' in content)) {
+      return { subject: content.subject, body: content.body, ...(content.html === undefined ? {} : { html: content.html }) };
+    }
+
+    const template = await loadTemplate(this.deps.db, content.template, message.locale);
+    if (!template) return null;
+
+    const rendered = renderContent(
+      { subject: template.subject, body: template.body, ...(template.html === null ? {} : { html: template.html }) },
+      content.template.data ?? {},
+    );
+    if (rendered.missing.length) {
+      logger.warn({ kind: message.kind, missing: rendered.missing }, 'В шаблоне уведомления не хватает переменных');
+    }
+
+    return {
+      subject: rendered.subject,
+      body: rendered.body,
+      ...(rendered.html === undefined ? {} : { html: rendered.html }),
+      ...(template.sender === null ? {} : { sender: template.sender }),
+      attachments: template.attachments,
+      ...(template.locale === null ? {} : { locale: template.locale }),
+    };
   }
 
   private async resolveTarget(message: NotificationMessage): Promise<{ channel: NotificationChannel; address: string } | null> {
@@ -154,6 +223,12 @@ export class NotificationServiceImpl implements BackendNotificationService {
         body: row.body,
         html: row.html ?? undefined,
         locale: row.locale ?? undefined,
+        sender: row.sender ?? undefined,
+        replyTo: row.replyTo ?? undefined,
+        cc: row.cc ?? undefined,
+        bcc: row.bcc ?? undefined,
+        headers: row.headers ?? undefined,
+        attachments: row.attachments.length ? row.attachments : undefined,
         channel: row.channel,
         address: row.address,
       });
