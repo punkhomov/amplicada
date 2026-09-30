@@ -50,6 +50,13 @@
       "when": 1789430400000,
       "tag": "0006_notification_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790755200000,
+      "tag": "0007_notification_contract_v2",
+      "breakpoints": true
     }
   ]
 }

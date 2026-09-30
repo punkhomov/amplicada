@@ -11,6 +11,8 @@ export type { IdentityUser } from './identity-user.js';
 export { identityUser } from './identity-user.js';
 export type { NewNotificationOutboxRow, NotificationOutboxRow } from './notification-outbox.js';
 export { notificationOutbox } from './notification-outbox.js';
+export type { NewNotificationTemplateRow, NotificationTemplateRow } from './notification-template.js';
+export { notificationTemplate } from './notification-template.js';
 export type { NewScheduledTaskRunLogRow, ScheduledTaskRunLogRow } from './scheduled-task-run-logs.js';
 export { scheduledTaskRunLogs } from './scheduled-task-run-logs.js';
 export type { NewScheduledTaskRunRow, ScheduledTaskRunRow } from './scheduled-task-runs.js';
