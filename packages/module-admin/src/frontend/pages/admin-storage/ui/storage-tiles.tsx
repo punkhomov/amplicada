@@ -2,7 +2,7 @@ import { fileKindOf, formatBytes } from '@amplicada/file-viewer/frontend';
 import { useTranslation } from '@amplicada/platform-core/frontend';
 import { Checkbox } from '@amplicada/platform-core/frontend/ui/checkbox';
 import { Folder } from 'lucide-react';
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import { type MouseEvent as ReactMouseEvent, useCallback } from 'react';
 import type { StorageEntry } from '../lib/entries.js';
 import { moveBlockReason } from '../lib/move.js';
 import type { SelectionState } from '../lib/selection.js';
@@ -64,8 +64,8 @@ function StorageTile({
 }: StorageTileProps) {
   const { t } = useTranslation('admin');
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useStorageDraggable(entry);
-  const { setNodeRef: setDropRef, isOver } = useStorageDroppable(entry.key);
   const isFolder = entry.kind === 'folder';
+  const { setNodeRef: setDropRef, isOver } = useStorageDroppable(entry.key, isFolder);
   // Невалидная цель (папка в себя/потомка, no-op) — красная: drop всё равно гасится в onDragEnd.
   const over = isFolder && isOver && dragKeys !== null;
   const dropClass = over
@@ -73,11 +73,15 @@ function StorageTile({
       ? 'ring-1 ring-destructive bg-destructive/10'
       : 'ring-1 ring-primary bg-primary/10'
     : '';
-  // Два ref на одной карточке: источник перетаскивания и цель drop у папки.
-  const setRefs = (node: HTMLDivElement | null) => {
-    setDragRef(node);
-    if (isFolder) setDropRef(node);
-  };
+  // Два ref на одной карточке: источник перетаскивания и цель drop. `useCallback` обязателен:
+  // новый ref каждый рендер заставлял бы dnd-kit переподключать ResizeObserver к узлу.
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      setDragRef(node);
+      setDropRef(node);
+    },
+    [setDragRef, setDropRef],
+  );
   const icon =
     entry.kind === 'folder' ? (
       <Folder className="size-8 text-muted-foreground" />
@@ -109,8 +113,11 @@ function StorageTile({
       ) : (
         // Карточка — настоящая кнопка: клавиатура получает Enter/Space бесплатно, а чекбокс
         // и инлайн-инпут отрисовываются соседями, а не вложенными интерактивными элементами.
+        // `data-dnd-drag-surface` оставляет её поверхностью drag: иначе guard интерактивных
+        // целей запретил бы тащить плитку за единственную крупную область карточки.
         <button
           type="button"
+          data-dnd-drag-surface
           className="flex w-full flex-1 flex-col items-center gap-2"
           onClick={event => onClick(entry, event)}
           onDoubleClick={() => onRenameStart(entry.key)}

@@ -1,7 +1,7 @@
 import { useTranslation } from '@amplicada/platform-core/frontend';
-import { useDraggable, useDroppable } from '@dnd-kit/core';
+import { PointerSensor, type PointerSensorOptions, useDraggable, useDroppable } from '@dnd-kit/core';
 import { Files } from 'lucide-react';
-import { type KeyboardEvent as ReactKeyboardEvent, useId, useMemo } from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useId, useMemo } from 'react';
 import type { StorageEntry } from '../lib/entries.js';
 
 /**
@@ -30,6 +30,49 @@ export function storagePrefixFromDropId(id: unknown): string | null {
   // У экземплярного суффикса (`useId`) разделитель `|` всегда последний: сам `useId` его не содержит.
   const separator = rest.lastIndexOf('|');
   return separator === -1 ? rest : rest.slice(0, separator);
+}
+
+/**
+ * Цели, с которых перетаскивание начинаться не должно: контролы внутри строки/карточки
+ * (инлайн-инпут, чекбокс, кнопки, ссылки, меню) и зона sentinel'а догрузки.
+ */
+export const STORAGE_DRAG_BLOCKERS =
+  'input, textarea, select, option, [contenteditable]:not([contenteditable="false"]), button, a, [role="checkbox"], [role="menu"], [data-slot="storage-load-more"]';
+
+/** Метка поверхности, которую контролом не считаем: тело кнопки-плитки — и клик, и drag. */
+export const STORAGE_DRAG_SURFACE_ATTR = 'data-dnd-drag-surface';
+
+/**
+ * Точка старта drag лежит внутри интерактивного элемента или sentinel'а. Исключение — сама
+ * помеченная поверхность: тело кнопки-плитки одновременно клик и drag-ручка, блокировать его
+ * значило бы запретить перетаскивание плиток; контролы внутри такой поверхности всё равно блокеры.
+ */
+export function isStorageDragBlocked(target: EventTarget | null): boolean {
+  const element = target as Element | null;
+  // Duck-typing вместо `instanceof Element`: предикат тестируется в Node, где DOM нет.
+  if (!element || typeof element.closest !== 'function') return false;
+  const blocker = element.closest(STORAGE_DRAG_BLOCKERS);
+  if (!blocker) return false;
+  return blocker !== element.closest(`[${STORAGE_DRAG_SURFACE_ATTR}]`);
+}
+
+/**
+ * PointerSensor с фильтром цели. Штатный сенсор активируется по одному pointerdown + 5px и в
+ * `handleStart` сбрасывает выделение текста — из-за этого протяжка внутри инлайн-инпута
+ * переименования срывала выделение и двигала строку целиком. Интерактивные цели drag не начинают.
+ */
+export class StoragePointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: ({ nativeEvent: event }: ReactPointerEvent, { onActivation }: PointerSensorOptions) => {
+        if (!event.isPrimary || event.button !== 0) return false;
+        if (isStorageDragBlocked(event.target)) return false;
+        onActivation?.({ event });
+        return true;
+      },
+    },
+  ];
 }
 
 /**
@@ -67,11 +110,16 @@ export function useStorageDraggable(entry: StorageEntry) {
  * узлами сразу (узел дерева, строка/плитка, крошка), а id droppable в dnd-kit обязан быть
  * уникальным: дубли затирают друг друга в реестре, и подсветка/обмер достаются «последнему», а
  * размонтирование одного узла удаляет общий id у остальных. `useId` разводит экземпляры, а
- * `storagePrefixFromDropId` снимает суффикс обратно до префикса.
+ * `storagePrefixFromDropId` снимает суффикс обратно до префикса. `enabled = false` выключает
+ * регистрацию: dnd-kit регистрирует droppable безусловно, поэтому файлам (не целям) его нужно
+ * гасить флагом `disabled`, а не отсутствием ref.
  */
-export function useStorageDroppable(destination: string) {
+export function useStorageDroppable(destination: string, enabled = true) {
   const instanceId = useId();
-  const { setNodeRef, isOver } = useDroppable({ id: `${storageDropId(destination)}|${instanceId}` });
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${storageDropId(destination)}|${instanceId}`,
+    disabled: !enabled,
+  });
   return { setNodeRef, isOver };
 }
 

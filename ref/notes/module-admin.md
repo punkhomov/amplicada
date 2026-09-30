@@ -314,3 +314,14 @@ id суффикс `useId()`, `storagePrefixFromDropId` снимает его п�
 `storage-tree.tsx`.
 **Связано.** D-004, D-006; `packages/module-admin/docs/reference/storage.md` (раздел
 «Frontend»); `admin-column-manager.tsx` — прежний потребитель dnd-kit.
+
+**Дополнение по ревью (2026-09-30).** PointerSensor заменён на `StoragePointerSensor`:
+pointerdown с интерактивной цели (`input`, `button`, `a`, `[role="checkbox"]`,
+`[role="menu"]`, зона sentinel'а) drag не активирует — штатный сенсор сбрасывал выделение
+текста в инлайн-инпуте и двигал строку. Исключение — тело кнопки-плитки, помеченное
+`data-dnd-drag-surface`: это её единственная крупная область, и без исключения плитку нельзя
+было бы тащить (контролы внутри поверхности по-прежнему блокеры). KeyboardSensor настроен
+`start: ['Space']` (Enter завершает drag, но не начинает) — иначе он съедал документированный
+хоткей «открыть». Невалидные цели адресной строки получили destructive-ring, как строки и
+дерево. `useStorageDroppable` принимает `enabled`: droppable файлов гасится флагом `disabled`,
+потому что dnd-kit регистрирует контейнер безусловно (отсутствие ref не отменяет регистрацию).

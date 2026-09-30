@@ -26,7 +26,6 @@ import {
   DragOverlay,
   type DragStartEvent,
   KeyboardSensor,
-  PointerSensor,
   pointerWithin,
   rectIntersection,
   useSensor,
@@ -54,7 +53,13 @@ import { adminStorageConfigQueryOptions, STORAGE_OBJECTS_QUERY_KEY, storageObjec
 import { selectionReducer } from '../lib/selection.js';
 import { type StorageSort, type StorageSortKey, sortEntries } from '../lib/sort.js';
 import { StorageContextMenu, type StorageContextMenuState } from './storage-context-menu.js';
-import { StorageDragPreview, storageKeyFromDragId, storagePrefixFromDropId, useStorageDroppable } from './storage-dnd.js';
+import {
+  StorageDragPreview,
+  StoragePointerSensor,
+  storageKeyFromDragId,
+  storagePrefixFromDropId,
+  useStorageDroppable,
+} from './storage-dnd.js';
 import { type StorageEditing, StorageList } from './storage-list.js';
 import { StorageMoveDialog } from './storage-move-dialog.js';
 import { StoragePropertiesDialog } from './storage-properties-dialog.js';
@@ -84,7 +89,8 @@ const storageCollisionDetection: CollisionDetection = args => {
 /**
  * Цель drop адресной строки (крошка или кнопка «вверх»). Рендер элемента передаётся функцией:
  * ref и подсветка должны лежать на самом `li`/кнопке — обёртка сломала бы разметку `ol > li`.
- * Невалидную цель не подсвечиваем: бросок всё равно гасит проверка в `onDragEnd`.
+ * Валидная цель подсвечивается primary-кольцом, невалидная — destructive, как у строк, плиток
+ * и дерева; бросок всё равно гасится проверкой в `onDragEnd`.
  */
 function AddressDropTarget({
   destination,
@@ -98,8 +104,11 @@ function AddressDropTarget({
   render: (props: { ref: (node: HTMLElement | null) => void; className: string }) => ReactNode;
 }) {
   const { setNodeRef, isOver } = useStorageDroppable(destination);
-  const active = isOver && dragKeys !== null && moveBlockReason(dragKeys, destination) === null;
-  const classes = `${className ?? ''} ${active ? 'rounded-sm ring-1 ring-primary' : ''}`.trim();
+  const invalid = isOver && dragKeys !== null && moveBlockReason(dragKeys, destination) !== null;
+  const active = isOver && dragKeys !== null && !invalid;
+  const classes = `${className ?? ''} ${active ? 'rounded-sm ring-1 ring-primary' : ''} ${
+    invalid ? 'rounded-sm ring-1 ring-destructive' : ''
+  }`.trim();
   return <>{render({ ref: setNodeRef, className: classes })}</>;
 }
 
@@ -138,8 +147,16 @@ export function AdminStorage() {
   const [dragKeys, setDragKeys] = useState<string[] | null>(null);
 
   // Порог 5px, а не 0: без него клик и двойной клик по строке превращались бы в перетаскивание,
-  // а чекбокс нельзя было бы нажать.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
+  // а чекбокс нельзя было бы нажать. `StoragePointerSensor` не даёт drag'у стартовать с
+  // интерактивных элементов строки (кнопки, чекбокс, инлайн-инпут). Enter — документированный
+  // хоткей «открыть», поэтому клавиатурный drag начинается только Space (Enter завершает уже
+  // идущий drag).
+  const sensors = useSensors(
+    useSensor(StoragePointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, {
+      keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter'] },
+    }),
+  );
 
   const prefix = searchParams.get('prefix') ?? '';
   const {

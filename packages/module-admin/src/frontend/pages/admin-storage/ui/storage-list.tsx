@@ -130,8 +130,8 @@ function StorageRow({
 }: StorageRowProps) {
   const { t } = useTranslation('admin');
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useStorageDraggable(entry);
-  const { setNodeRef: setDropRef, isOver } = useStorageDroppable(entry.key);
   const isFolder = entry.kind === 'folder';
+  const { setNodeRef: setDropRef, isOver } = useStorageDroppable(entry.key, isFolder);
   const previewable = entry.kind === 'file' && fileKindOf({ name: entry.key }) !== 'other';
   // Невалидная цель (папка в себя/потомка, no-op) — красная; ring, а не bg: фон выбранной строки
   // его перекрыл бы, а контур виден при любом состоянии строки.
@@ -141,12 +141,16 @@ function StorageRow({
       ? 'ring-1 ring-destructive bg-destructive/10'
       : 'ring-1 ring-primary bg-primary/10'
     : '';
-  // Два ref на одной строке: источник перетаскивания и цель drop у папки. У файла droppable
-  // не регистрируется — ref не отдаём, цель из него всё равно не собрать.
-  const setRefs = (node: HTMLTableRowElement | null) => {
-    setDragRef(node);
-    if (isFolder) setDropRef(node);
-  };
+  // Два ref на одной строке: источник перетаскивания и цель drop. У файла droppable выключен
+  // флагом в хуке (dnd-kit регистрирует контейнеры безусловно). `useCallback` обязателен:
+  // новый ref каждый рендер заставлял бы dnd-kit переподключать ResizeObserver к узлу.
+  const setRefs = useCallback(
+    (node: HTMLTableRowElement | null) => {
+      setDragRef(node);
+      setDropRef(node);
+    },
+    [setDragRef, setDropRef],
+  );
 
   return (
     <TableRow
