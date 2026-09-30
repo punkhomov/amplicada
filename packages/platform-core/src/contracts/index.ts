@@ -62,7 +62,9 @@ export type { Lifecycle, LifecycleHook } from './lifecycle.js';
 export type { ModuleDependencyNode } from './module-graph.js';
 export { sortModules } from './module-graph.js';
 export type {
+  NotificationAttachment,
   NotificationChannel,
+  NotificationContent,
   NotificationDelivery,
   NotificationDeliveryListParams,
   NotificationFailedEvent,
@@ -70,6 +72,8 @@ export type {
   NotificationSentEvent,
   NotificationStatus,
   ResolvedNotification,
+  SendBatchResult,
+  SendManyRequest,
 } from './notification.js';
-export { NOTIFICATION_EVENTS } from './notification.js';
+export { NOTIFICATION_ATTACHMENT_LIMITS, NOTIFICATION_EVENTS } from './notification.js';
 export type { ServiceRegistry } from './service-registry.js';
