@@ -3,6 +3,7 @@ import {
   ApiError,
   QueryError,
   useApiClient,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -35,7 +36,7 @@ import type { StorageDeleteResult, StorageMoveResult, StorageObject } from '../.
 import { type StorageEntry, toEntries } from '../lib/entries.js';
 import { formatDate } from '../lib/format.js';
 import { folderName, folderTrail, objectName, parentPrefix, storageDownloadUrl, storageViewUrl } from '../lib/paths.js';
-import { adminStorageConfigQueryOptions, adminStorageObjectsQueryOptions, STORAGE_OBJECTS_QUERY_KEY } from '../lib/queries.js';
+import { adminStorageConfigQueryOptions, storageObjectsInfiniteQueryOptions, STORAGE_OBJECTS_QUERY_KEY } from '../lib/queries.js';
 import { selectionReducer } from '../lib/selection.js';
 import { type StorageSort, type StorageSortKey, sortEntries } from '../lib/sort.js';
 import { StorageContextMenu, type StorageContextMenuState } from './storage-context-menu.js';
@@ -48,7 +49,7 @@ import { StorageTiles } from './storage-tiles.js';
 import { StorageToolbar, type StorageView } from './storage-toolbar.js';
 import { StorageTree } from './storage-tree.js';
 
-export { adminStorageConfigQueryOptions, adminStorageObjectsQueryOptions } from '../lib/queries.js';
+export { adminStorageConfigQueryOptions, storageObjectsInfiniteQueryOptions } from '../lib/queries.js';
 
 /**
  * Пауза перед открытием строки. Она же — окно, в котором второй клик успевает стать двойным:
@@ -90,20 +91,41 @@ export function AdminStorage() {
   const [dragKeys, setDragKeys] = useState<string[] | null>(null);
 
   const prefix = searchParams.get('prefix') ?? '';
-  const { data, isLoading, isError, error: queryError, refetch, isFetching } = useQuery(adminStorageObjectsQueryOptions(api, prefix));
+  const {
+    data,
+    isLoading,
+    isError,
+    error: queryError,
+    refetch,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery(storageObjectsInfiniteQueryOptions(api, prefix));
   // Правка — опциональная возможность деплоя: пока конфиг не приехал, превью только для чтения.
   const { data: config } = useQuery(adminStorageConfigQueryOptions(api));
   const editEnabled = config?.editEnabled ?? false;
 
   const entries = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const all = data ? toEntries(data) : [];
+    // Поиск остаётся клиентским по догруженным страницам: серверного поиска у листинга нет,
+    // поэтому фильтр сужает то, что уже принесено, и не исчезает при обрыве догрузки.
+    const all = data ? data.pages.flatMap(page => toEntries(page)) : [];
     const filtered = term ? all.filter(entry => entry.name.toLowerCase().includes(term)) : all;
     return sortEntries(filtered, sort);
   }, [data, search, sort]);
   const visibleKeys = useMemo(() => entries.map(entry => entry.key), [entries]);
   const selectedKeys = useMemo(() => new Set(selection.keys), [selection.keys]);
-  const objectsByKey = useMemo(() => new Map((data?.objects ?? []).map(object => [object.key, object])), [data]);
+  const objectsByKey = useMemo(
+    () => new Map((data?.pages ?? []).flatMap(page => page.objects).map(object => [object.key, object])),
+    [data],
+  );
+
+  // Догрузку запускает sentinel в конце списка; стабильная ссылка нужна, чтобы наблюдатель
+  // не пересоздавался на каждом рендере (возврат к первой странице делает сам queryKey).
+  const loadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Выбор переживает смену списка, поэтому его надо подрезать до видимых ключей: иначе поиск
   // или уход в другую папку оставят «тихо выбранные» строки, и bulk-операция заденет лишнее.
@@ -620,6 +642,9 @@ export function AdminStorage() {
                       sort={sort}
                       selection={selection}
                       editing={editing}
+                      hasNextPage={hasNextPage}
+                      isFetchingNextPage={isFetchingNextPage}
+                      onLoadMore={loadMore}
                       onSort={handleSort}
                       onRowClick={handleRowClick}
                       onCheck={handleCheck}
@@ -642,6 +667,9 @@ export function AdminStorage() {
                       entries={entries}
                       selection={selection}
                       editing={editing}
+                      hasNextPage={hasNextPage}
+                      isFetchingNextPage={isFetchingNextPage}
+                      onLoadMore={loadMore}
                       onRowClick={handleRowClick}
                       onOpen={scheduleOpen}
                       onCheck={handleCheck}

@@ -9,6 +9,7 @@ import {
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -46,12 +47,56 @@ export interface StorageListProps {
   onRowContextMenu: (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => void;
   /** Drop на папку-строку: destination — ключ папки. */
   onDropMove: (destination: string, keys: string[]) => void;
+  /** Есть ли ещё страницы листинга; `false` — sentinel-строка не рендерится. */
+  hasNextPage: boolean;
+  /** Идёт догрузка следующей страницы: sentinel показывает текст загрузки. */
+  isFetchingNextPage: boolean;
+  /** Запросить следующую страницу; зовётся sentinel-строкой при попадании в зону видимости. */
+  onLoadMore: () => void;
+}
+
+/** Общий контракт sentinel-элемента бесконечного скролла для списка и плиток. */
+export interface StorageLoadMoreProps {
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadMore: () => void;
+}
+
+/**
+ * Наблюдатель sentinel-элемента: как только тот попадает в `rootMargin` вьюпорта, зовём
+ * `onLoadMore`. Наблюдатель одноразовый — после срабатывания отключается, а эффект пересоздаёт
+ * его только когда догрузка закончилась; так исчерпанный `nextToken` (`hasNextPage === false`)
+ * гарантированно останавливает цикл запросов.
+ */
+export function useLoadMoreSentinel({ hasNextPage, isFetchingNextPage, onLoadMore }: StorageLoadMoreProps) {
+  const node = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const element = node.current;
+    if (!element || !hasNextPage || isFetchingNextPage) return;
+    const observer = new IntersectionObserver(
+      entries => {
+        if (!entries.some(entry => entry.isIntersecting)) return;
+        // Отключаемся до запроса: одно появление в зоне видимости — один fetch.
+        observer.disconnect();
+        onLoadMore();
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, onLoadMore]);
+  // Колбэк-ref, а не `useRef`: sentinel появляется только с `hasNextPage`, и ссылка обязана
+  // быть записана до пассивного эффекта того же рендера.
+  return useCallback((element: HTMLElement | null) => {
+    node.current = element;
+  }, []);
 }
 
 export function StorageList(props: StorageListProps) {
   const { t } = useTranslation('admin');
   const { entries, sort, selection, editing } = props;
   const drop = useStorageDropTarget(props.dragKeys, props.onDropMove);
+  const loadMoreRef = useLoadMoreSentinel(props);
 
   const selected = new Set(selection.keys);
   const allSelected = entries.length > 0 && entries.every(entry => selected.has(entry.key));
@@ -185,6 +230,15 @@ export function StorageList(props: StorageListProps) {
             </TableRow>
           );
         })}
+
+        {/* Sentinel бесконечного скролла: пустая строка-маркер в конце, пока есть `nextToken`. */}
+        {props.hasNextPage && (
+          <TableRow ref={loadMoreRef} data-slot="storage-load-more">
+            <TableCell colSpan={6} className="py-2 text-center text-sm text-muted-foreground">
+              {props.isFetchingNextPage ? t('admin_storage_loading_more') : null}
+            </TableCell>
+          </TableRow>
+        )}
       </TableBody>
     </Table>
   );

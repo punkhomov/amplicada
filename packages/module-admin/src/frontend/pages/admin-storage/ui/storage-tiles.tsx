@@ -6,7 +6,7 @@ import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from 
 import type { StorageEntry } from '../lib/entries.js';
 import type { SelectionState } from '../lib/selection.js';
 import { useStorageDropTarget } from './storage-drop.js';
-import { FileKindIcon, InlineNameInput, type StorageEditing } from './storage-list.js';
+import { FileKindIcon, InlineNameInput, type StorageEditing, useLoadMoreSentinel } from './storage-list.js';
 
 export interface StorageTilesProps {
   entries: StorageEntry[];
@@ -26,6 +26,12 @@ export interface StorageTilesProps {
   onRowContextMenu: (entry: StorageEntry, event: ReactMouseEvent<HTMLDivElement>) => void;
   /** Drop на карточку-папку: destination — ключ папки. */
   onDropMove: (destination: string, keys: string[]) => void;
+  /** Есть ли ещё страницы листинга; `false` — sentinel не рендерится. */
+  hasNextPage: boolean;
+  /** Идёт догрузка следующей страницы: sentinel показывает текст загрузки. */
+  isFetchingNextPage: boolean;
+  /** Запросить следующую страницу; зовётся sentinel-элементом при попадании в зону видимости. */
+  onLoadMore: () => void;
 }
 
 /** Плитка повторяет семантику списка (клик/модификаторы/чекбокс/двойной клик) другими средствами. */
@@ -33,6 +39,7 @@ export function StorageTiles(props: StorageTilesProps) {
   const { t } = useTranslation('admin');
   const selected = new Set(props.selection.keys);
   const drop = useStorageDropTarget(props.dragKeys, props.onDropMove);
+  const loadMoreRef = useLoadMoreSentinel(props);
 
   const handleClick = (entry: StorageEntry, event: ReactMouseEvent<HTMLButtonElement>) => {
     if (event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -129,6 +136,12 @@ export function StorageTiles(props: StorageTilesProps) {
           </div>
         );
       })}
+      {/* Sentinel бесконечного скролла: на всю ширину сетки, пока есть `nextToken`. */}
+      {props.hasNextPage && (
+        <div ref={loadMoreRef} data-slot="storage-load-more" className="col-span-full py-2 text-center text-sm text-muted-foreground">
+          {props.isFetchingNextPage ? t('admin_storage_loading_more') : null}
+        </div>
+      )}
     </div>
   );
 }

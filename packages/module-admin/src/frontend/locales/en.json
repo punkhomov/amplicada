@@ -30,6 +30,7 @@
   "admin_storage_delete": "Delete",
   "admin_storage_search_placeholder": "Search in folder...",
   "admin_storage_summary": "Folders: {{folders}} · Files: {{files}}",
+  "admin_storage_loading_more": "Loading more…",
   "admin_storage_empty_title": "No files",
   "admin_storage_empty_description": "There are no objects in storage yet",
   "admin_storage_empty_folder_title": "Folder is empty",

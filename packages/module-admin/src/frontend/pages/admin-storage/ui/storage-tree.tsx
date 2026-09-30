@@ -33,7 +33,11 @@ export function StorageTree({ prefix, onNavigate, version, dragKeys, onDropMove 
     async (nodePrefix: string) => {
       setLoading(current => (current.includes(nodePrefix) ? current : [...current, nodePrefix]));
       try {
-        const listing = await api.get<StorageListing>('/admin/storage/objects', { query: { prefix: nodePrefix } });
+        // Дереву нужны все подпапки уровня, а не первая страница листинга: просим потолок
+        // `limit=1000` и курсор дальше не ведём — обрезанное дерево врало бы о структуре.
+        const listing = await api.get<StorageListing>('/admin/storage/objects', {
+          query: { prefix: nodePrefix, limit: 1000 },
+        });
         setChildren(current => ({ ...current, [nodePrefix]: listing.prefixes }));
       } catch {
         // Ошибку не помечаем загруженной: повторное раскрытие узла попробует ещё раз.

@@ -30,6 +30,7 @@
   "admin_storage_delete": "Удалить",
   "admin_storage_search_placeholder": "Поиск в папке...",
   "admin_storage_summary": "Папок: {{folders}} · Файлов: {{files}}",
+  "admin_storage_loading_more": "Загружаем ещё…",
   "admin_storage_empty_title": "Нет файлов",
   "admin_storage_empty_description": "В хранилище пока нет ни одного объекта",
   "admin_storage_empty_folder_title": "Папка пуста",
