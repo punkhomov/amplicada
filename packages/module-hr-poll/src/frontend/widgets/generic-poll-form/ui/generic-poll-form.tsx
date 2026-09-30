@@ -78,12 +78,15 @@ function QuestionControl({
     case 'single-choice':
       return (
         <RadioGroup value={typeof value === 'string' ? value : ''} onValueChange={onSet} disabled={readonly}>
-          {(question.options ?? []).map(option => (
-            <label key={option.value} className="flex items-center gap-2 text-sm cursor-pointer">
-              <RadioGroupItem value={option.value} disabled={readonly} />
-              {option.label}
-            </label>
-          ))}
+          {(question.options ?? []).map(option => {
+            const optionId = `${question.key}-${option.value}`;
+            return (
+              <label key={option.value} htmlFor={optionId} className="flex items-center gap-2 text-sm cursor-pointer">
+                <RadioGroupItem id={optionId} value={option.value} disabled={readonly} />
+                {option.label}
+              </label>
+            );
+          })}
         </RadioGroup>
       );
     case 'multi-choice': {
@@ -93,12 +96,20 @@ function QuestionControl({
       };
       return (
         <div className="flex flex-col gap-2">
-          {(question.options ?? []).map(option => (
-            <label key={option.value} className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox checked={selected.includes(option.value)} disabled={readonly} onCheckedChange={c => toggle(option.value, !!c)} />
-              {option.label}
-            </label>
-          ))}
+          {(question.options ?? []).map(option => {
+            const optionId = `${question.key}-${option.value}`;
+            return (
+              <label key={option.value} htmlFor={optionId} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  id={optionId}
+                  checked={selected.includes(option.value)}
+                  disabled={readonly}
+                  onCheckedChange={c => toggle(option.value, !!c)}
+                />
+                {option.label}
+              </label>
+            );
+          })}
         </div>
       );
     }
