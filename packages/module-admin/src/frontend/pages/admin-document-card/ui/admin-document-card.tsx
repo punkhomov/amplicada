@@ -20,6 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@amplicada/platform-core/frontend/ui/alert-dialog';
+import { Badge } from '@amplicada/platform-core/frontend/ui/badge';
 import { Button } from '@amplicada/platform-core/frontend/ui/button';
 import { Card, CardContent } from '@amplicada/platform-core/frontend/ui/card';
 import { Separator } from '@amplicada/platform-core/frontend/ui/separator';
@@ -94,6 +95,8 @@ interface DocumentDetail {
   type: { id: string; label: string; creatable: boolean; deletable: boolean };
   pages: PageData[];
   data: DocumentData;
+  /** Документ объявлен кодом (fixture) — правка заблокирована на сервере и в UI. */
+  fixture?: boolean;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string;
@@ -225,7 +228,8 @@ export function AdminDocumentCard() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
-  const canSave = isNew ? creatable && !saveMutation.isPending : isDirty && !saveMutation.isPending;
+  const fixture = doc?.fixture === true;
+  const canSave = !fixture && (isNew ? creatable && !saveMutation.isPending : isDirty && !saveMutation.isPending);
 
   const handleSave = () => {
     if (!type || !canSave) return;
@@ -269,11 +273,12 @@ export function AdminDocumentCard() {
               ]}
             />
             <div className="flex items-center gap-2">
+              {fixture && <Badge variant="outline">{t('admin_doc_fixture_badge')}</Badge>}
               <Button
                 size="lg"
                 onClick={handleSave}
                 disabled={!canSave}
-                title={isNew && !creatable ? t('admin_toolbar_create_disabled') : undefined}
+                title={fixture ? t('admin_toolbar_fixture_readonly') : isNew && !creatable ? t('admin_toolbar_create_disabled') : undefined}
               >
                 {saveMutation.isPending ? t('admin_doc_save_pending') : isNew ? t('admin_doc_create') : t('admin_doc_save')}
               </Button>

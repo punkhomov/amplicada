@@ -241,6 +241,10 @@
   "admin_list_select_row": "Select row",
   "admin_list_open": "Open",
   "admin_list_delete_disabled": "Deletion disabled",
+  "admin_doc_fixture_badge": "From code",
+  "admin_list_fixture_badge": "From code",
+  "admin_toolbar_fixture_readonly": "Document is declared in code (fixture) — editing and deletion are unavailable",
+  "admin_list_fixture_readonly": "Deletion disabled (from code)",
   "admin_list_empty": "No records",
 
   "admin_breadcrumb_notifications": "Notifications",

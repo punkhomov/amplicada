@@ -241,6 +241,10 @@
   "admin_list_select_row": "Выбрать строку",
   "admin_list_open": "Открыть",
   "admin_list_delete_disabled": "Удаление запрещено",
+  "admin_doc_fixture_badge": "Из кода",
+  "admin_list_fixture_badge": "Из кода",
+  "admin_toolbar_fixture_readonly": "Документ объявлен кодом (fixture) — правка и удаление недоступны",
+  "admin_list_fixture_readonly": "Удаление запрещено (из кода)",
   "admin_list_empty": "Нет записей",
 
   "admin_breadcrumb_notifications": "Уведомления",
