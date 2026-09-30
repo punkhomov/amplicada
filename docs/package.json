@@ -1,0 +1,20 @@
+{
+  "name": "@amplicada/docs-site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "VitePress-сборка потребительской документации пакетов (spike без версионирования). Standalone-проект вне pnpm-workspace: VitePress 1.x требует vite 5, что конфликтует с trustPolicy no-downgrade основного lockfile (там vite 8).",
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "assemble": "node assemble.mjs",
+    "docs:dev": "node assemble.mjs && vitepress dev content",
+    "docs:build": "node assemble.mjs && vitepress build content",
+    "docs:preview": "vitepress preview content"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
+}

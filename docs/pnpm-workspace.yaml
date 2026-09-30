@@ -1,0 +1,22 @@
+# Standalone workspace для сборки документации (вне корневого workspace:
+# VitePress 1.x требует vite 5, что триггерит trustPolicy корня).
+# Политика — зеркало корневой pnpm-workspace.yaml, ослаблений нет; единственное
+# отличие — точечный trustPolicyExclude для vite@5.4.21 (опубликован 2025-10-20,
+# без provenance новых мажоров; см. ADR-08).
+packages:
+  - "."
+ignoreScripts: true
+blockExoticSubdeps: true
+strictDepBuilds: true
+dangerouslyAllowAllBuilds: false
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+trustPolicy: no-downgrade
+trustLockfile: false
+trustPolicyExclude:
+  - vite@5.4.21
+strictStorePkgContentCheck: true
+strictPeerDependencies: true
+engineStrict: true
+preferFrozenLockfile: true
