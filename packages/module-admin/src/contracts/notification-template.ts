@@ -1,3 +1,5 @@
+import type { SendBatchResult } from '@amplicada/platform-core/contracts';
+
 /** Типы документов, которыми владеет module-admin. */
 export const AdminDocuments = {
   NOTIFICATION_TEMPLATE: 'notification-template',
@@ -16,13 +18,5 @@ export interface SendNotificationTemplateRequest {
   userIds: string[];
 }
 
-export interface SendNotificationTemplateResponse {
-  /** Уникальных получателей после нормализации. */
-  total: number;
-  /** Строк outbox создано (канал и подтверждённый адрес найдены). */
-  queued: number;
-  /** Получателей без канала/адреса — send() вернул null, это не ошибка. */
-  skipped: number;
-  /** Неожиданные ошибки отправки (БД/резолв адреса); подробности — в логе сервера. */
-  failed: number;
-}
+/** Ответ рассылки — агрегат батча ядра (`sendMany`): queued/skipped/failed/deduped + batchId. */
+export type SendNotificationTemplateResponse = SendBatchResult;

@@ -1,11 +1,8 @@
-import { logger } from '@amplicada/platform-core/backend';
 import type { NotificationStatus } from '@amplicada/platform-core/contracts';
-import type { BackendDbService, BackendNotificationService, BackendSetupContext } from '@amplicada/platform-core/contracts/backend';
-import { eq } from 'drizzle-orm';
+import type { BackendNotificationService, BackendSetupContext } from '@amplicada/platform-core/contracts/backend';
 import type { FastifyInstance } from 'fastify';
-import { ADMIN_BROADCAST_KIND, type SendNotificationTemplateResponse } from '../../contracts/notification-template.js';
+import { ADMIN_BROADCAST_KIND } from '../../contracts/notification-template.js';
 import { isUuid, normalizeRecipients } from '../lib/normalize-recipients.js';
-import { adminNotificationTemplate } from '../schemas/index.js';
 
 const LIMIT_DEFAULT = 50;
 const LIMIT_MAX = 200;
@@ -21,19 +18,18 @@ function readInt(raw: string | undefined, fallback: number, min: number, max: nu
  * Лог доставок уведомлений: без него ретраи слепые — «письмо не пришло» не отличить от «канал не
  * настроен», «адрес не подтверждён» и «SMTP отбил». Отсюда же ручной повтор строки `failed`.
  *
- * Здесь же ручная рассылка по шаблону: админка — первый вызывающий `notification.send()`.
- * Получатели выбираются явно, но контракт ядра не трогается: каждый получатель уходит отдельным
- * `send({ userId, … })`, а канал и адрес по-прежнему резолвит канальный модуль.
+ * Ручная рассылка по шаблону идёт через `notification.sendMany` (контракт v2): один батч, по строке
+ * на получателя, без eager — доставку добирает worker-диспетчер. Шаблон резолвит ядро по id.
  */
 export function createNotificationRoutes(fastify: FastifyInstance, context: BackendSetupContext): void {
   const notification = context.services.resolve<BackendNotificationService>('notification');
-  const db = context.services.resolve<BackendDbService>('db');
 
   fastify.get('/notifications', async request => {
     const query = request.query as {
       status?: string;
       kind?: string;
       userId?: string;
+      batchId?: string;
       limit?: string;
       offset?: string;
     };
@@ -42,16 +38,27 @@ export function createNotificationRoutes(fastify: FastifyInstance, context: Back
       status: STATUSES.find(status => status === query.status),
       kind: query.kind?.trim() || undefined,
       userId: query.userId?.trim() || undefined,
+      batchId: query.batchId?.trim() || undefined,
       limit: readInt(query.limit, LIMIT_DEFAULT, 1, LIMIT_MAX),
       offset: readInt(query.offset, 0, 0, Number.MAX_SAFE_INTEGER),
     });
   });
+
+  /** Имена отправителей узла — для select в редакторе шаблона. */
+  fastify.get('/notifications/senders', async () => ({ senders: notification.listSenders() }));
 
   fastify.post('/notifications/:id/retry', async (request, reply) => {
     const { id } = request.params as { id: string };
     const retried = await notification.retry(id);
     if (!retried) return reply.code(404).send({ error: 'Доставка не найдена или уже отправлена' });
     return { ok: true };
+  });
+
+  /** Повтор всех `failed` строк батча — кнопка «Повторить батч» в логе. */
+  fastify.post('/notifications/batch/:batchId/retry', async (request, reply) => {
+    const { batchId } = request.params as { batchId: string };
+    if (!batchId.trim()) return reply.code(400).send({ error: 'Некорректный batchId' });
+    return { retried: await notification.retryBatch(batchId) };
   });
 
   fastify.post('/notifications/send-template', async (request, reply) => {
@@ -66,37 +73,10 @@ export function createNotificationRoutes(fastify: FastifyInstance, context: Back
       return reply.code(400).send({ error: 'Не выбран ни один получатель' });
     }
 
-    const [template] = await db.select().from(adminNotificationTemplate).where(eq(adminNotificationTemplate.id, templateId)).limit(1);
-    if (!template) return reply.code(404).send({ error: 'Шаблон не найден' });
-
-    const results = await Promise.allSettled(
-      userIds.map(userId =>
-        notification.send({
-          userId,
-          kind: ADMIN_BROADCAST_KIND,
-          subject: template.subject,
-          body: template.body,
-          html: template.html?.trim() ? template.html : undefined,
-          locale: template.locale ?? undefined,
-        }),
-      ),
-    );
-
-    const queued = results.filter(result => result.status === 'fulfilled' && result.value !== null).length;
-    const failed = results.filter(result => result.status === 'rejected').length;
-    if (failed > 0) {
-      const reasons = results
-        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-        .map(result => (result.reason instanceof Error ? result.reason.message : String(result.reason)));
-      logger.warn({ templateId, failed, reasons }, 'Рассылка по шаблону: часть отправок упала с ошибкой');
-    }
-
-    const response: SendNotificationTemplateResponse = {
-      total: userIds.length,
-      queued,
-      skipped: userIds.length - queued - failed,
-      failed,
-    };
-    return response;
+    return notification.sendMany({
+      userIds,
+      kind: ADMIN_BROADCAST_KIND,
+      content: { template: { id: templateId } },
+    });
   });
 }
