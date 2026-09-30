@@ -20,6 +20,10 @@ interface MovePlan {
 }
 
 const FOLDER_DELIMITER = '/';
+/** Дефолт страницы: дерево и диалог перемещения курсор не шлют — им нужна первая страница целиком. */
+const DEFAULT_PAGE_LIMIT = 200;
+/** Потолок страницы: больше S3 за один `ListObjectsV2` всё равно не отдаст, а буфер ответа раздуется. */
+const MAX_PAGE_LIMIT = 1000;
 const ACTIVE_CONTENT_TYPES = new Set(['image/svg+xml', 'text/html', 'application/xhtml+xml', 'text/xml', 'application/xml']);
 /** Маркер папки: в S3 директорий нет, папка — пустой объект с ключом на `/`. */
 const DIRECTORY_CONTENT_TYPE = 'application/x-directory';
@@ -35,16 +39,31 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
   /** Возможности страницы для фронта: сейчас — только флаг правки. */
   fastify.get('/storage/config', async () => ({ editEnabled }));
 
-  /** Содержимое одной «папки»: объекты текущего уровня и префиксы вложенных папок. */
-  fastify.get('/storage/objects', async request => {
-    const prefix = folderPrefix((request.query as { prefix?: unknown }).prefix);
-    const { objects, prefixes } = await storage.listObjects(prefix, { delimiter: FOLDER_DELIMITER });
+  /**
+   * Страница содержимого одной «папки»: объекты текущего уровня и префиксы вложенных папок.
+   * `cursor` — токен из `nextToken` предыдущей страницы; без него отдаётся первая страница.
+   */
+  fastify.get('/storage/objects', async (request, reply) => {
+    const query = request.query as { prefix?: unknown; cursor?: unknown; limit?: unknown };
+    const prefix = folderPrefix(query.prefix);
+    const cursor = pageCursor(query.cursor);
+    if (cursor === null) return reply.code(400).send({ error: 'Недопустимый курсор' });
+    const limit = pageLimit(query.limit);
+    if (limit === null) return reply.code(400).send({ error: 'Недопустимый размер страницы' });
+
+    const { objects, prefixes, nextToken } = await storage.listObjects(prefix, {
+      delimiter: FOLDER_DELIMITER,
+      maxKeys: limit,
+      // Первая страница — это тоже токен, просто `undefined`: форма вызова одна на оба случая.
+      continuationToken: cursor,
+    });
     return {
       prefix,
       prefixes,
       // Объект-маркер папки (`foo/`) файлом не является: в списке ему делать нечего, а удаляется
       // он вместе с папкой. Всё остальное отдаём как есть.
       objects: objects.filter(object => object.key && object.key !== prefix && !object.key.endsWith(FOLDER_DELIMITER)),
+      nextToken,
     };
   });
 
@@ -238,6 +257,27 @@ function folderPrefix(raw: unknown): string {
   const trimmed = raw.replace(/^\/+/, '');
   if (!trimmed) return '';
   return trimmed.endsWith(FOLDER_DELIMITER) ? trimmed : `${trimmed}${FOLDER_DELIMITER}`;
+}
+
+/**
+ * Размер страницы из query. Мусор отвергаем, а не чиним молча: клиент, приславший `limit=abc`,
+ * иначе счёл бы ответ запрошенной страницей. `null` — сигнал роуту ответить 400.
+ */
+function pageLimit(raw: unknown): number | null {
+  if (raw === undefined) return DEFAULT_PAGE_LIMIT;
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw)) return null;
+  const limit = Number(raw);
+  return limit >= 1 && limit <= MAX_PAGE_LIMIT ? limit : null;
+}
+
+/**
+ * Курсор страницы. Токен opaque — содержимое не разбираем, но пустая строка и дубль параметра
+ * (массив) курсором не являются: вернуть на них молча первую страницу значило бы отдать не то,
+ * чего ждёт клиент. `null` — сигнал роуту ответить 400.
+ */
+function pageCursor(raw: unknown): string | undefined | null {
+  if (raw === undefined) return undefined;
+  return typeof raw === 'string' && raw !== '' ? raw : null;
 }
 
 /** Последний сегмент: нестандартный клиент может прислать путь, а ключ должен остаться именем. */

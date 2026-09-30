@@ -15,6 +15,8 @@ export interface StorageListing {
   prefix: string;
   prefixes: string[];
   objects: StorageObject[];
+  /** Курсор следующей страницы; нет — страница последняя. Возвращается в query-параметр `cursor`. */
+  nextToken?: string;
 }
 
 export interface StorageDeleteResult {

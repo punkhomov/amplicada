@@ -21,6 +21,11 @@ interface MoveCall {
   to: string;
 }
 
+interface ListCall {
+  prefix: string;
+  options?: { delimiter?: string; maxKeys?: number; continuationToken?: string };
+}
+
 interface FakeOptions {
   /** Переопределение ответа `headObject` (в т.ч. `null`) для любого ключа; без него смотрится бакет. */
   head?: HeadResult | null;
@@ -30,6 +35,8 @@ interface FakeOptions {
   objects?: string[];
   /** Содержимое «папок»: префикс → полные ключи объектов, как их отдаёт рекурсивный листинг. */
   folderContents?: Record<string, string[]>;
+  /** Дополнительные поля ответа `listObjects` поверх вычисленных: токен продолжения и подмена префиксов. */
+  listing?: { nextToken?: string; prefixes?: string[] };
 }
 
 /**
@@ -38,12 +45,13 @@ interface FakeOptions {
  * объект для перемещения; `head` переопределяет ответ `headObject` целиком (нужен для проверки
  * веток «объекта нет» и «нет contentType»).
  */
-function appWith({ head, editEnabled = true, objects: seeded = [], folderContents = {} }: FakeOptions = {}) {
+function appWith({ head, editEnabled = true, objects: seeded = [], folderContents = {}, listing }: FakeOptions = {}) {
   if (editEnabled) process.env.STORAGE_EDIT_ENABLED = 'true';
   else delete process.env.STORAGE_EDIT_ENABLED;
   const puts: PutCall[] = [];
   const moves: MoveCall[] = [];
   const deletes: string[][] = [];
+  const listings: ListCall[] = [];
   const objects = new Map<string, HeadResult>([
     ['notes/a.json', { key: 'notes/a.json', size: 1, contentType: 'application/json' }],
     ['a/f.txt', { key: 'a/f.txt', size: 1 }],
@@ -62,9 +70,10 @@ function appWith({ head, editEnabled = true, objects: seeded = [], folderContent
       if (head !== undefined) return head;
       return objects.get(key) ?? null;
     },
-    listObjects: async (prefix = '', options?: { delimiter?: string }) => {
+    listObjects: async (prefix = '', options?: ListCall['options']) => {
+      listings.push({ prefix, options });
       const matching = [...objects.values()].filter(object => object.key.startsWith(prefix));
-      if (!options?.delimiter) return { objects: matching, prefixes: [] };
+      if (!options?.delimiter) return { objects: matching, prefixes: [], nextToken: listing?.nextToken };
       const prefixes = new Set<string>();
       const atLevel: HeadResult[] = [];
       for (const object of matching) {
@@ -72,7 +81,7 @@ function appWith({ head, editEnabled = true, objects: seeded = [], folderContent
         if (cut === -1) atLevel.push(object);
         else prefixes.add(object.key.slice(0, prefix.length + cut + 1));
       }
-      return { objects: atLevel, prefixes: [...prefixes] };
+      return { objects: atLevel, prefixes: listing?.prefixes ?? [...prefixes], nextToken: listing?.nextToken };
     },
     copyObject: async (fromKey: string, toKey: string) => {
       moves.push({ from: fromKey, to: toKey });
@@ -90,7 +99,7 @@ function appWith({ head, editEnabled = true, objects: seeded = [], folderContent
   const context = { services: { resolve: () => storage } } as unknown as BackendSetupContext;
   const app = Fastify();
   createStorageRoutes(app, context);
-  return { app, puts, moves, deletes };
+  return { app, puts, moves, deletes, listings };
 }
 
 test('PUT существующего текстового объекта сохраняет содержимое и contentType', async () => {
@@ -383,4 +392,48 @@ test('POST /storage/move отвергает два источника в оди�
   });
   assert.equal(res.statusCode, 400);
   assert.deepEqual(moves, []);
+});
+
+test('GET /storage/objects отдаёт страницу: limit уходит в core, nextToken возвращается', async () => {
+  const { app, listings } = appWith({ listing: { nextToken: 'tok-2' }, folderContents: { 'a/sub/': ['a/sub/i.txt'] } });
+  const res = await app.inject({ method: 'GET', url: '/storage/objects?prefix=a/&limit=2' });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(listings, [{ prefix: 'a/', options: { delimiter: '/', maxKeys: 2, continuationToken: undefined } }]);
+  assert.deepEqual(res.json(), {
+    prefix: 'a/',
+    prefixes: ['a/sub/'],
+    objects: [{ key: 'a/f.txt', size: 1 }],
+    nextToken: 'tok-2',
+  });
+});
+
+test('GET /storage/objects передаёт cursor в core как continuationToken', async () => {
+  const { app, listings } = appWith();
+  const res = await app.inject({ method: 'GET', url: '/storage/objects?cursor=tok-2' });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(listings, [{ prefix: '', options: { delimiter: '/', maxKeys: 200, continuationToken: 'tok-2' } }]);
+});
+
+test('GET /storage/objects с невалидным limit — 400 без вызова core', async () => {
+  const { app, listings } = appWith();
+  for (const limit of ['0', '1001', 'abc', '-1', '2.5', '']) {
+    const res = await app.inject({ method: 'GET', url: `/storage/objects?limit=${limit}` });
+    assert.equal(res.statusCode, 400, `limit=${limit}`);
+    assert.ok(res.json().error);
+  }
+  assert.equal(listings.length, 0);
+});
+
+test('GET /storage/objects с пустым cursor — 400 без вызова core', async () => {
+  const { app, listings } = appWith();
+  const res = await app.inject({ method: 'GET', url: '/storage/objects?cursor=' });
+  assert.equal(res.statusCode, 400);
+  assert.equal(listings.length, 0);
+});
+
+test('GET /storage/objects без limit просит у core первую страницу по умолчанию (200)', async () => {
+  const { app, listings } = appWith();
+  const res = await app.inject({ method: 'GET', url: '/storage/objects?prefix=a/' });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(listings, [{ prefix: 'a/', options: { delimiter: '/', maxKeys: 200, continuationToken: undefined } }]);
 });
