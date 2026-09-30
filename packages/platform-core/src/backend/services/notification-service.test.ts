@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { BackendDbService } from '../../contracts/backend/db.js';
 import type { EventBus } from '../../contracts/event-bus.js';
 import type { NotificationChannel } from '../../contracts/notification.js';
-import { BACKOFF_CAP_MS, backoffDelayMs, NotificationServiceImpl, pickChannel } from './notification-service.js';
+import { BACKOFF_CAP_MS, backoffDelayMs, countBatchOutcomes, NotificationServiceImpl, pickChannel } from './notification-service.js';
 
 function channel(id: string, address: string | null): NotificationChannel {
   return {
@@ -131,4 +131,47 @@ test('send с scheduledAt в будущем не запускает eager и с�
   assert.equal(queries.length, 1);
   // timestamptz драйвер передаёт ISO-строкой.
   assert.ok(queries[0].values.some(value => value === scheduledAt.toISOString()));
+});
+
+test('countBatchOutcomes агрегирует исходы', () => {
+  const counts = countBatchOutcomes(['queued', 'queued', 'skipped', 'failed', 'deduped', 'skipped']);
+  assert.deepEqual(counts, { queued: 2, skipped: 2, failed: 1, deduped: 1 });
+});
+
+test('sendMany без шаблона не вставляет строк и считает skipped', async () => {
+  const { service, queries } = serviceWith([[]]);
+  const other = '00000000-0000-0000-0000-000000000002';
+
+  const result = await service.sendMany({
+    userIds: [ID, other],
+    kind: 'admin.broadcast',
+    content: { template: { code: 'missing.code' } },
+  });
+
+  assert.equal(typeof result.batchId, 'string');
+  assert.deepEqual(
+    { total: result.total, queued: result.queued, skipped: result.skipped, failed: result.failed, deduped: result.deduped },
+    { total: 2, queued: 0, skipped: 2, failed: 0, deduped: 0 },
+  );
+  assert.equal(queries.length, 1);
+});
+
+test('listSenders объединяет имена каналов без дублей', () => {
+  const { service } = serviceWith();
+  service.registerChannel({ ...channel('a', 'x@y'), listSenders: () => ['no-reply', 'support'] });
+  service.registerChannel({ ...channel('b', 'x@y'), listSenders: () => ['support'] });
+
+  assert.deepEqual(service.listSenders(), ['no-reply', 'support']);
+});
+
+test('retryBatch переводит failed-строки батча в pending и возвращает счётчик', async () => {
+  const { service, queries } = serviceWith([[[ID], [ID]]]);
+
+  const retried = await service.retryBatch('00000000-0000-0000-0000-0000000000aa');
+
+  assert.equal(retried, 2);
+  assert.match(queries[0].text, /^update "core"\."notification_outbox"/);
+  // SET-параметры идут перед WHERE: batch_id и 'failed' — в хвосте значений.
+  assert.ok(queries[0].values.includes('00000000-0000-0000-0000-0000000000aa'));
+  assert.ok(queries[0].values.includes('failed'));
 });

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, count, desc, eq, inArray, lt, lte, sql } from 'drizzle-orm';
 import type { BackendDbService } from '../../contracts/backend/db.js';
 import type { EventBus } from '../../contracts/event-bus.js';
@@ -6,12 +7,15 @@ import {
   NOTIFICATION_EVENTS,
   type NotificationAttachment,
   type NotificationChannel,
+  type NotificationContent,
   type NotificationDelivery,
   type NotificationDeliveryListParams,
   type NotificationFailedEvent,
   type NotificationMessage,
   type NotificationSentEvent,
   type NotificationStatus,
+  type SendBatchResult,
+  type SendManyRequest,
 } from '../../contracts/notification.js';
 import { logger } from '../logger.js';
 import { notificationOutbox } from '../schemas/index.js';
@@ -65,6 +69,25 @@ export function pickChannel(
   return { channel: first.channel, address: first.address };
 }
 
+export type BatchOutcome = 'queued' | 'skipped' | 'failed' | 'deduped';
+
+/** Агрегат батча: то, что `sendMany` возвращает вызывающему (без batchId/total). */
+export function countBatchOutcomes(outcomes: BatchOutcome[]): Omit<SendBatchResult, 'batchId' | 'total'> {
+  const counts = { queued: 0, skipped: 0, failed: 0, deduped: 0 };
+  for (const outcome of outcomes) counts[outcome] += 1;
+  return counts;
+}
+
+/** Контент сообщения после резолва шаблона и рендера — снапшот для outbox. */
+interface ResolvedContent {
+  subject: string;
+  body: string;
+  html?: string;
+  sender?: string;
+  attachments?: NotificationAttachment[];
+  locale?: string;
+}
+
 /**
  * Реестр каналов + outbox. Владеет маршрутизацией (кого и куда) и надёжностью (claim, ретраи,
  * ретенция). Транспорт и адресные книги — забота каналов, см. `NotificationChannel`.
@@ -86,6 +109,14 @@ export class NotificationServiceImpl implements BackendNotificationService {
     this.channels.set(channel.id, channel);
   }
 
+  listSenders(): string[] {
+    const names = new Set<string>();
+    for (const channel of this.channels.values()) {
+      for (const name of channel.listSenders?.() ?? []) names.add(name);
+    }
+    return [...names].sort();
+  }
+
   async send(message: NotificationMessage): Promise<{ id: string } | null> {
     const content = await this.resolveContent(message);
     if (!content) return null;
@@ -99,66 +130,57 @@ export class NotificationServiceImpl implements BackendNotificationService {
       return null;
     }
 
-    const scheduled = message.scheduledAt !== undefined && message.scheduledAt.getTime() > Date.now();
+    const scheduledAt = message.scheduledAt && message.scheduledAt.getTime() > Date.now() ? message.scheduledAt : undefined;
+    const result = await this.insertDelivery(message, content, resolved.channel.id, resolved.address, null, scheduledAt ?? new Date());
+    if (!result) return null;
 
-    const values = {
-      userId: message.userId,
-      channel: resolved.channel.id,
-      kind: message.kind,
-      address: resolved.address,
-      subject: content.subject,
-      body: content.body,
-      html: content.html ?? null,
-      locale: message.locale ?? content.locale ?? null,
-      sender: message.sender ?? content.sender ?? null,
-      replyTo: message.replyTo ?? null,
-      cc: message.cc ?? null,
-      bcc: message.bcc ?? null,
-      headers: message.headers ?? null,
-      attachments: message.attachments ?? content.attachments ?? [],
-      dedupeKey: message.dedupeKey ?? null,
-      nextAttemptAt: scheduled ? message.scheduledAt : new Date(),
-      maxAttempts: this.maxAttempts,
-    };
-
-    const insert = this.deps.db.insert(notificationOutbox).values(values);
-    const [row] = message.dedupeKey
-      ? await insert.onConflictDoNothing().returning({ id: notificationOutbox.id })
-      : await insert.returning({ id: notificationOutbox.id });
-
-    // Конфликт по dedupeKey: доставка уже создана бизнес-действием ранее — возвращаем её id.
-    if (!row && message.dedupeKey) {
-      const [existing] = await this.deps.db
-        .select({ id: notificationOutbox.id })
-        .from(notificationOutbox)
-        .where(
-          and(
-            eq(notificationOutbox.kind, message.kind),
-            eq(notificationOutbox.dedupeKey, message.dedupeKey),
-            eq(notificationOutbox.userId, message.userId),
-          ),
-        )
-        .limit(1);
-      return existing ? { id: existing.id } : null;
+    // Eager-попытка в своём процессе: ответ вызывающему не ждёт SMTP (кроме отложенных и dedupe-повторов).
+    // Ошибку глотаем — строка уже в outbox, диспетчер доделает (транспортную ошибку вернуть вызывающему
+    // бессмысленно: он её не решает, а откатывать бизнес-действие из-за недоступности почты нельзя).
+    if (result.inserted && !scheduledAt) {
+      void this.deliver(result.id).catch(err => logger.error({ err, deliveryId: result.id }, 'Eager-доставка упала'));
     }
 
-    // Eager-попытка в своём процессе: ответ вызывающему не ждёт SMTP (кроме отложенных). Ошибку
-    // глотаем — строка уже в outbox, диспетчер доделает (транспортную ошибку вернуть вызывающему
-    // бессмысленно: он её не решает, а откатывать бизнес-действие из-за недоступности почты нельзя).
-    if (row && !scheduled) void this.deliver(row.id).catch(err => logger.error({ err, deliveryId: row.id }, 'Eager-доставка упала'));
+    return { id: result.id };
+  }
 
-    return row ?? null;
+  /**
+   * Батч: контент резолвится один раз, строка — на каждого получателя. Без eager: доставку делает
+   * worker-диспетчер (trade-off — на узле без worker-роли строки лежат `pending`).
+   */
+  async sendMany(request: SendManyRequest): Promise<SendBatchResult> {
+    const batchId = randomUUID();
+    const total = request.userIds.length;
+
+    const content = await this.resolveContent(request);
+    if (!content) {
+      return { batchId, total, ...countBatchOutcomes(request.userIds.map(() => 'skipped')) };
+    }
+
+    const outcomes: BatchOutcome[] = [];
+    for (const userId of request.userIds) {
+      const message: NotificationMessage = { ...request, userId };
+      try {
+        const resolved = await this.resolveTarget(message);
+        if (!resolved) {
+          logger.warn({ userId, kind: request.kind, channel: request.channel }, 'Строка рассылки не отправлена: канал или адрес не найдены');
+          outcomes.push('skipped');
+          continue;
+        }
+        const scheduledAt = request.scheduledAt && request.scheduledAt.getTime() > Date.now() ? request.scheduledAt : undefined;
+        const result = await this.insertDelivery(message, content, resolved.channel.id, resolved.address, batchId, scheduledAt ?? new Date());
+        outcomes.push(result === null ? 'skipped' : result.inserted ? 'queued' : 'deduped');
+      } catch (err) {
+        logger.warn({ err, userId, kind: request.kind }, 'Строка рассылки не поставлена в outbox');
+        outcomes.push('failed');
+      }
+    }
+
+    return { batchId, total, ...countBatchOutcomes(outcomes) };
   }
 
   /** Контент сообщения: inline — как есть; шаблон — резолв и рендер `{{path}}` со снапшотом. */
-  private async resolveContent(message: NotificationMessage): Promise<{
-    subject: string;
-    body: string;
-    html?: string;
-    sender?: string;
-    attachments?: NotificationAttachment[];
-    locale?: string;
-  } | null> {
+  private async resolveContent(message: { kind: string; content: NotificationContent; locale?: string }): Promise<ResolvedContent | null> {
     const content = message.content;
     if (!('template' in content)) {
       return { subject: content.subject, body: content.body, ...(content.html === undefined ? {} : { html: content.html }) };
@@ -193,6 +215,64 @@ export class NotificationServiceImpl implements BackendNotificationService {
       await Promise.all(requested.map(async channel => ({ channel, address: await channel.resolveAddress(message.userId) }))),
       message.channel,
     );
+  }
+
+  /**
+   * Вставка строки outbox. Конфликт по `dedupeKey` (`ON CONFLICT DO NOTHING` + partial unique
+   * `(kind, dedupe_key, user_id)`) возвращает существующий id с `inserted: false`; null — строку
+   * поставить не удалось и существующей нет.
+   */
+  private async insertDelivery(
+    message: NotificationMessage,
+    content: ResolvedContent,
+    channelId: string,
+    address: string,
+    batchId: string | null,
+    nextAttemptAt: Date,
+  ): Promise<{ id: string; inserted: boolean } | null> {
+    const values = {
+      userId: message.userId,
+      channel: channelId,
+      kind: message.kind,
+      address,
+      subject: content.subject,
+      body: content.body,
+      html: content.html ?? null,
+      locale: message.locale ?? content.locale ?? null,
+      sender: message.sender ?? content.sender ?? null,
+      replyTo: message.replyTo ?? null,
+      cc: message.cc ?? null,
+      bcc: message.bcc ?? null,
+      headers: message.headers ?? null,
+      attachments: message.attachments ?? content.attachments ?? [],
+      dedupeKey: message.dedupeKey ?? null,
+      batchId,
+      nextAttemptAt,
+      maxAttempts: this.maxAttempts,
+    };
+
+    const insert = this.deps.db.insert(notificationOutbox).values(values);
+    const [row] = message.dedupeKey
+      ? await insert.onConflictDoNothing().returning({ id: notificationOutbox.id })
+      : await insert.returning({ id: notificationOutbox.id });
+    if (row) return { id: row.id, inserted: true };
+
+    if (message.dedupeKey) {
+      const [existing] = await this.deps.db
+        .select({ id: notificationOutbox.id })
+        .from(notificationOutbox)
+        .where(
+          and(
+            eq(notificationOutbox.kind, message.kind),
+            eq(notificationOutbox.dedupeKey, message.dedupeKey),
+            eq(notificationOutbox.userId, message.userId),
+          ),
+        )
+        .limit(1);
+      return existing ? { id: existing.id, inserted: false } : null;
+    }
+
+    return null;
   }
 
   /**
@@ -354,6 +434,7 @@ export class NotificationServiceImpl implements BackendNotificationService {
     if (params.status) filters.push(eq(notificationOutbox.status, params.status));
     if (params.kind) filters.push(eq(notificationOutbox.kind, params.kind));
     if (params.userId) filters.push(eq(notificationOutbox.userId, params.userId));
+    if (params.batchId) filters.push(eq(notificationOutbox.batchId, params.batchId));
     const where = filters.length ? and(...filters) : undefined;
 
     const [rows, [total]] = await Promise.all([
@@ -376,6 +457,7 @@ export class NotificationServiceImpl implements BackendNotificationService {
         lastError: row.lastError,
         createdAt: row.createdAt,
         sentAt: row.sentAt,
+        batchId: row.batchId,
       })),
       total: total?.value ?? 0,
     };
@@ -390,6 +472,17 @@ export class NotificationServiceImpl implements BackendNotificationService {
       .returning({ id: notificationOutbox.id });
 
     return rows.length > 0;
+  }
+
+  /** Повтор всех `failed` строк батча — кнопка «Повторить батч» в админке. */
+  async retryBatch(batchId: string): Promise<number> {
+    const rows = await this.deps.db
+      .update(notificationOutbox)
+      .set({ status: 'pending', nextAttemptAt: new Date(), lastError: null, updatedAt: new Date() })
+      .where(and(eq(notificationOutbox.batchId, batchId), eq(notificationOutbox.status, 'failed')))
+      .returning({ id: notificationOutbox.id });
+
+    return rows.length;
   }
 
   private emit<T>(type: string, payload: T): void {
