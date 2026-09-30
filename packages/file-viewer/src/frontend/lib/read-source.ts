@@ -33,6 +33,9 @@ export async function readSourceText(source: FileSource, { limitBytes, offsetByt
       headers: { Range: `bytes=${offsetBytes}-${offsetBytes + limitBytes - 1}` },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // На Range со смещением сервер обязан ответить 206/Content-Range. 200 значит, что Range
+    // проигнорирован и тело начинается с нуля: догрузка вклеила бы весь файл заново.
+    if (offsetBytes > 0 && response.status !== 206) throw new Error(`HTTP ${response.status}`);
     // Байты, а не .text(): границу кодовой точки ищем сами, иначе разрезанный символ
     // станет U+FFFD ещё до нашей логики.
     const bytes = new Uint8Array(await response.arrayBuffer());

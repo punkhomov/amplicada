@@ -123,6 +123,30 @@ test('окно URL с невалидного байта в начале не з�
   }
 });
 
+test('окно URL с offset > 0 требует частичный ответ и падает на 200', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(new Uint8Array([0x41, 0x42, 0x43]), { status: 200 })) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => readSourceText({ type: 'url', url: '/api/x' }, { limitBytes: 3, offsetBytes: 10 }),
+      /HTTP 200/,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('окно URL с offset 0 по-прежнему принимает полный ответ 200', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(new Uint8Array([0x41, 0x42, 0x43]), { status: 200 })) as typeof fetch;
+  try {
+    const result = await readSourceText({ type: 'url', url: '/api/x' }, { limitBytes: 3, offsetBytes: 0 });
+    assert.equal(result.text, 'ABC');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('blob читается окном через slice с тем же UTF-8-безопасным стыком', async () => {
   // 'A€B' = 41 E2 82 AC 42.
   const blob = new Blob([new Uint8Array([0x41, 0xe2, 0x82, 0xac, 0x42])]);
