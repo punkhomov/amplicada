@@ -16,6 +16,7 @@ verified_commit: 61bed2d7
 | Сервисы и интеграции действий | [Справочник](./reference/composition.md) |
 | Режим «Приложения» (`admin:apps`, `/admin/apps`) | [Справочник](./reference/composition.md) |
 | Страница хранилища (`/admin/storage`, Explorer UI, операции, HTTP API, превью) | [Справочник](./reference/storage.md) |
+| Шаблоны уведомлений (`/admin/notification-template`, рассылка) | [Справочник](./reference/notification-templates.md) |
 | Frontend: интеграция; остальные страницы и слоты | [Справочник](./reference/composition.md); полное покрытие — нет |
 | HTTP API (кроме storage), env | — нет |
 | Схемы БД и миграции | — нет |
@@ -27,3 +28,7 @@ verified_commit: 61bed2d7
 приложений проверен живым прогоном API; Explorer-UI и операции хранилища сверены по коду
 и тестам; постраничный листинг и бесконечный скролл — по коду и тестам. Визуальная проверка —
 за браузером.
+
+Шаблоны уведомлений (контракт v2, ADR-07) сверены по коду на `0551349` (ветка `feat/notifications`):
+`sendMany` с батчем, «Повторить батч», вложения через `template-attachments`, fixture read-only.
+Живой прогон — план `ref/plans/2026-09-30-notification-v2-implementation.md`.

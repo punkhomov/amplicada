@@ -21,8 +21,11 @@
 | `adr/00-evolution.md` | `implemented` | Эволюция решений: что сохранили, изменили, отбросили |
 | `adr/01-architecture.md` | `implemented` | Архитектура: философия, модули, core decisions |
 | `adr/02-dependency-injection.md` | `Accepted` | Без DI-контейнера: service locator для обязательных зависимостей, extension points для опциональных связей между модулями |
+| `adr/03-frontend-fsd.md` | `accepted` | Feature-Sliced Design v2.1 для frontend модулей |
+| `adr/04-notifications.md` | `implemented` | Уведомления: маршрутизация и надёжность (outbox, ретраи) — core-сервис `notification`; транспорт и адресные книги — канальные модули |
 | `adr/05-application-composition.md` | `implemented` | Единый состав приложения, генерация статических подключений и проверяемые зависимости обеих сторон; заменяет декларативный-only порядок из ADR-02 |
 | `adr/06-module-conventions.md` | `implemented` | amplicada: true, экспорт module, стороны/CSS из exports, порядок обязательных и выбранных optional peers; дополняет ADR-02/05 |
+| `adr/07-notification-contract-v2.md` | `accepted` | Контракт уведомлений v2: шаблоны-документы ядра с code-fixtures (`fixtureReadonly`), `sendMany` без eager (worker-trade-off), `dedupeKey`, `scheduledAt`, вложения 10/20 МиБ с `headObject`, именованные отправители; частично заменяет ADR-04 |
 
 | `context.md` | `implemented` | Актуальный контекст проекта |
 
@@ -34,6 +37,7 @@
 | `notes/application-tools.md` | `implemented` | D-004: подробно «было → стало», причины, компромиссы и отвергнутые варианты; discovery и optional peers |
 | `notes/file-viewer.md` | `implemented` | D-001…D-008: общая либа превью, делегирование сложных форматов браузеру, ленивый Monaco, реестр рендереров; D-005: Office-WASM-рендерер `@silurus/ooxml`; D-006: правка текста через `PUT` потребителя; D-007: accepted risk — недоверенный Office парсится на своём origin; D-008: оконное чтение текста («Показать ещё») и потолок Office 50 МиБ |
 | `notes/module-admin.md`, `notes/module-auth-password.md`, `notes/module-hr-poll.md` | `implemented` | Optional-интеграция и сервис admin:toolbar; D-002: режим «Приложения»; D-004: файловый менеджер хранилища и `PUT`-правка текста; D-006: Explorer-UI — операции (`copyObject`/`deleteObjects`), move = copy + delete; D-007: постраничный листинг `cursor`/`limit` и бесконечный скролл |
+| `notes/module-notification-email.md` | `implemented` | D-001…D-007: nodemailer `^10` (D-005 supersedes D-001), backend-only модуль, подтверждение адреса, режим без SMTP, `SMTP_SENDERS`, вложения стримом с лимитами |
 | `notes/module-support-chat.md` | `implemented` | D-001…D-008: таблицы вместо документов, SSE + Redis, приложения админки через общий хост, вложения через storage, карточка-виджет и композер на ките, несколько обращений и портал |
 | `notes/platform-core.md` | `implemented` | D-001…D-007: вендоринг UI-кита и скрипт синка, шим установки зависимостей, `cn` вместо clsx+tailwind-merge, `minimumReleaseAge` 7 дней, `delimiter` в `listObjects`, постраничный режим `maxKeys`/`nextToken` |
 | `notes/<package>.md` | — | Заметки по пакету; создаются по мере применения скилла `.agents/skills/module-docs/` |
@@ -55,6 +59,7 @@
 | `module-auth-password` | [`packages/module-auth-password/docs/`](../packages/module-auth-password/docs/index.md) — optional-интеграция admin |
 | `module-hr` | [`packages/module-hr/docs/`](../packages/module-hr/docs/) — пока 4 плоских файла, не разнесены |
 | `module-support-chat` | [`packages/module-support-chat/docs/`](../packages/module-support-chat/docs/index.md) — API, SSE, встроенное приложение поддержки |
+| `module-notification-email` | [`packages/module-notification-email/docs/`](../packages/module-notification-email/docs/index.md) — справочник канала и 2 how-to |
 | `module-workflow` | [`packages/module-workflow/docs/`](../packages/module-workflow/docs/) — пока 4 плоских файла |
 | `platform-core` | [`packages/platform-core/docs/`](../packages/platform-core/docs/index.md) — вендоренный UI-кит и сервис storage (S3) |
 
@@ -76,13 +81,15 @@
 |------|--------|----------|
 | `plans/2026-09-14-module-lifecycle-review.md` | `draft` | Первый архитектурный разбор: зависимости и порядок загрузки, дефект shutdown, владение ресурсами и удаление модулей; предложения и следующие итерации, без изменения runtime |
 | `plans/2026-09-15-auth-node-method.md` | `implemented` | Метод аутентификации — свойство узла: `auth-node` + `GET /api/auth/context`, платформа редиректит на `loginUrl` метода и не содержит страницы логина; парольный логин — `/auth/password/login`, `/me` и `/logout` переехали в core |
-| `plans/2026-09-15-notifications/` | `draft` | Уведомления: core-сервис `notification` + outbox с ретраями, канальные модули (`module-notification-email` — SMTP + адресная книга), админ-лог доставок, Mailpit в dev, ADR-04. Подпланы `01`–`04`; разблокирует регистрацию/сброс пароля/2FA в auth |
+| `plans/2026-09-15-notifications/` | `implemented` | Уведомления: core-сервис `notification` + outbox с ретраями, канальный модуль `module-notification-email` (SMTP + адресная книга), админ-лог доставок `/admin/notifications`, Mailpit в dev, ADR-04. Подпланы `01`–`04` сделаны; разблокирует регистрацию/сброс пароля/2FA в auth |
 | `plans/2026-09-19-storage-preview-editor.md` | `superseded` | Превью файлов: Shiki vs Monaco, обзор multi-format вьюеров, ограничения auth/CORS. Реализована общая либа `file-viewer`, storage переведён; правка и Office дозакрыты в итерации 1 roadmap. Заменён `2026-09-29-admin-storage-roadmap.md` |
 | `plans/2026-09-29-admin-storage-roadmap.md` | `in-progress` | Ближайшие итерации линии admin storage + file-viewer. **Итерация 1 закрыта 2026-09-29**: правка текста (`PUT`) и Office-WASM (`@silurus/ooxml`) влиты. **Итерация 2 закрыта 2026-09-29**: Explorer-UI и операции (папки, rename/move, мультивыбор, контекстное меню, плитка). **Enabler пагинации закрыт 2026-09-30**: `nextToken` в core, `cursor`/`limit` в листинге, бесконечный скролл, оконное чтение текста, потолок Office. Дальше: `support-chat` на `file-viewer` и остальные enabler'ы (права, аудит, share) |
 | `plans/2026-09-29-storage-text-edit-office-preview.md` | `implemented` | Реализация итерации 1: `PUT /storage/objects` + правка в UI, `readBytes`/Office-kinds и ленивые docx/xlsx-рендереры в `file-viewer`, docs. Код написан, собран и проверен живьём (Playwright) |
 | `plans/2026-09-29-admin-storage-explorer-ui.md` | `implemented` | Итерация 2: Explorer-UI и операции `/admin/storage` — core `copyObject`/`deleteObjects`, роуты folder/move/bulk delete, список с мультивыбором, тулбар, дерево, адресная строка, контекстное меню, диалоги перемещения/свойств, плитка. Код влит (`328eb072..45ab313f`); живой e2e — шаг 8 плана |
 | `plans/2026-09-29-storage-pagination-streaming.md` | `implemented` | Итерация пагинации и стриминга: постраничный `listObjects` (`maxKeys`/`continuationToken`/`nextToken`, дефолт «дочитать всё» сохранён) и `cursor`/`limit` в листинге, бесконечный скролл списка, оконное чтение текста с безопасными границами UTF-8 («Показать ещё»), потолок 50 МиБ для Office-превью. Живые прогоны: 250 файлов, текст 1.5 МБ, `.docx` 51 МБ |
 | `plans/2026-09-18-support-chat-ai-first.md` | `in-progress` | Support chat AI-first: исследование практик (Fin, Zendesk, ITIL/JSM, handoff-пакеты, доступ агента к данным) и направление — ассистент отвечает по данным платформы, эскалирует структурированным брифом, инцидент как отдельный вид, пользователь закрывает сам. Без AI реализованы этап 0 (статусы, закрытие пользователем) и инциденты (вид, серьёзность, привязка дублей, рассылка); автозакрытие/метрики — нет |
+| `plans/2026-09-17-notification-contract-v2.md` | `implemented` | Notification API v2: ломающий контракт под auth/workflow/learning/рассылки — `sendMany` с batch, шаблоны-документы ядра с code-fixtures (read-only через `fixtureReadonly`), именованные отправители, `dedupeKey`, `scheduledAt`, вложения, `cc/bcc/replyTo/headers`; миграция `core/0007`, переезд типа из `module-admin`. Реализовано 2026-09-30 (план `2026-09-30-notification-v2-implementation.md`), живой прогон Mailpit выполнен |
+| `plans/2026-09-30-notification-v2-implementation.md` | `implemented` | План реализации v2 (20 задач, фазы 0–6): rebase и политика pnpm, ADR-07, контракт, миграция `0007`, рендер и резолв шаблонов, `sendMany`/dedupe/`scheduledAt`, документ-тип `notification-template` с read-only фикстурами, вложения, админка, docs/notes и живой прогон Mailpit |
 | `plans/2026-07-13-poc-cookie-auth.md` | `implemented` | PoC cookie auth (выполнен) |
 | `plans/2026-07-13-frontend-core-reorg.md` | `implemented` | Реорганизация core/sdk (выполнен) |
 | `plans/2026-07-13-server-sessions.md` | `implemented` | Безопасные серверные сессии (Redis + @fastify/session + bcrypt) |

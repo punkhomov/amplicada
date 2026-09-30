@@ -65,12 +65,15 @@ export function FieldWidget({ fieldKey: _fieldKey, meta, value, readonly, onChan
     case 'radiobutton':
       input = (
         <RadioGroup value={String(value ?? '')} onValueChange={handleChange} disabled={disabled}>
-          {meta.options?.map(opt => (
-            <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
-              <RadioGroupItem value={opt.value} disabled={disabled} />
-              {opt.label}
-            </label>
-          ))}
+          {meta.options?.map(opt => {
+            const optionId = `${_fieldKey}-${opt.value}`;
+            return (
+              <label key={opt.value} htmlFor={optionId} className="flex items-center gap-2 text-sm cursor-pointer">
+                <RadioGroupItem id={optionId} value={opt.value} disabled={disabled} />
+                {opt.label}
+              </label>
+            );
+          })}
         </RadioGroup>
       );
       break;

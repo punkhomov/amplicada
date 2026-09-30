@@ -20,8 +20,10 @@ export type {
   AuthLog,
   IdentityUser,
   NewAuthLog,
+  NewNotificationOutboxRow,
   NewScheduledTaskRow,
   NewScheduledTaskRunLogRow,
+  NotificationOutboxRow,
   ScheduledTaskRow,
   ScheduledTaskRunLogRow,
   ScheduledTaskRunRow,
@@ -31,6 +33,7 @@ export {
   documentCustomFields,
   documentIndex,
   identityUser,
+  notificationOutbox,
   scheduledTaskRunLogs,
   scheduledTaskRuns,
   scheduledTasks,
@@ -56,6 +59,18 @@ export {
   withDbErrors,
 } from './services/db-errors.js';
 export { DocumentRuntime, DocumentRuntimeError } from './services/document-runtime.js';
+export { NotificationDispatcher } from './services/notification-dispatcher.js';
+export type { NotificationServiceConfig, NotificationServiceDeps } from './services/notification-service.js';
+export {
+  BACKOFF_CAP_MS,
+  backoffDelayMs,
+  DEFAULT_MAX_ATTEMPTS,
+  DEFAULT_RETENTION_DAYS,
+  DEFAULT_RETRY_BASE_MS,
+  NotificationServiceImpl,
+  pickChannel,
+  STALE_SENDING_THRESHOLD_MS,
+} from './services/notification-service.js';
 export { ensureBucket, StorageServiceImpl } from './services/storage-service.js';
 export type { TaskEventBridgeDeps } from './services/task-event-bridge.js';
 export { TaskEventBridge } from './services/task-event-bridge.js';

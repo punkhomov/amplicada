@@ -2,7 +2,7 @@
 title: Mailpit в dev, ADR-04 и обновление документации
 type: plan
 tier: 2
-status: draft
+status: implemented
 date: 2026-09-15
 ---
 
@@ -89,10 +89,10 @@ SMTP_FROM=Amplicada <no-reply@amplicada.local>
 
 ## Порядок реализации
 
-- [ ] Mailpit в compose + переменные в `.env.host.example`
-- [ ] ADR-04
-- [ ] Строки в `ref/README.md`
-- [ ] Обновление `ref/context.md` после живой проверки (шаг финальный)
+- [x] Mailpit в compose + переменные в `.env.host.example`
+- [x] ADR-04
+- [x] Строки в `ref/README.md`
+- [x] Обновление `ref/context.md` после живой проверки (шаг финальный)
 
 ## Проверка
 

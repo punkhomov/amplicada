@@ -211,6 +211,31 @@ filer держит пустую директорию отдельной запи
 **Код.** `src/contracts/backend/storage.ts:25`, `src/backend/services/storage-service.ts:154`.
 **Связано.** D-006 (развитие формы), `ref/plans/2026-09-29-storage-pagination-streaming.md`.
 
+## D-008. Уведомления v2: шаблоны-документы в ядре, `fixtureReadonly`, `sendMany` без eager — accepted (2026-09-30)
+
+**Контекст.** Контракт v1 (ADR-04) не покрывал шаблоны с i18n и переменными, батчи, dedupe,
+отложенную отправку и вложения; админская рассылка делала цикл `send()` в HTTP-запросе.
+**Решение.** Контракт v2 (ADR-07): тип `notification-template` в ядре с code-fixtures; read-only
+фикстур — opt-in флагом `DocumentType.fixtureReadonly` (у шаблонов включён); `sendMany` пишет
+только строки в outbox, доставка — worker-диспетчер; `dedupeKey` — partial unique
+`(kind, dedupe_key, user_id)` + `ON CONFLICT DO NOTHING` + выборка существующей; вложения —
+лимиты одной константой, реальный размер через `headObject`.
+**Почему именно так.** Сборка без админки должна слать по code-шаблону → тип в ядре.
+Blanket read-only сломал бы редактируемые фикстуры `scheduled-task` → флаг у типа. Eager для
+200 получателей — 200 SMTP-отправок внутри HTTP → без eager (trade-off: нужна worker-роль).
+Dedupe на индексе, а не «сначала SELECT» — гонка параллельных отправок.
+**Отвергнуто.** Слой совместимости v1 (данные одноразовые, потребитель один); шаблоны в
+`module-admin` (сборка без админки не умела бы слать по шаблону); blanket-guard; eager для `sendMany`.
+**Что изменит решение.** Потребители auth/workflow/learning (вне плана v2) могут вскрыть
+нехватку полей — контракт расширяется аддитивно; событие завершения батча — при потребности.
+**Грабли.** `reconcileFixtures` перезаписывает fixture-строки на каждом bootstrap — правки в UI
+молча терялись бы, поэтому guard. `sendMany` на `ROLE=web` оставляет строки `pending` (нужен
+воркер). Манифест вложений редактируем через документное API — размер проверяется `headObject`
+на отправке. `INDEX_STATE_COLUMNS` — единственный способ отдать index-колонку (`fixture`) списку.
+**Код.** `src/contracts/notification.ts`, `src/backend/services/notification-service.ts`,
+`src/backend/documents/notification-template.ts`, `src/backend/services/document-runtime.ts`.
+**Связано.** [ADR-07](../adr/07-notification-contract-v2.md), [ADR-04](../adr/04-notifications.md).
+
 ## Пробелы
 
 - `ui:check` не подключён к CI — CI в проекте нет (`ref/plans/2026-08-08-tech-debt-audit.md`).

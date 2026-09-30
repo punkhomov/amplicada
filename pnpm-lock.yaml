@@ -213,6 +213,9 @@ importers:
       '@amplicada/module-hr-request':
         specifier: workspace:*
         version: link:../../packages/module-hr-request
+      '@amplicada/module-notification-email':
+        specifier: workspace:*
+        version: link:../../packages/module-notification-email
       '@amplicada/module-support-chat':
         specifier: workspace:*
         version: link:../../packages/module-support-chat
@@ -641,6 +644,28 @@ importers:
       react-router-dom:
         specifier: ^7.18.2
         version: 7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/module-notification-email:
+    dependencies:
+      nodemailer:
+        specifier: ^10.0.10
+        version: 10.0.10
+    devDependencies:
+      '@amplicada/platform-core':
+        specifier: workspace:*
+        version: link:../platform-core
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@types/pg@8.21.0)(pg@8.23.0)
+      fastify:
+        specifier: ^5.12.0
+        version: 5.12.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -3512,6 +3537,10 @@ packages:
   node-releases@2.0.53:
     resolution: {integrity: sha512-D9UOmYG3UH1V+ENW56t5QXBwJw1YEY18ruVeus89Rw+SyIgjPkCO84bRzO3uNIYosJbNwiabWVn48o3uJLjxFQ==}
     engines: {node: '>=18'}
+
+  nodemailer@10.0.10:
+    resolution: {integrity: sha512-He9XskOFms62SyAKkLu8CcGcYHAo+BSHSsORI8s4PJH8qZgZY4L4lDfvyN0twvmbpyG+eGrxpyBlskj9d9rJ8A==}
+    engines: {node: '>=20.0.0'}
 
   npm-run-path@4.0.1:
     resolution: {integrity: sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==}
@@ -6757,6 +6786,8 @@ snapshots:
   node-gyp-build@4.8.4: {}
 
   node-releases@2.0.53: {}
+
+  nodemailer@10.0.10: {}
 
   npm-run-path@4.0.1:
     dependencies:

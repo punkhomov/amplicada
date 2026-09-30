@@ -17,6 +17,8 @@ date: 2026-09-30
 > Не делать move переименованием префикса и не копировать через presigned-URL/`UploadPartCopy` — move = copy + delete — D-006 (accepted).
 > Не отдавать листинг папки целиком и не строить пагинацию на offset — `cursor`/`nextToken` из S3, sentinel-скролл — D-007 (accepted).
 > Не возвращать нативный HTML5 drag&drop в `/admin/storage` — pointer-DnD на dnd-kit, один id на экземпляр цели — D-008 (accepted).
+> Не тащить rich-text редактор шаблонов — D-009 (accepted: textarea + iframe-preview, без зависимостей).
+> Не менять контракт ядра ради рассылок — D-009 (accepted: цикл `notification.send()` в админке; пересмотрено в v2 — рассылка через `sendMany`).
 
 ## D-001. Сервис toolbar и optional-интеграция — accepted (2026-09-16)
 
@@ -325,3 +327,41 @@ pointerdown с интерактивной цели (`input`, `button`, `a`, `[ro
 хоткей «открыть». Невалидные цели адресной строки получили destructive-ring, как строки и
 дерево. `useStorageDroppable` принимает `enabled`: droppable файлов гасится флагом `disabled`,
 потому что dnd-kit регистрирует контейнер безусловно (отсутствие ref не отменяет регистрацию).
+## D-009. Шаблоны уведомлений: документ админки + рассылка циклом `send()` — accepted (2026-09-17)
+
+**Контекст.** Нужен админский конструктор писем: создавать шаблоны, редактировать контент,
+сразу отправлять выбранным пользователям. Core-контракт уведомлений умеет только
+`send({ userId, kind, … })`; расширять его под рассылки в этой задаче не планировалось.
+**Решение.** Шаблон — документ типа `notification-template`, которым владеет module-admin: своя
+таблица `admin.notification_template` (миграция `0000_init`), auto load/save по `schema`. Редактор —
+зарегистрированный компонент `notification-template-editor`: две textarea (body/html) и
+предпросмотр в `iframe sandbox=""`. Отправка — toolbar-действие `notification-template-send` →
+`POST /api/admin/notifications/send-template`: читает сохранённый шаблон и делает по одному
+`notification.send()` на получателя (`kind: 'admin.broadcast'`, потолок 200).
+**Почему именно так.** Document System даёт CRUD, список с фильтрами, аудит и карточку без
+страничного кода; админка — владелец management-сущности, core остаётся маршрутизатором
+(граница ADR-04 не двигается). Новых зависимостей нет: политика `minimumReleaseAge: 43200` и
+отсутствие `allowBuilds` для редактора исключают TipTap/Lexical, а textarea + iframe закрывают задачу.
+**Отвергнуто.** Отдельная таблица + своя страница списка/формы — больше кода без аудита и
+generic-фильтров; `customFields: true` (jsonb) — путь в репозитории не используется, а NOT NULL-поля
+и колонки списка удобнее в таблице; rich-text редактор — новая зависимость под строгой
+install-политикой; отправка несохранённого черновика — серверу пришлось бы принимать контент вместо
+`templateId` и терять аудит; явные адреса получателей — изменение контракта ядра (см. ADR-04).
+**Что изменит решение.** Улучшение контракта уведомлений (bulk/шаблоны/`from`) — рассылку можно
+перевести на него, а шаблоны — на core-уровень; появление второго канала (sms) — в шаблон добавится
+поле `channel`.
+**Грабли.** Auto-save пишет только переданные ключи: обязательные `name/subject/body` должны приехать
+в первом сохранении (карточка шлёт весь бакет, но частичное сохранение снаружи упадёт на NOT NULL).
+`updatedAt` обновляется `$onUpdate` в схеме. `userIds` — id документов `user` (совпадают с
+`identity_user.id`). Пропущенный получатель — не ошибка: нет канала или подтверждённого адреса.
+**Код.** `src/backend/documents/notification-template.ts`, `src/backend/routes/notifications.ts`,
+`src/frontend/widgets/send-notification-template/`, `migrations/0000_init.sql`
+**Связано.** [ADR-04](../adr/04-notifications.md), `packages/module-admin/docs/reference/notification-templates.md`
+
+**Обновление (2026-09-30).** Ожидание из «Что изменит решение» сбылось: контракт уведомлений
+обновлён до v2 (ADR-07). Шаблоны переехали в ядро (`core.notification_template`, тип регистрирует
+platform-core; админка — только UI), рассылка переведена на `notification.sendMany` (один батч,
+worker доставляет, в логе «Повторить батч»), в редакторе появились отправитель и вложения
+(роуты `template-attachments`), fixture-шаблоны read-only. Админская миграция `0000_init` и её
+таблица удалены — формат БД сломан, данные одноразовые. Цикл `send()` в HTTP остался только
+историей D-009.

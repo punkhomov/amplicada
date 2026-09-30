@@ -5,7 +5,7 @@ import { boolean, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 import type { BackendDbService } from '../../contracts/backend/db.js';
 import type { DocumentExtension } from '../../contracts/documents.js';
 import { DocumentRegistryImpl } from '../documents.js';
-import { DocumentRuntime } from './document-runtime.js';
+import { DocumentRuntime, DocumentRuntimeError } from './document-runtime.js';
 
 /**
  * Две таблицы расширений одного документа. Своей таблицы у типа документа нет — она такое же
@@ -245,4 +245,80 @@ test('hard delete чистит расширения до индекса — их
   assert.match(texts[1], /^delete from "probe_doc"/);
   assert.match(texts[2], /^delete from "core"\."document_index"/);
   assert.deepEqual(texts[3], 'commit');
+});
+
+/** Рантайм с типом `probe`, опционально объявленным read-only для fixture-строк. */
+function fixtureRuntime(
+  responses: unknown[][][] = [],
+  fixtureReadonly = true,
+): { runtime: DocumentRuntime; queries: RecordedQuery[] } {
+  const registry = new DocumentRegistryImpl();
+  registry.register('probe', { module: 'm', label: 'Probe', fixtureReadonly });
+  registry.objects.extend('probe', {
+    module: 'm',
+    layout: {},
+    fields: { phone: { label: 'Phone' } },
+    schema: satellite,
+    idColumn: 'docId',
+  });
+  const { db, queries } = recordingDb(responses);
+  return { runtime: new DocumentRuntime(db, registry), queries };
+}
+
+function isFixtureConflict(err: unknown): boolean {
+  return err instanceof DocumentRuntimeError && err.status === 409;
+}
+
+test('update fixture-документа типа с fixtureReadonly → 409 без записи', async () => {
+  const { runtime, queries } = fixtureRuntime([[], [[ID, true]]]);
+
+  await assert.rejects(() => runtime.update('probe', ID, { m: { base: { phone: '+7' } } }), isFixtureConflict);
+  // begin + проверка + rollback: saveExtension не выполнялся
+  assert.equal(queries.length, 3);
+  assert.equal(queries[2].text, 'rollback');
+});
+
+test('update fixture-документа типа без флага → проходит', async () => {
+  const { runtime, queries } = fixtureRuntime([[], [[ID, true]], [[ID]]], false);
+
+  await runtime.update('probe', ID, { m: { base: { phone: '+7' } } });
+
+  assert.match(queries[2].text, /^update "probe_profile"/);
+});
+
+test('delete fixture-документа типа с fixtureReadonly → 409', async () => {
+  const { runtime } = fixtureRuntime([[[ID]]]);
+
+  await assert.rejects(() => runtime.delete('probe', ID), isFixtureConflict);
+});
+
+test('bulkDelete fixture-документов типа с fixtureReadonly → 409', async () => {
+  const { runtime } = fixtureRuntime([[[ID]]]);
+
+  await assert.rejects(() => runtime.bulkDelete('probe', [ID]), isFixtureConflict);
+});
+
+test('getAnyById отдаёт fixture', async () => {
+  const { runtime } = fixtureRuntime([[['probe', true]]]);
+
+  const doc = await runtime.getAnyById(ID);
+  assert.equal(doc?.fixture, true);
+});
+
+test('index-колонка fixture доступна списку через INDEX_STATE_COLUMNS', async () => {
+  const registry = new DocumentRegistryImpl();
+  registry.register('probe', { module: 'm', label: 'Probe', fixtureReadonly: true });
+  registry.lists.extend('probe', {
+    module: 'm',
+    schema: satellite,
+    foreignKey: 'id',
+    fields: { fixture: { label: 'Fixture', type: 'checkbox' } },
+  });
+  // Сначала count, затем данные.
+  const { db, queries } = recordingDb([[[0]], []]);
+  const runtime = new DocumentRuntime(db, registry);
+
+  await runtime.list('probe', {});
+
+  assert.ok(queries.some(q => /"fixture"/.test(q.text)));
 });

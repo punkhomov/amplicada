@@ -15,6 +15,7 @@ import {
   useSwipeSelect,
   useTranslation,
 } from '@amplicada/platform-core/frontend';
+import { Badge } from '@amplicada/platform-core/frontend/ui/badge';
 import { Button } from '@amplicada/platform-core/frontend/ui/button';
 import { Checkbox } from '@amplicada/platform-core/frontend/ui/checkbox';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@amplicada/platform-core/frontend/ui/context-menu';
@@ -328,6 +329,13 @@ export function AdminDocumentList() {
         accessorKey: key,
         header: meta.label,
         enableSorting: true,
+        // Index-колонка fixture: документ объявлен кодом — бейдж вместо true/false.
+        ...(key === 'core:base:fixture'
+          ? {
+              cell: ({ getValue }: { getValue: () => unknown }) =>
+                getValue() ? <Badge variant="outline">{t('admin_list_fixture_badge')}</Badge> : null,
+            }
+          : {}),
         ...(meta.size !== undefined ? { size: meta.size } : {}),
         ...(meta.minSize !== undefined ? { minSize: meta.minSize } : {}),
       });
@@ -627,14 +635,20 @@ export function AdminDocumentList() {
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => openItem(row.id)}>{t('admin_list_open')}</ContextMenuItem>
-        <ContextMenuItem
-          variant="destructive"
-          disabled={!deletable}
-          title={deletable ? undefined : t('admin_toolbar_delete_disabled')}
-          onClick={() => handleDeleteOne(row.id)}
-        >
-          {deletable ? t('core:common_delete') : t('admin_list_delete_disabled')}
-        </ContextMenuItem>
+        {(() => {
+          const fixtureRow = row.original['core:base:fixture'] === true;
+          const deleteDisabled = !deletable || fixtureRow;
+          return (
+            <ContextMenuItem
+              variant="destructive"
+              disabled={deleteDisabled}
+              title={fixtureRow ? t('admin_toolbar_fixture_readonly') : deletable ? undefined : t('admin_toolbar_delete_disabled')}
+              onClick={() => handleDeleteOne(row.id)}
+            >
+              {fixtureRow ? t('admin_list_fixture_readonly') : deletable ? t('core:common_delete') : t('admin_list_delete_disabled')}
+            </ContextMenuItem>
+          );
+        })()}
       </ContextMenuContent>
     </ContextMenu>
   );

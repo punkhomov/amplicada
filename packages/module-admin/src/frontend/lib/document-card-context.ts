@@ -15,6 +15,8 @@ export interface DocumentCardContextValue {
   editData: Record<string, Record<string, Record<string, unknown>>>;
   updateField: (module: string, key: string, fieldKey: string, value: unknown) => void;
   isNew: boolean;
+  /** Документ объявлен кодом (fixture): вклады должны блокировать правку, как кнопка «Сохранить». */
+  fixture: boolean;
 }
 
 export const DocumentCardContext = createContext<DocumentCardContextValue | null>(null);
