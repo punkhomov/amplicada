@@ -51,7 +51,8 @@ export function StorageMoveDialog({ open, keys, onOpenChange, onMove }: StorageM
 
   const listing = useQuery({ ...adminStorageObjectsQueryOptions(api, destination), enabled: open });
 
-  const blocked = moveBlockReason(keys, destination) === 'inside';
+  const blockReason = moveBlockReason(keys, destination);
+  const blocked = blockReason !== null;
   const trail = folderTrail(destination);
 
   const go = (next: string) => {
@@ -150,7 +151,7 @@ export function StorageMoveDialog({ open, keys, onOpenChange, onMove }: StorageM
           <div className="mr-auto text-xs">
             {error ? (
               <span className="text-destructive">{error}</span>
-            ) : blocked ? (
+            ) : blockReason === 'inside' ? (
               <span className="text-muted-foreground">{t('admin_storage_move_here_hint')}</span>
             ) : null}
           </div>

@@ -96,7 +96,7 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
    */
   fastify.post('/storage/move', async (request, reply) => {
     const { keys: rawKeys, destination: rawDestination, name: rawName } = (request.body ?? {}) as Partial<StorageMoveRequest>;
-    const keys = bodyKeys(rawKeys);
+    const keys = [...new Set(bodyKeys(rawKeys))];
     if (!keys.length) return reply.code(400).send({ error: 'Не указаны ключи для перемещения' });
     if (typeof rawDestination !== 'string' || !rawDestination.trim()) {
       return reply.code(400).send({ error: 'Не указана папка назначения' });
@@ -121,6 +121,14 @@ export function createStorageRoutes(fastify: FastifyInstance, context: BackendSe
         return reply.code(400).send({ error: 'Папку нельзя переместить в себя или в свою подпапку' });
       }
       plans.push({ key, target, isFolder });
+    }
+
+    // Два разных источника могут сойтись в одном целевом ключе (например, `x/f.txt` и `y/f.txt`
+    // в одну папку): второй copy молча перезапишет первый. Лучше отказать до копирования.
+    const targets = new Set<string>();
+    for (const plan of plans) {
+      if (targets.has(plan.target)) return reply.code(400).send({ error: 'Несколько элементов перемещаются в один ключ' });
+      targets.add(plan.target);
     }
 
     // Сначала проверяем все источники и коллизии, потом двигаем: транзакций в S3 нет, и частично

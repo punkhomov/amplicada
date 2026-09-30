@@ -212,3 +212,10 @@ test('прочие ошибки S3 не превращаются в 416', async 
     (err: Error & { statusCode?: number }) => err.statusCode === undefined && err.name === 'NoSuchKey',
   );
 });
+
+test('deleteObjects падает, если S3 вернул частичные ошибки', async () => {
+  const { client } = fakeClient([{ Errors: [{ Key: 'b.txt', Code: 'AccessDenied' }] }]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+
+  await assert.rejects(() => storage.deleteObjects(['a.txt', 'b.txt']), /b\.txt/);
+});

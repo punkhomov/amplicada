@@ -106,9 +106,13 @@ export class StorageServiceImpl implements BackendStorageService {
     // приводит в том числе deletePrefix, а пустой DeleteObjects — гарантированная ошибка.
     for (let i = 0; i < keys.length; i += 1000) {
       const batch = keys.slice(i, i + 1000);
-      await this.client.send(
+      const result = await this.client.send(
         new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true } }),
       );
+      // `Quiet: true` глушит успешные ключи, но частичные отказы (права, блокировка) приходят
+      // в `Errors` при общем 200. Молча вернуть всё как удалённое — соврать вызывающему.
+      const failed = (result.Errors ?? []).map(error => error.Key).filter((key): key is string => Boolean(key));
+      if (failed.length) throw new Error(`Не удалось удалить объекты: ${failed.join(', ')}`);
     }
     return keys.length;
   }

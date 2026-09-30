@@ -361,3 +361,26 @@ test('isDescendant отличает потомка от соседа и само
   assert.equal(isDescendant('a/pkg-old/', 'a/pkg/'), false);
   assert.equal(isDescendant('b/pkg/', 'a/pkg/'), false);
 });
+
+test('POST /storage/move дедуплицирует ключи', async () => {
+  const { app, moves } = appWith();
+  const res = await app.inject({
+    method: 'POST',
+    url: '/storage/move',
+    payload: { keys: ['a/f.txt', 'a/f.txt'], destination: 'b' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json(), { moved: 1 });
+  assert.deepEqual(moves, [{ from: 'a/f.txt', to: 'b/f.txt' }]);
+});
+
+test('POST /storage/move отвергает два источника в один целевой ключ', async () => {
+  const { app, moves } = appWith({ objects: ['x/f.txt', 'y/f.txt'] });
+  const res = await app.inject({
+    method: 'POST',
+    url: '/storage/move',
+    payload: { keys: ['x/f.txt', 'y/f.txt'], destination: 'z/' },
+  });
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(moves, []);
+});
