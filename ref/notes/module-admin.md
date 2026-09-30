@@ -16,6 +16,7 @@ date: 2026-09-30
 > Не оставлять правку текста включённой по умолчанию — env-флаг `STORAGE_EDIT_ENABLED`, выключенный роут не регистрируется — D-005 (accepted).
 > Не делать move переименованием префикса и не копировать через presigned-URL/`UploadPartCopy` — move = copy + delete — D-006 (accepted).
 > Не отдавать листинг папки целиком и не строить пагинацию на offset — `cursor`/`nextToken` из S3, sentinel-скролл — D-007 (accepted).
+> Не возвращать нативный HTML5 drag&drop в `/admin/storage` — pointer-DnD на dnd-kit, один id на экземпляр цели — D-008 (accepted).
 
 ## D-001. Сервис toolbar и optional-интеграция — accepted (2026-09-16)
 
@@ -259,3 +260,57 @@ Sentinel вместо кнопки — привычное поведение ф�
 `src/frontend/pages/admin-storage/ui/storage-tiles.tsx:139`.
 **Связано.** D-004, D-006; `ref/notes/platform-core.md` D-007;
 `ref/plans/2026-09-29-storage-pagination-streaming.md`.
+
+## D-008. Drag&drop хранилища — pointer-DnD на dnd-kit, один droppable id на экземпляр — accepted (2026-09-30)
+
+**Контекст.** Перетаскивание строк/плиток на папки было на нативном HTML5 drag&drop
+(`draggable`, `dataTransfer`). Нативный DnD не воспроизводится pointer-событиями (e2e в
+Playwright мышью его не запускает), смешивает HTML5-семантику с React-состоянием и не даёт
+оверлея. В пакете уже есть `@dnd-kit/core` — на нём сделан менеджер колонок.
+
+**Решение.** Страница `/admin/storage` переведена на dnd-kit: `DndContext` с
+`PointerSensor` (activation constraint 5px, чтобы клик/двойной клик/чекбокс не превращались
+в перетаскивание) и `KeyboardSensor`; строки/плитки — `useDraggable`, папки, узлы дерева,
+крошки и кнопка «вверх» — `useDroppable`; `DragOverlay` показывает счётчик переносимых.
+Валидность цели по-прежнему из `moveBlockReason(keys, destination)` — в подсветке и в
+`onDragEnd`. Общие куски — `ui/storage-dnd.tsx`, `ui/storage-drop.ts` удалён.
+
+**Почему именно так.** dnd-kit уже в зависимостях и даёт оверлей, клавиатурное управление и
+collision-стратегии без своих велосипедов. Id draggable и droppable разведены префиксами
+(`storage-drag:` / `storage-drop:`), а `storagePrefixFromDropId` снимает экземплярный
+суффикс — так `onDragEnd` получает префикс, не зная, какой из узлов дал цель.
+
+**Отвергнуто.** Нативный HTML5 DnD — не тестируется pointer-событиями и не даёт оверлея.
+`collisionDetection={[pointerWithin, rectIntersection]}` массивом — установленный
+`@dnd-kit/core` 6.3.1 принимает только одну стратегию, массив уронит рантайм; композиция
+сделана руками. Обёртка `AddressDropTarget` с `div` вокруг крошек — сломала бы разметку
+`ol > li`, поэтому ref и класс отдаются рендер-функцией на сам `li`/кнопку.
+
+**Что изменит решение.** Апгрейд `@dnd-kit/core` до версии с массивами стратегий —
+композицию можно упростить до пропа-массива. Появление прав доступа к объектам DnD не
+затрагивает.
+
+**Грабли.** (1) Id droppable в dnd-kit обязан быть уникальным на узел, а один префикс
+рисуется сразу несколькими узлами (узел дерева, строка-папка/плитка, крошка): дубли
+затирают друг друга в реестре контейнеров — подсветка/обмер достаются «последнему», а
+размонтирование одного узла удаляет общий id у остальных. `useStorageDroppable` добавляет к
+id суффикс `useId()`, `storagePrefixFromDropId` снимает его по последнему `|`.
+(2) Обёртка `DragOverlay` наследует размер перетаскиваемой строки таблицы: оверлейная
+плашка обязана быть `w-max` и центрироваться (`absolute left-1/2 top-1/2
+-translate-x-1/2 -translate-y-1/2`), иначе растягивается в полосу и уезжает за край.
+(3) `KeyboardSensor` активируется Space/Enter из любого потомка: проверка `activatorNode`
+в 6.3.1 пустая (`useDraggable` этот ref не выставляет), поэтому Enter на кнопке строки
+стартовал бы drag вместо нажатия. `useStorageDraggable` оборачивает `onKeyDown` и пропускает
+событие, только если его цель — сама строка/карточка. Глобальный обработчик хоткеев
+страницы дополнительно пропускает `defaultPrevented`, иначе Enter открывал бы строку
+одновременно со стартом drag. (4) Авто-раскрытие узла
+дерева (600 мс) требует уже загруженных детей: у ни разу не раскрытого узла дети
+неизвестны, и «есть ли дети» проверить нечем. (5) `dragKeys` остаётся пропом списка/плиток/
+дерева: подсветке невалидной цели нужен весь набор перетаскиваемого, а не только ключ под
+курсором.
+
+**Код.** `src/frontend/pages/admin-storage/ui/storage-dnd.tsx`,
+`storage-dnd.test.ts`, `admin-storage.tsx`, `storage-list.tsx`, `storage-tiles.tsx`,
+`storage-tree.tsx`.
+**Связано.** D-004, D-006; `packages/module-admin/docs/reference/storage.md` (раздел
+«Frontend»); `admin-column-manager.tsx` — прежний потребитель dnd-kit.

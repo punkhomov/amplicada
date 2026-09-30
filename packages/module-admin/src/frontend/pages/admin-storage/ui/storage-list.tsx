@@ -6,7 +6,6 @@ import { Input } from '@amplicada/platform-core/frontend/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@amplicada/platform-core/frontend/ui/table';
 import { ArrowDown, ArrowUp, Download, Eye, File, FileAudio, FileImage, FileText, FileType, FileVideo, Folder, Trash2 } from 'lucide-react';
 import {
-  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   useCallback,
@@ -16,9 +15,10 @@ import {
 } from 'react';
 import type { StorageEntry } from '../lib/entries.js';
 import { formatDate } from '../lib/format.js';
+import { moveBlockReason } from '../lib/move.js';
 import type { SelectionState } from '../lib/selection.js';
 import type { StorageSort, StorageSortKey } from '../lib/sort.js';
-import { useStorageDropTarget } from './storage-drop.js';
+import { useStorageDraggable, useStorageDroppable } from './storage-dnd.js';
 
 /** Состояние инлайн-правки: одна строка на страницу — либо создание папки, либо переименование. */
 export type StorageEditing = { mode: 'create' } | { mode: 'rename'; key: string } | null;
@@ -40,13 +40,9 @@ export interface StorageListProps {
   onDelete: (entry: StorageEntry) => void;
   onDownload: (key: string) => void;
   onPreview: (entry: StorageEntry) => void;
-  /** Ключи текущего перетаскивания; `null` — перетаскивания нет. */
+  /** Ключи текущего перетаскивания; `null` — перетаскивания нет. Нужны подсветке невалидных целей. */
   dragKeys: string[] | null;
-  onDragStart: (entry: StorageEntry, event: ReactDragEvent<HTMLTableRowElement>) => void;
-  onDragEnd: () => void;
   onRowContextMenu: (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => void;
-  /** Drop на папку-строку: destination — ключ папки. */
-  onDropMove: (destination: string, keys: string[]) => void;
   /** Есть ли ещё страницы листинга; `false` — sentinel-строка не рендерится. */
   hasNextPage: boolean;
   /** Идёт догрузка следующей страницы: sentinel показывает текст загрузки. */
@@ -97,17 +93,123 @@ export function useLoadMoreSentinel({ hasNextPage, isFetchingNextPage, onLoadMor
   }, []);
 }
 
+interface StorageRowProps {
+  entry: StorageEntry;
+  isSelected: boolean;
+  renaming: boolean;
+  dragKeys: string[] | null;
+  onRowClick: (entry: StorageEntry, event: ReactMouseEvent<HTMLElement>) => void;
+  onRenameStart: (key: string) => void;
+  onRowContextMenu: (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => void;
+  onCheck: (key: string, checked: boolean) => void;
+  onCommitEdit: (name: string) => void;
+  onCancelEdit: () => void;
+  onDelete: (entry: StorageEntry) => void;
+  onDownload: (key: string) => void;
+  onPreview: (entry: StorageEntry) => void;
+}
+
+/**
+ * Строка списка: собственный компонент, а не тело `map` — dnd-хуки обязаны вызываться на элемент
+ * (у draggable и droppable свой ref), а хуки внутри цикла запрещены правилами React.
+ */
+function StorageRow({
+  entry,
+  isSelected,
+  renaming,
+  dragKeys,
+  onRowClick,
+  onRenameStart,
+  onRowContextMenu,
+  onCheck,
+  onCommitEdit,
+  onCancelEdit,
+  onDelete,
+  onDownload,
+  onPreview,
+}: StorageRowProps) {
+  const { t } = useTranslation('admin');
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useStorageDraggable(entry);
+  const { setNodeRef: setDropRef, isOver } = useStorageDroppable(entry.key);
+  const isFolder = entry.kind === 'folder';
+  const previewable = entry.kind === 'file' && fileKindOf({ name: entry.key }) !== 'other';
+  // Невалидная цель (папка в себя/потомка, no-op) — красная; ring, а не bg: фон выбранной строки
+  // его перекрыл бы, а контур виден при любом состоянии строки.
+  const over = isFolder && isOver && dragKeys !== null;
+  const dropClass = over
+    ? moveBlockReason(dragKeys, entry.key) !== null
+      ? 'ring-1 ring-destructive bg-destructive/10'
+      : 'ring-1 ring-primary bg-primary/10'
+    : '';
+  // Два ref на одной строке: источник перетаскивания и цель drop у папки. У файла droppable
+  // не регистрируется — ref не отдаём, цель из него всё равно не собрать.
+  const setRefs = (node: HTMLTableRowElement | null) => {
+    setDragRef(node);
+    if (isFolder) setDropRef(node);
+  };
+
+  return (
+    <TableRow
+      ref={setRefs}
+      data-state={isSelected ? 'selected' : undefined}
+      className={`cursor-pointer select-none ${dropClass} ${isDragging ? 'opacity-50' : ''}`}
+      onClick={event => onRowClick(entry, event)}
+      onDoubleClick={() => onRenameStart(entry.key)}
+      onContextMenu={event => onRowContextMenu(entry, event)}
+      {...attributes}
+      {...listeners}
+    >
+      <TableCell onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
+        <Checkbox checked={isSelected} onCheckedChange={checked => onCheck(entry.key, checked)} aria-label={t('admin_list_select_row')} />
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          {renaming ? (
+            <InlineNameInput initial={entry.name} onCommit={onCommitEdit} onCancel={onCancelEdit} />
+          ) : (
+            <>
+              {isFolder ? <Folder className="size-4 text-muted-foreground" /> : <FileKindIcon kind={fileKindOf({ name: entry.key })} />}
+              <span className={entry.kind === 'file' ? 'font-mono text-xs' : 'font-medium'}>{entry.name}</span>
+            </>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground tabular-nums">{entry.kind === 'folder' ? '—' : formatBytes(entry.size ?? 0)}</TableCell>
+      <TableCell className="text-muted-foreground">{entry.kind === 'folder' ? '—' : formatDate(entry.lastModified)}</TableCell>
+      <TableCell className="text-muted-foreground uppercase">
+        {entry.kind === 'folder' ? '—' : fileExtension(entry.name) || t('admin_storage_other')}
+      </TableCell>
+      <TableCell onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
+        <div className="flex justify-end gap-1">
+          {previewable && (
+            <Button variant="outline" size="icon" title={t('admin_storage_preview')} onClick={() => onPreview(entry)}>
+              <Eye className="size-4" />
+            </Button>
+          )}
+          {entry.kind === 'file' && (
+            <Button variant="outline" size="icon" title={t('admin_storage_download')} onClick={() => onDownload(entry.key)}>
+              <Download className="size-4" />
+            </Button>
+          )}
+          <Button variant="outline" size="icon" title={t('admin_storage_delete')} onClick={() => onDelete(entry)}>
+            <Trash2 className="size-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export function StorageList(props: StorageListProps) {
   const { t } = useTranslation('admin');
   const { entries, sort, selection, editing } = props;
-  const drop = useStorageDropTarget(props.dragKeys, props.onDropMove);
   const loadMoreRef = useLoadMoreSentinel(props);
 
   const selected = new Set(selection.keys);
   const allSelected = entries.length > 0 && entries.every(entry => selected.has(entry.key));
   const someSelected = entries.some(entry => selected.has(entry.key));
 
-  const handleRowClick = (entry: StorageEntry, event: ReactMouseEvent<HTMLTableRowElement>) => {
+  const handleRowClick = (entry: StorageEntry, event: ReactMouseEvent<HTMLElement>) => {
     if (event.ctrlKey || event.metaKey || event.shiftKey) {
       props.onRowClick(entry, event);
       return;
@@ -115,26 +217,6 @@ export function StorageList(props: StorageListProps) {
     // Задержку «клик vs двойной клик» держит страница: таймер общий со плиткой, и его гасят
     // F2/Delete/чекбоксы, чтобы превью не всплыло поверх правки или удалённого ключа.
     props.onOpen(entry);
-  };
-
-  const handleRowDoubleClick = (entry: StorageEntry) => {
-    props.onRenameStart(entry.key);
-  };
-
-  const renderName = (entry: StorageEntry) => {
-    if (editing?.mode === 'rename' && editing.key === entry.key) {
-      return <InlineNameInput initial={entry.name} onCommit={props.onCommitEdit} onCancel={props.onCancelEdit} />;
-    }
-    return (
-      <>
-        {entry.kind === 'folder' ? (
-          <Folder className="size-4 text-muted-foreground" />
-        ) : (
-          <FileKindIcon kind={fileKindOf({ name: entry.key })} />
-        )}
-        <span className={entry.kind === 'file' ? 'font-mono text-xs' : 'font-medium'}>{entry.name}</span>
-      </>
-    );
   };
 
   return (
@@ -179,62 +261,24 @@ export function StorageList(props: StorageListProps) {
           </TableRow>
         )}
 
-        {entries.map(entry => {
-          const isSelected = selected.has(entry.key);
-          const previewable = entry.kind === 'file' && fileKindOf({ name: entry.key }) !== 'other';
-          // Drop-цель — только папка-строка: файл-цель бэкенд отвергнет коллизией.
-          const isDropTarget = entry.kind === 'folder' && props.dragKeys !== null && drop.overPrefix === entry.key;
-          const dropClass = isDropTarget ? (drop.invalidFor(entry.key) ? 'bg-destructive/10' : 'bg-accent') : '';
-          return (
-            <TableRow
-              key={entry.key}
-              draggable
-              data-state={isSelected ? 'selected' : undefined}
-              className={`cursor-pointer select-none ${dropClass}`}
-              onClick={event => handleRowClick(entry, event)}
-              onDoubleClick={() => handleRowDoubleClick(entry)}
-              onContextMenu={event => props.onRowContextMenu(entry, event)}
-              onDragStart={event => props.onDragStart(entry, event)}
-              onDragEnd={props.onDragEnd}
-              {...(entry.kind === 'folder' ? drop.handlersFor(entry.key) : {})}
-            >
-              <TableCell onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
-                <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={checked => props.onCheck(entry.key, checked)}
-                  aria-label={t('admin_list_select_row')}
-                />
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">{renderName(entry)}</div>
-              </TableCell>
-              <TableCell className="text-muted-foreground tabular-nums">
-                {entry.kind === 'folder' ? '—' : formatBytes(entry.size ?? 0)}
-              </TableCell>
-              <TableCell className="text-muted-foreground">{entry.kind === 'folder' ? '—' : formatDate(entry.lastModified)}</TableCell>
-              <TableCell className="text-muted-foreground uppercase">
-                {entry.kind === 'folder' ? '—' : fileExtension(entry.name) || t('admin_storage_other')}
-              </TableCell>
-              <TableCell onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
-                <div className="flex justify-end gap-1">
-                  {previewable && (
-                    <Button variant="outline" size="icon" title={t('admin_storage_preview')} onClick={() => props.onPreview(entry)}>
-                      <Eye className="size-4" />
-                    </Button>
-                  )}
-                  {entry.kind === 'file' && (
-                    <Button variant="outline" size="icon" title={t('admin_storage_download')} onClick={() => props.onDownload(entry.key)}>
-                      <Download className="size-4" />
-                    </Button>
-                  )}
-                  <Button variant="outline" size="icon" title={t('admin_storage_delete')} onClick={() => props.onDelete(entry)}>
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          );
-        })}
+        {entries.map(entry => (
+          <StorageRow
+            key={entry.key}
+            entry={entry}
+            isSelected={selected.has(entry.key)}
+            renaming={editing?.mode === 'rename' && editing.key === entry.key}
+            dragKeys={props.dragKeys}
+            onRowClick={handleRowClick}
+            onRenameStart={props.onRenameStart}
+            onRowContextMenu={props.onRowContextMenu}
+            onCheck={props.onCheck}
+            onCommitEdit={props.onCommitEdit}
+            onCancelEdit={props.onCancelEdit}
+            onDelete={props.onDelete}
+            onDownload={props.onDownload}
+            onPreview={props.onPreview}
+          />
+        ))}
 
         {/* Sentinel бесконечного скролла: пустая строка-маркер в конце, пока есть `nextToken`. */}
         {props.hasNextPage && (

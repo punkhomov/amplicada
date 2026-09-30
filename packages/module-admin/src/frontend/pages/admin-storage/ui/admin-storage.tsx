@@ -19,11 +19,24 @@ import {
 } from '@amplicada/platform-core/frontend/ui/breadcrumb';
 import { Button } from '@amplicada/platform-core/frontend/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@amplicada/platform-core/frontend/ui/empty';
+import {
+  type CollisionDetection,
+  DndContext,
+  type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  pointerWithin,
+  rectIntersection,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import { ArrowUp } from 'lucide-react';
 import {
   Fragment,
-  type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -35,12 +48,13 @@ import { Link, useSearchParams } from 'react-router-dom';
 import type { StorageDeleteResult, StorageMoveResult, StorageObject } from '../../../../contracts/storage.js';
 import { type StorageEntry, toEntries } from '../lib/entries.js';
 import { formatDate } from '../lib/format.js';
+import { moveBlockReason } from '../lib/move.js';
 import { folderName, folderTrail, objectName, parentPrefix, storageDownloadUrl, storageViewUrl } from '../lib/paths.js';
 import { adminStorageConfigQueryOptions, STORAGE_OBJECTS_QUERY_KEY, storageObjectsInfiniteQueryOptions } from '../lib/queries.js';
 import { selectionReducer } from '../lib/selection.js';
 import { type StorageSort, type StorageSortKey, sortEntries } from '../lib/sort.js';
 import { StorageContextMenu, type StorageContextMenuState } from './storage-context-menu.js';
-import { useStorageDropTarget } from './storage-drop.js';
+import { StorageDragPreview, storageKeyFromDragId, storagePrefixFromDropId, useStorageDroppable } from './storage-dnd.js';
 import { type StorageEditing, StorageList } from './storage-list.js';
 import { StorageMoveDialog } from './storage-move-dialog.js';
 import { StoragePropertiesDialog } from './storage-properties-dialog.js';
@@ -56,6 +70,38 @@ export { adminStorageConfigQueryOptions, storageObjectsInfiniteQueryOptions } fr
  * без паузы первый клик уже открыл бы превью/папку, и переименовать двойным кликом было бы нельзя.
  */
 const OPEN_DELAY_MS = 250;
+
+/**
+ * Стратегия столкновений: под курсором — приоритет `pointerWithin`, иначе `rectIntersection`
+ * (клавиатурное перетаскивание идёт без координат указателя). Массив стратегий установленный
+ * `@dnd-kit/core` 6.3.1 не принимает — композиция руками.
+ */
+const storageCollisionDetection: CollisionDetection = args => {
+  const pointer = pointerWithin(args);
+  return pointer.length > 0 ? pointer : rectIntersection(args);
+};
+
+/**
+ * Цель drop адресной строки (крошка или кнопка «вверх»). Рендер элемента передаётся функцией:
+ * ref и подсветка должны лежать на самом `li`/кнопке — обёртка сломала бы разметку `ol > li`.
+ * Невалидную цель не подсвечиваем: бросок всё равно гасит проверка в `onDragEnd`.
+ */
+function AddressDropTarget({
+  destination,
+  dragKeys,
+  className,
+  render,
+}: {
+  destination: string;
+  dragKeys: string[] | null;
+  className?: string;
+  render: (props: { ref: (node: HTMLElement | null) => void; className: string }) => ReactNode;
+}) {
+  const { setNodeRef, isOver } = useStorageDroppable(destination);
+  const active = isOver && dragKeys !== null && moveBlockReason(dragKeys, destination) === null;
+  const classes = `${className ?? ''} ${active ? 'rounded-sm ring-1 ring-primary' : ''}`.trim();
+  return <>{render({ ref: setNodeRef, className: classes })}</>;
+}
 
 export function AdminStorage() {
   const { t } = useTranslation('admin');
@@ -90,6 +136,10 @@ export function AdminStorage() {
   const [moveKeys, setMoveKeys] = useState<string[] | null>(null);
   const [propertiesKey, setPropertiesKey] = useState<string | null>(null);
   const [dragKeys, setDragKeys] = useState<string[] | null>(null);
+
+  // Порог 5px, а не 0: без него клик и двойной клик по строке превращались бы в перетаскивание,
+  // а чекбокс нельзя было бы нажать.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
 
   const prefix = searchParams.get('prefix') ?? '';
   const {
@@ -311,18 +361,26 @@ export function AdminStorage() {
     setMoveKeys(null);
   };
 
-  const handleDragStart = (entry: StorageEntry, event: ReactDragEvent<HTMLElement>) => {
+  const handleDragStart = (event: DragStartEvent) => {
+    const key = storageKeyFromDragId(event.active.id);
+    if (key === null) return;
     cancelPendingOpen();
     // Тащим выбор, если строка в нём; иначе — только эту строку: унести «тихий» старый выбор
     // вместе с невыбранной строкой под курсором было бы сюрпризом.
-    const keys = selection.keys.includes(entry.key) ? selection.keys : [entry.key];
-    setDragKeys(keys);
-    event.dataTransfer.effectAllowed = 'move';
-    // payload для консоли/внешних приёмников; свои drop-цели читают `dragKeys` из состояния.
-    event.dataTransfer.setData('text/plain', keys.join('\n'));
+    setDragKeys(selection.keys.includes(key) ? selection.keys : [key]);
   };
 
-  const handleDragEnd = () => setDragKeys(null);
+  const handleDragEnd = (event: DragEndEvent) => {
+    const keys = dragKeys;
+    setDragKeys(null);
+    if (!keys) return;
+    const destination = storagePrefixFromDropId(event.over?.id);
+    // Невалидные цели (папка в себя/потомка, no-op) гасим до мутации: сервер ответил бы 400/409.
+    if (destination === null || moveBlockReason(keys, destination) !== null) return;
+    handleDropMove(destination, keys);
+  };
+
+  const handleDragCancel = () => setDragKeys(null);
 
   const handleRowContextMenu = (entry: StorageEntry, event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault();
@@ -340,15 +398,6 @@ export function AdminStorage() {
     cancelPendingOpen();
     setMenu({ x: event.clientX, y: event.clientY, entry: null });
   };
-
-  // Общая цель drop для адресной строки: кнопка «вверх» и крошки — одна и та же подсветка.
-  const addressDrop = useStorageDropTarget(dragKeys, handleDropMove);
-  const dropClass = (destination: string) =>
-    addressDrop.overPrefix === destination && dragKeys
-      ? addressDrop.invalidFor(destination)
-        ? 'rounded-sm ring-1 ring-destructive'
-        : 'rounded-sm ring-1 ring-primary'
-      : '';
 
   const openEntry = (entry: StorageEntry, downloadFallback = false) => {
     // Строка могла исчезнуть за паузу перед открытием (смена папки/поиск): открывать нечего.
@@ -471,6 +520,9 @@ export function AdminStorage() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const state = hotkeys.current;
+      // Клавиатурное перетаскивание Start/End занимает Space/Enter: dnd-kit гасит событие
+      // (`preventDefault`), и второй обработчик не должен открывать строку тем же нажатием.
+      if (event.defaultPrevented) return;
       // Поля ввода не перехватываем: в инлайн-инпуте свои Enter/Esc, в поиске — правка текста.
       const target = event.target as HTMLElement | null;
       const isTextField =
@@ -532,226 +584,252 @@ export function AdminStorage() {
   const propertiesObject = propertiesKey !== null ? objectsByKey.get(propertiesKey) : undefined;
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="w-full max-w-screen-2xl mx-auto flex flex-col px-8 py-4 gap-4">
-        <div className="shrink-0 flex flex-col gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">{t('admin_storage_title')}</h1>
-            <p className="text-sm text-muted-foreground">
-              {t('admin_storage_summary', {
-                folders: entries.filter(entry => entry.kind === 'folder').length,
-                files: entries.filter(entry => entry.kind === 'file').length,
-              })}
-            </p>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={storageCollisionDetection}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div className="h-full overflow-y-auto">
+        <div className="w-full max-w-screen-2xl mx-auto flex flex-col px-8 py-4 gap-4">
+          <div className="shrink-0 flex flex-col gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">{t('admin_storage_title')}</h1>
+              <p className="text-sm text-muted-foreground">
+                {t('admin_storage_summary', {
+                  folders: entries.filter(entry => entry.kind === 'folder').length,
+                  files: entries.filter(entry => entry.kind === 'file').length,
+                })}
+              </p>
+            </div>
+            <StorageToolbar
+              search={search}
+              onSearchChange={setSearch}
+              uploading={uploadMutation.isPending}
+              onUpload={() => fileInputRef.current?.click()}
+              createFolderDisabled={editing?.mode === 'create'}
+              onCreateFolder={handleCreateFolder}
+              selectedCount={selection.keys.length}
+              onRename={() => selection.keys.length === 1 && handleRenameStart(selection.keys[0])}
+              onMove={handleMove}
+              onDownload={handleDownloadSelected}
+              onDelete={() => requestDelete(selection.keys)}
+              refreshing={isFetching}
+              onRefresh={() => refetch()}
+              view={view}
+              onViewChange={setView}
+            />
           </div>
-          <StorageToolbar
-            search={search}
-            onSearchChange={setSearch}
-            uploading={uploadMutation.isPending}
-            onUpload={() => fileInputRef.current?.click()}
-            createFolderDisabled={editing?.mode === 'create'}
-            onCreateFolder={handleCreateFolder}
-            selectedCount={selection.keys.length}
-            onRename={() => selection.keys.length === 1 && handleRenameStart(selection.keys[0])}
-            onMove={handleMove}
-            onDownload={handleDownloadSelected}
-            onDelete={() => requestDelete(selection.keys)}
-            refreshing={isFetching}
-            onRefresh={() => refetch()}
-            view={view}
-            onViewChange={setView}
-          />
-        </div>
 
-        <div className="flex items-start gap-4">
-          <aside className="w-64 shrink-0 rounded-md border bg-card/50">
-            <StorageTree prefix={prefix} onNavigate={navigateTo} version={treeVersion} dragKeys={dragKeys} onDropMove={handleDropMove} />
-          </aside>
+          <div className="flex items-start gap-4">
+            <aside className="w-64 shrink-0 rounded-md border bg-card/50">
+              <StorageTree prefix={prefix} onNavigate={navigateTo} version={treeVersion} dragKeys={dragKeys} />
+            </aside>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
-            {/* Адресная строка — вместо виджетных крошек: вверх + кликабельные сегменты пути. */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                className={`size-8 shrink-0 ${dropClass(parentPrefix(prefix))}`}
-                disabled={!prefix}
-                title={t('admin_storage_up')}
-                aria-label={t('admin_storage_up')}
-                onClick={() => navigateTo(parentPrefix(prefix))}
-                {...addressDrop.handlersFor(parentPrefix(prefix))}
-              >
-                <ArrowUp className="size-4" />
-              </Button>
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem className={dropClass('')} {...addressDrop.handlersFor('')}>
-                    {prefix ? (
-                      <BreadcrumbLink render={<Link to="/admin/storage" onClick={() => setSearch('')} />}>
-                        {t('admin_storage_title')}
-                      </BreadcrumbLink>
-                    ) : (
-                      <BreadcrumbPage>{t('admin_storage_title')}</BreadcrumbPage>
-                    )}
-                  </BreadcrumbItem>
-                  {folderTrail(prefix).map((segment, index, trail) => {
-                    const isLast = index === trail.length - 1;
-                    return (
-                      <Fragment key={segment.prefix}>
-                        <BreadcrumbSeparator />
-                        <BreadcrumbItem className={dropClass(segment.prefix)} {...addressDrop.handlersFor(segment.prefix)}>
-                          {isLast ? (
-                            <BreadcrumbPage>{segment.name}</BreadcrumbPage>
-                          ) : (
-                            <BreadcrumbLink
-                              render={
-                                <Link to={`/admin/storage?prefix=${encodeURIComponent(segment.prefix)}`} onClick={() => setSearch('')} />
-                              }
-                            >
-                              {segment.name}
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
+              {/* Адресная строка — вместо виджетных крошек: вверх + кликабельные сегменты пути. */}
+              <div className="flex items-center gap-2">
+                <AddressDropTarget
+                  destination={parentPrefix(prefix)}
+                  dragKeys={dragKeys}
+                  className="size-8 shrink-0"
+                  render={({ ref, className }) => (
+                    <Button
+                      ref={ref}
+                      variant="outline"
+                      size="icon"
+                      className={className}
+                      disabled={!prefix}
+                      title={t('admin_storage_up')}
+                      aria-label={t('admin_storage_up')}
+                      onClick={() => navigateTo(parentPrefix(prefix))}
+                    >
+                      <ArrowUp className="size-4" />
+                    </Button>
+                  )}
+                />
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    <AddressDropTarget
+                      destination=""
+                      dragKeys={dragKeys}
+                      render={({ ref, className }) => (
+                        <BreadcrumbItem ref={ref} className={className}>
+                          {prefix ? (
+                            <BreadcrumbLink render={<Link to="/admin/storage" onClick={() => setSearch('')} />}>
+                              {t('admin_storage_title')}
                             </BreadcrumbLink>
+                          ) : (
+                            <BreadcrumbPage>{t('admin_storage_title')}</BreadcrumbPage>
                           )}
                         </BreadcrumbItem>
-                      </Fragment>
-                    );
-                  })}
-                </BreadcrumbList>
-              </Breadcrumb>
-            </div>
+                      )}
+                    />
+                    {folderTrail(prefix).map((segment, index, trail) => {
+                      const isLast = index === trail.length - 1;
+                      return (
+                        <Fragment key={segment.prefix}>
+                          <BreadcrumbSeparator />
+                          <AddressDropTarget
+                            destination={segment.prefix}
+                            dragKeys={dragKeys}
+                            render={({ ref, className }) => (
+                              <BreadcrumbItem ref={ref} className={className}>
+                                {isLast ? (
+                                  <BreadcrumbPage>{segment.name}</BreadcrumbPage>
+                                ) : (
+                                  <BreadcrumbLink
+                                    render={
+                                      <Link
+                                        to={`/admin/storage?prefix=${encodeURIComponent(segment.prefix)}`}
+                                        onClick={() => setSearch('')}
+                                      />
+                                    }
+                                  >
+                                    {segment.name}
+                                  </BreadcrumbLink>
+                                )}
+                              </BreadcrumbItem>
+                            )}
+                          />
+                        </Fragment>
+                      );
+                    })}
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </div>
 
-            {/* Пустое место принимает правый клик: меню «Новая папка/Загрузить/Обновить». */}
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: фон списка, а не интерактивный контрол */}
-            <div className="flex min-h-40 flex-1 flex-col gap-2" onContextMenu={handleEmptyContextMenu}>
-              {isLoading ? (
-                <div className="p-8 text-muted-foreground">{t('core:loading')}</div>
-              ) : isEmpty ? (
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyTitle>
-                      {search
-                        ? t('admin_storage_search_empty')
-                        : prefix
-                          ? t('admin_storage_empty_folder_title')
-                          : t('admin_storage_empty_title')}
-                    </EmptyTitle>
-                    <EmptyDescription>
-                      {prefix ? t('admin_storage_empty_folder_description') : t('admin_storage_empty_description')}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              ) : (
-                <>
-                  {view === 'list' ? (
-                    <StorageList
-                      entries={entries}
-                      sort={sort}
-                      selection={selection}
-                      editing={editing}
-                      hasNextPage={hasNextPage}
-                      isFetchingNextPage={isFetchingNextPage}
-                      loadMoreError={isFetchNextPageError}
-                      onLoadMore={loadMore}
-                      onSort={handleSort}
-                      onRowClick={handleRowClick}
-                      onCheck={handleCheck}
-                      onCheckAll={handleCheckAll}
-                      onOpen={scheduleOpen}
-                      onCommitEdit={handleCommitEdit}
-                      onCancelEdit={() => setEditing(null)}
-                      onRenameStart={handleRenameStart}
-                      onDelete={entry => requestDelete([entry.key])}
-                      onDownload={handleDownload}
-                      onPreview={handlePreview}
-                      dragKeys={dragKeys}
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      onRowContextMenu={handleRowContextMenu}
-                      onDropMove={handleDropMove}
-                    />
-                  ) : (
-                    <StorageTiles
-                      entries={entries}
-                      selection={selection}
-                      editing={editing}
-                      hasNextPage={hasNextPage}
-                      isFetchingNextPage={isFetchingNextPage}
-                      loadMoreError={isFetchNextPageError}
-                      onLoadMore={loadMore}
-                      onRowClick={handleRowClick}
-                      onOpen={scheduleOpen}
-                      onCheck={handleCheck}
-                      onCommitEdit={handleCommitEdit}
-                      onCancelEdit={() => setEditing(null)}
-                      onRenameStart={handleRenameStart}
-                      dragKeys={dragKeys}
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      onRowContextMenu={handleRowContextMenu}
-                      onDropMove={handleDropMove}
-                    />
-                  )}
-                  <StorageStatusBar selected={selection.keys.length} total={entries.length} selectedBytes={selectedBytes} />
-                </>
-              )}
+              {/* Пустое место принимает правый клик: меню «Новая папка/Загрузить/Обновить». */}
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: фон списка, а не интерактивный контрол */}
+              <div className="flex min-h-40 flex-1 flex-col gap-2" onContextMenu={handleEmptyContextMenu}>
+                {isLoading ? (
+                  <div className="p-8 text-muted-foreground">{t('core:loading')}</div>
+                ) : isEmpty ? (
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyTitle>
+                        {search
+                          ? t('admin_storage_search_empty')
+                          : prefix
+                            ? t('admin_storage_empty_folder_title')
+                            : t('admin_storage_empty_title')}
+                      </EmptyTitle>
+                      <EmptyDescription>
+                        {prefix ? t('admin_storage_empty_folder_description') : t('admin_storage_empty_description')}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : (
+                  <>
+                    {view === 'list' ? (
+                      <StorageList
+                        entries={entries}
+                        sort={sort}
+                        selection={selection}
+                        editing={editing}
+                        hasNextPage={hasNextPage}
+                        isFetchingNextPage={isFetchingNextPage}
+                        loadMoreError={isFetchNextPageError}
+                        onLoadMore={loadMore}
+                        onSort={handleSort}
+                        onRowClick={handleRowClick}
+                        onCheck={handleCheck}
+                        onCheckAll={handleCheckAll}
+                        onOpen={scheduleOpen}
+                        onCommitEdit={handleCommitEdit}
+                        onCancelEdit={() => setEditing(null)}
+                        onRenameStart={handleRenameStart}
+                        onDelete={entry => requestDelete([entry.key])}
+                        onDownload={handleDownload}
+                        onPreview={handlePreview}
+                        dragKeys={dragKeys}
+                        onRowContextMenu={handleRowContextMenu}
+                      />
+                    ) : (
+                      <StorageTiles
+                        entries={entries}
+                        selection={selection}
+                        editing={editing}
+                        hasNextPage={hasNextPage}
+                        isFetchingNextPage={isFetchingNextPage}
+                        loadMoreError={isFetchNextPageError}
+                        onLoadMore={loadMore}
+                        onRowClick={handleRowClick}
+                        onOpen={scheduleOpen}
+                        onCheck={handleCheck}
+                        onCommitEdit={handleCommitEdit}
+                        onCancelEdit={() => setEditing(null)}
+                        onRenameStart={handleRenameStart}
+                        dragKeys={dragKeys}
+                        onRowContextMenu={handleRowContextMenu}
+                      />
+                    )}
+                    <StorageStatusBar selected={selection.keys.length} total={entries.length} selectedBytes={selectedBytes} />
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
+
+        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+
+        <FilePreviewDialog
+          open={preview !== null}
+          onOpenChange={open => !open && setPreview(null)}
+          source={previewSource}
+          description={preview ? `${formatBytes(preview.size)} · ${formatDate(preview.lastModified)}` : undefined}
+          mode={editEnabled ? 'edit' : 'view'}
+          onSave={
+            editEnabled
+              ? async content => {
+                  // `mutateAsync` отдаёт обновлённый объект — `onSave` ждёт `void`, поэтому гасим результат.
+                  await saveObjectMutation.mutateAsync({ key: preview?.key ?? '', content });
+                }
+              : undefined
+          }
+          labels={viewerLabels}
+          actions={
+            preview ? (
+              <Button variant="outline" size="sm" onClick={() => handleDownload(preview.key)}>
+                {t('admin_storage_download')}
+              </Button>
+            ) : null
+          }
+        />
+
+        <StorageContextMenu
+          state={menu}
+          selectedKeys={selection.keys}
+          onClose={() => setMenu(null)}
+          onOpen={entry => openEntry(entry, true)}
+          onDownload={handleDownloadSelected}
+          onRename={handleRenameStart}
+          onMove={handleMove}
+          onDelete={() => requestDelete(selection.keys)}
+          onProperties={entry => setPropertiesKey(entry.key)}
+          onCreateFolder={handleCreateFolder}
+          onUpload={() => fileInputRef.current?.click()}
+          onRefresh={() => refetch()}
+        />
+
+        <StorageMoveDialog
+          open={moveKeys !== null}
+          keys={moveKeys ?? []}
+          onOpenChange={open => !open && setMoveKeys(null)}
+          onMove={handleDialogMove}
+        />
+
+        <StoragePropertiesDialog
+          open={propertiesEntry !== null}
+          entry={propertiesEntry}
+          object={propertiesObject}
+          onOpenChange={open => !open && setPropertiesKey(null)}
+        />
       </div>
-
-      <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
-
-      <FilePreviewDialog
-        open={preview !== null}
-        onOpenChange={open => !open && setPreview(null)}
-        source={previewSource}
-        description={preview ? `${formatBytes(preview.size)} · ${formatDate(preview.lastModified)}` : undefined}
-        mode={editEnabled ? 'edit' : 'view'}
-        onSave={
-          editEnabled
-            ? async content => {
-                // `mutateAsync` отдаёт обновлённый объект — `onSave` ждёт `void`, поэтому гасим результат.
-                await saveObjectMutation.mutateAsync({ key: preview?.key ?? '', content });
-              }
-            : undefined
-        }
-        labels={viewerLabels}
-        actions={
-          preview ? (
-            <Button variant="outline" size="sm" onClick={() => handleDownload(preview.key)}>
-              {t('admin_storage_download')}
-            </Button>
-          ) : null
-        }
-      />
-
-      <StorageContextMenu
-        state={menu}
-        selectedKeys={selection.keys}
-        onClose={() => setMenu(null)}
-        onOpen={entry => openEntry(entry, true)}
-        onDownload={handleDownloadSelected}
-        onRename={handleRenameStart}
-        onMove={handleMove}
-        onDelete={() => requestDelete(selection.keys)}
-        onProperties={entry => setPropertiesKey(entry.key)}
-        onCreateFolder={handleCreateFolder}
-        onUpload={() => fileInputRef.current?.click()}
-        onRefresh={() => refetch()}
-      />
-
-      <StorageMoveDialog
-        open={moveKeys !== null}
-        keys={moveKeys ?? []}
-        onOpenChange={open => !open && setMoveKeys(null)}
-        onMove={handleDialogMove}
-      />
-
-      <StoragePropertiesDialog
-        open={propertiesEntry !== null}
-        entry={propertiesEntry}
-        object={propertiesObject}
-        onOpenChange={open => !open && setPropertiesKey(null)}
-      />
-    </div>
+      {/* Оверлей показывает, что именно тащат: исходная строка/карточка — полупрозрачная. */}
+      <DragOverlay dropAnimation={null}>{dragKeys ? <StorageDragPreview count={dragKeys.length} /> : null}</DragOverlay>
+    </DndContext>
   );
 }

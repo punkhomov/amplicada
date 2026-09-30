@@ -2,10 +2,11 @@ import { fileKindOf, formatBytes } from '@amplicada/file-viewer/frontend';
 import { useTranslation } from '@amplicada/platform-core/frontend';
 import { Checkbox } from '@amplicada/platform-core/frontend/ui/checkbox';
 import { Folder } from 'lucide-react';
-import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { StorageEntry } from '../lib/entries.js';
+import { moveBlockReason } from '../lib/move.js';
 import type { SelectionState } from '../lib/selection.js';
-import { useStorageDropTarget } from './storage-drop.js';
+import { useStorageDraggable, useStorageDroppable } from './storage-dnd.js';
 import { FileKindIcon, InlineNameInput, type StorageEditing, useLoadMoreSentinel } from './storage-list.js';
 
 export interface StorageTilesProps {
@@ -19,13 +20,9 @@ export interface StorageTilesProps {
   onCommitEdit: (name: string) => void;
   onCancelEdit: () => void;
   onRenameStart: (key: string) => void;
-  /** Ключи текущего перетаскивания; `null` — перетаскивания нет. */
+  /** Ключи текущего перетаскивания; `null` — перетаскивания нет. Нужны подсветке невалидных целей. */
   dragKeys: string[] | null;
-  onDragStart: (entry: StorageEntry, event: ReactDragEvent<HTMLDivElement>) => void;
-  onDragEnd: () => void;
   onRowContextMenu: (entry: StorageEntry, event: ReactMouseEvent<HTMLDivElement>) => void;
-  /** Drop на карточку-папку: destination — ключ папки. */
-  onDropMove: (destination: string, keys: string[]) => void;
   /** Есть ли ещё страницы листинга; `false` — sentinel не рендерится. */
   hasNextPage: boolean;
   /** Идёт догрузка следующей страницы: sentinel показывает текст загрузки. */
@@ -36,11 +33,108 @@ export interface StorageTilesProps {
   loadMoreError?: boolean;
 }
 
+interface StorageTileProps {
+  entry: StorageEntry;
+  isSelected: boolean;
+  renaming: boolean;
+  dragKeys: string[] | null;
+  onClick: (entry: StorageEntry, event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onRenameStart: (key: string) => void;
+  onRowContextMenu: (entry: StorageEntry, event: ReactMouseEvent<HTMLDivElement>) => void;
+  onCheck: (key: string, checked: boolean) => void;
+  onCommitEdit: (name: string) => void;
+  onCancelEdit: () => void;
+}
+
+/**
+ * Карточка плитки: собственный компонент — dnd-хукам нужен один узел на элемент, а хуки в `.map`
+ * запрещены. Клики живут на вложенной кнопке, перетаскивание — на карточке-обёртке.
+ */
+function StorageTile({
+  entry,
+  isSelected,
+  renaming,
+  dragKeys,
+  onClick,
+  onRenameStart,
+  onRowContextMenu,
+  onCheck,
+  onCommitEdit,
+  onCancelEdit,
+}: StorageTileProps) {
+  const { t } = useTranslation('admin');
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useStorageDraggable(entry);
+  const { setNodeRef: setDropRef, isOver } = useStorageDroppable(entry.key);
+  const isFolder = entry.kind === 'folder';
+  // Невалидная цель (папка в себя/потомка, no-op) — красная: drop всё равно гасится в onDragEnd.
+  const over = isFolder && isOver && dragKeys !== null;
+  const dropClass = over
+    ? moveBlockReason(dragKeys, entry.key) !== null
+      ? 'ring-1 ring-destructive bg-destructive/10'
+      : 'ring-1 ring-primary bg-primary/10'
+    : '';
+  // Два ref на одной карточке: источник перетаскивания и цель drop у папки.
+  const setRefs = (node: HTMLDivElement | null) => {
+    setDragRef(node);
+    if (isFolder) setDropRef(node);
+  };
+  const icon =
+    entry.kind === 'folder' ? (
+      <Folder className="size-8 text-muted-foreground" />
+    ) : (
+      <FileKindIcon kind={fileKindOf({ name: entry.key })} className="size-8 text-muted-foreground" />
+    );
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: карточка — drag-обёртка, клики живут на вложенной кнопке
+    <div
+      ref={setRefs}
+      data-slot="storage-tile"
+      data-state={isSelected ? 'selected' : undefined}
+      onContextMenu={event => onRowContextMenu(entry, event)}
+      className={`relative flex cursor-pointer select-none flex-col items-center gap-2 rounded-lg border p-3 text-center transition-colors ${
+        isSelected ? 'border-primary bg-accent' : 'hover:bg-accent/50'
+      } ${dropClass} ${isDragging ? 'opacity-50' : ''}`}
+      {...attributes}
+      {...listeners}
+    >
+      <span className="absolute left-2 top-2">
+        <Checkbox checked={isSelected} onCheckedChange={checked => onCheck(entry.key, checked)} aria-label={t('admin_list_select_row')} />
+      </span>
+      {renaming ? (
+        <>
+          {icon}
+          <InlineNameInput initial={entry.name} className="h-7 w-full max-w-none text-xs" onCommit={onCommitEdit} onCancel={onCancelEdit} />
+        </>
+      ) : (
+        // Карточка — настоящая кнопка: клавиатура получает Enter/Space бесплатно, а чекбокс
+        // и инлайн-инпут отрисовываются соседями, а не вложенными интерактивными элементами.
+        <button
+          type="button"
+          className="flex w-full flex-1 flex-col items-center gap-2"
+          onClick={event => onClick(entry, event)}
+          onDoubleClick={() => onRenameStart(entry.key)}
+          onKeyDown={event => {
+            // Enter на кнопке открывает её же нативным кликом; страничный хоткей Enter
+            // не должен обработать то же нажатие второй раз (и открыть другую строку).
+            if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+          }}
+        >
+          {icon}
+          <span className="w-full truncate text-sm" title={entry.name}>
+            {entry.name}
+          </span>
+          <span className="text-xs text-muted-foreground">{entry.kind === 'folder' ? '—' : formatBytes(entry.size ?? 0)}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Плитка повторяет семантику списка (клик/модификаторы/чекбокс/двойной клик) другими средствами. */
 export function StorageTiles(props: StorageTilesProps) {
   const { t } = useTranslation('admin');
   const selected = new Set(props.selection.keys);
-  const drop = useStorageDropTarget(props.dragKeys, props.onDropMove);
   const loadMoreRef = useLoadMoreSentinel(props);
 
   const handleClick = (entry: StorageEntry, event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -66,78 +160,21 @@ export function StorageTiles(props: StorageTilesProps) {
           />
         </div>
       )}
-      {props.entries.map(entry => {
-        const isSelected = selected.has(entry.key);
-        const renaming = props.editing?.mode === 'rename' && props.editing.key === entry.key;
-        // Drop-цель — только карточка-папка; невалидная цель подсвечивается красным и не принимает drop.
-        const isDropTarget = entry.kind === 'folder' && props.dragKeys !== null && drop.overPrefix === entry.key;
-        const dropClass = isDropTarget
-          ? drop.invalidFor(entry.key)
-            ? 'border-destructive ring-1 ring-destructive'
-            : 'border-primary ring-1 ring-primary'
-          : '';
-        const icon =
-          entry.kind === 'folder' ? (
-            <Folder className="size-8 text-muted-foreground" />
-          ) : (
-            <FileKindIcon kind={fileKindOf({ name: entry.key })} className="size-8 text-muted-foreground" />
-          );
-        return (
-          // biome-ignore lint/a11y/noStaticElementInteractions: карточка — drag-обёртка, клики живут на вложенной кнопке
-          <div
-            key={entry.key}
-            data-slot="storage-tile"
-            data-state={isSelected ? 'selected' : undefined}
-            draggable
-            onContextMenu={event => props.onRowContextMenu(entry, event)}
-            onDragStart={event => props.onDragStart(entry, event)}
-            onDragEnd={props.onDragEnd}
-            {...(entry.kind === 'folder' ? drop.handlersFor(entry.key) : {})}
-            className={`relative flex cursor-pointer select-none flex-col items-center gap-2 rounded-lg border p-3 text-center transition-colors ${
-              isSelected ? 'border-primary bg-accent' : 'hover:bg-accent/50'
-            } ${dropClass}`}
-          >
-            <span className="absolute left-2 top-2">
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={checked => props.onCheck(entry.key, checked)}
-                aria-label={t('admin_list_select_row')}
-              />
-            </span>
-            {renaming ? (
-              <>
-                {icon}
-                <InlineNameInput
-                  initial={entry.name}
-                  className="h-7 w-full max-w-none text-xs"
-                  onCommit={props.onCommitEdit}
-                  onCancel={props.onCancelEdit}
-                />
-              </>
-            ) : (
-              // Карточка — настоящая кнопка: клавиатура получает Enter/Space бесплатно, а чекбокс
-              // и инлайн-инпут отрисовываются соседями, а не вложенными интерактивными элементами.
-              <button
-                type="button"
-                className="flex w-full flex-1 flex-col items-center gap-2"
-                onClick={event => handleClick(entry, event)}
-                onDoubleClick={() => props.onRenameStart(entry.key)}
-                onKeyDown={event => {
-                  // Enter на кнопке открывает её же нативным кликом; страничный хоткей Enter
-                  // не должен обработать то же нажатие второй раз (и открыть другую строку).
-                  if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
-                }}
-              >
-                {icon}
-                <span className="w-full truncate text-sm" title={entry.name}>
-                  {entry.name}
-                </span>
-                <span className="text-xs text-muted-foreground">{entry.kind === 'folder' ? '—' : formatBytes(entry.size ?? 0)}</span>
-              </button>
-            )}
-          </div>
-        );
-      })}
+      {props.entries.map(entry => (
+        <StorageTile
+          key={entry.key}
+          entry={entry}
+          isSelected={selected.has(entry.key)}
+          renaming={props.editing?.mode === 'rename' && props.editing.key === entry.key}
+          dragKeys={props.dragKeys}
+          onClick={handleClick}
+          onRenameStart={props.onRenameStart}
+          onRowContextMenu={props.onRowContextMenu}
+          onCheck={props.onCheck}
+          onCommitEdit={props.onCommitEdit}
+          onCancelEdit={props.onCancelEdit}
+        />
+      ))}
       {/* Sentinel бесконечного скролла: на всю ширину сетки, пока есть `nextToken`. */}
       {props.hasNextPage && (
         <div ref={loadMoreRef} data-slot="storage-load-more" className="col-span-full py-2 text-center text-sm text-muted-foreground">
