@@ -151,9 +151,13 @@ export class StorageServiceImpl implements BackendStorageService {
   async listObjects(prefix?: string, options?: StorageListOptions): Promise<StorageListResult> {
     const objects: StorageObjectInfo[] = [];
     const prefixes: string[] = [];
-    // ListObjectsV2 отдаёт максимум 1000 ключей за вызов и не сообщает об этом ничем, кроме
-    // IsTruncated — без дочитывания по токену большой префикс молча виден лишь частично.
-    let continuationToken: string | undefined;
+    // С maxKeys — ровно один запрос за вызов: в память попадает только страница, продолжение
+    // клиент запросит сам по nextToken. Без него сохраняем дочитывание: ListObjectsV2 отдаёт
+    // максимум 1000 ключей за вызов и не сообщает об этом ничем, кроме IsTruncated, — большой
+    // префикс без дочитывания по токену молча виден лишь частично.
+    const singlePage = options?.maxKeys !== undefined;
+    let nextToken: string | undefined;
+    let continuationToken = singlePage ? options?.continuationToken : undefined;
     do {
       const result = await this.client.send(
         new ListObjectsV2Command({
@@ -161,6 +165,7 @@ export class StorageServiceImpl implements BackendStorageService {
           Prefix: prefix,
           Delimiter: options?.delimiter,
           ContinuationToken: continuationToken,
+          MaxKeys: options?.maxKeys,
         }),
       );
       for (const obj of result.Contents ?? []) {
@@ -169,9 +174,12 @@ export class StorageServiceImpl implements BackendStorageService {
       for (const common of result.CommonPrefixes ?? []) {
         if (common.Prefix) prefixes.push(common.Prefix);
       }
-      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+      nextToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+      continuationToken = singlePage ? undefined : nextToken;
     } while (continuationToken);
-    return { objects, prefixes };
+    // Ключ nextToken добавляем только по факту: результат drain-режима должен остаться прежним
+    // по форме — потребители сравнивают его целиком (deepEqual), лишний undefined ломает такое.
+    return nextToken === undefined ? { objects, prefixes } : { objects, prefixes, nextToken };
   }
 
   async getSignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {

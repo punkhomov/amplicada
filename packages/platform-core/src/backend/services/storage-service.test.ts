@@ -87,6 +87,25 @@ test('listObjects переживает пустой ответ без Contents',
   assert.deepEqual(await storage.listObjects(), { objects: [], prefixes: [] });
 });
 
+test('listObjects с maxKeys отдаёт одну страницу и nextToken', async () => {
+  const { client, sent } = fakeClient([page(['a'], 'tok-2')]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  const result = await storage.listObjects('p/', { maxKeys: 2, continuationToken: 'tok-1' });
+  assert.deepEqual(result.objects.map(o => o.key), ['a']);
+  assert.equal(result.nextToken, 'tok-2');
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].input, { Bucket: 'bucket', Prefix: 'p/', Delimiter: undefined, ContinuationToken: 'tok-1', MaxKeys: 2 });
+});
+
+test('listObjects без maxKeys дочитывает всё, nextToken не выставлен', async () => {
+  const { client, sent } = fakeClient([page(['a'], 'tok-2'), page(['b'])]);
+  const storage = new StorageServiceImpl(client, 'bucket');
+  const result = await storage.listObjects('p/');
+  assert.deepEqual(result.objects.map(o => o.key), ['a', 'b']);
+  assert.equal(result.nextToken, undefined);
+  assert.equal(sent.length, 2);
+});
+
 test('getObjectStream пробрасывает Range в S3 и отдаёт Content-Range наружу', async () => {
   const { client, sent } = fakeClient([
     {
