@@ -2,7 +2,7 @@
 title: Notification API v2 — контракт под разных потребителей
 type: plan
 tier: 2
-status: in-progress
+status: implemented
 date: 2026-09-17
 updated: 2026-09-30
 ---
