@@ -341,7 +341,12 @@ export interface DocumentAccess {
   groupId?: string;
 }
 
-export const Documents = { USER: 'user', USER_GROUP: 'user-group', SCHEDULED_TASK: 'scheduled-task' } as const;
+export const Documents = {
+  USER: 'user',
+  USER_GROUP: 'user-group',
+  SCHEDULED_TASK: 'scheduled-task',
+  NOTIFICATION_TEMPLATE: 'notification-template',
+} as const;
 
 export const DocumentPages = {
   DEFAULT: 'default',

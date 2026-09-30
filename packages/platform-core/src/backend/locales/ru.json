@@ -20,6 +20,20 @@
   "scheduled_task_list_field_schedule": "Расписание",
   "scheduled_task_list_field_stale": "Устарела",
 
+  "notification_template_label": "Шаблоны уведомлений",
+  "notification_template_field_name": "Название",
+  "notification_template_field_subject": "Тема письма",
+  "notification_template_field_locale": "Язык",
+  "notification_template_field_locale_help": "Необязательно: язык сообщения для получателя",
+  "notification_template_locale_ru": "Русский",
+  "notification_template_locale_en": "English",
+  "notification_template_field_body": "Текст (plain text)",
+  "notification_template_field_html": "HTML",
+  "notification_template_field_sender": "Отправитель",
+  "notification_template_field_attachments": "Вложения",
+  "notification_template_field_updated": "Изменён",
+  "notification_template_list_fixture": "Из кода",
+
   "user_group_label": "Группа пользователей",
   "group_members": "Участники",
 

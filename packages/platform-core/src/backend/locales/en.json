@@ -20,6 +20,20 @@
   "scheduled_task_list_field_schedule": "Schedule",
   "scheduled_task_list_field_stale": "Stale",
 
+  "notification_template_label": "Notification templates",
+  "notification_template_field_name": "Name",
+  "notification_template_field_subject": "Email subject",
+  "notification_template_field_locale": "Locale",
+  "notification_template_field_locale_help": "Optional: message locale for the recipient",
+  "notification_template_locale_ru": "Русский",
+  "notification_template_locale_en": "English",
+  "notification_template_field_body": "Text (plain text)",
+  "notification_template_field_html": "HTML",
+  "notification_template_field_sender": "Sender",
+  "notification_template_field_attachments": "Attachments",
+  "notification_template_field_updated": "Updated",
+  "notification_template_list_fixture": "From code",
+
   "user_group_label": "User group",
   "group_members": "Members",
 

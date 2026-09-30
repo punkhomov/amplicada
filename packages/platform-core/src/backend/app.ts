@@ -213,7 +213,7 @@ export async function bootstrap(app: FastifyInstance, modules: BackendModule[], 
   const redisClient = context.services.resolve<RedisClientType>('redis');
   const s3Client = context.services.resolve<S3Client>('s3-client');
 
-  registerCoreDocuments(context.documents);
+  registerCoreDocuments(context.documents, context.services.resolve<StorageServiceImpl>('storage'));
 
   // Метод-агностичные auth-роуты принадлежат ядру: узел, где модуль паролей не собран,
   // всё равно имеет /me и /logout, а /context публикует его метод аутентификации.
