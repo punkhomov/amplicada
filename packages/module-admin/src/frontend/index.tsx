@@ -1,8 +1,8 @@
 import type { FrontendModule } from '@amplicada/platform-core/contracts/frontend';
+import { Documents } from '@amplicada/platform-core/contracts';
 import { API_CLIENT_TOKEN, type ApiClient } from '@amplicada/platform-core/frontend';
 import type { LoaderFunction } from 'react-router-dom';
 import { moduleManifest } from '../contracts/manifest.js';
-import { AdminDocuments } from '../contracts/notification-template.js';
 import type { AdminToolbarService } from '../contracts/toolbar.js';
 import { AdminLayout } from './layouts/admin-layout.js';
 import { createAdminAppsService } from './lib/app-registry.js';
@@ -41,7 +41,7 @@ const adminFrontendModule: FrontendModule = {
     registerComponent('notification-template-editor', NotificationTemplateEditor);
     context.services.resolve<AdminToolbarService>('admin:toolbar').register({
       id: 'notification-template-send',
-      documentType: AdminDocuments.NOTIFICATION_TEMPLATE,
+      documentType: Documents.NOTIFICATION_TEMPLATE,
       label: 'admin:template_send_action',
       component: SendNotificationTemplateAction,
       order: 10,

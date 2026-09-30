@@ -11,11 +11,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@amplicada/platform-core/frontend/ui/dialog';
+import { Documents } from '@amplicada/platform-core/contracts';
 import { Send } from 'lucide-react';
 import { useState } from 'react';
 import {
   ADMIN_BROADCAST_MAX_RECIPIENTS,
-  AdminDocuments,
   type SendNotificationTemplateResponse,
 } from '../../../../contracts/notification-template.js';
 import type { ToolbarActionProps } from '../../../../contracts/toolbar.js';
@@ -52,7 +52,7 @@ export function SendNotificationTemplateAction({ documentType, editData, isNew }
     },
   });
 
-  if (documentType !== AdminDocuments.NOTIFICATION_TEMPLATE) return null;
+  if (documentType !== Documents.NOTIFICATION_TEMPLATE) return null;
 
   const bucket = editData.admin?.[DEFAULT_EXTENSION_KEY] ?? {};
   const subject = typeof bucket.subject === 'string' ? bucket.subject : '';

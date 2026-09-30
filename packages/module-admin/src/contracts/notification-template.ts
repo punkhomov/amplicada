@@ -1,12 +1,5 @@
 import type { SendBatchResult } from '@amplicada/platform-core/contracts';
 
-/** Типы документов, которыми владеет module-admin. */
-export const AdminDocuments = {
-  NOTIFICATION_TEMPLATE: 'notification-template',
-} as const;
-
-export type AdminDocumentId = (typeof AdminDocuments)[keyof typeof AdminDocuments];
-
 /** kind ручной рассылки из админки — отличает её от писем auth/workflow в логе доставок. */
 export const ADMIN_BROADCAST_KIND = 'admin.broadcast';
 
