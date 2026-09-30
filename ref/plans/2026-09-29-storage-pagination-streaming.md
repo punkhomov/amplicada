@@ -10,6 +10,11 @@
 
 **Spec:** `ref/plans/2026-09-29-admin-storage-roadmap.md` (enabler «постраничный контракт `listObjects`»); предсказание формы — `ref/notes/platform-core.md` D-006.
 
+**Статус: `implemented` (2026-09-30).** Tasks 1–4 — коммиты `21c59150`, `ff4ea622`,
+`c3e07532`, `b72e11f4`, `61bed2d7`; Task 5 — `docs: storage pagination and streaming`.
+Живые прогоны: 250 файлов (страницы + исчерпание курсора), текст 1.5 МБ (стык UTF-8),
+Office 51 МБ (external без `readBytes`).
+
 ## Global Constraints
 
 - Только `pnpm`; политика workspace не меняется.
@@ -43,7 +48,7 @@
 - Поведение: `maxKeys` не задан → drain всех страниц, `nextToken` undefined (как сейчас); задан → **один** запрос с `MaxKeys` и `ContinuationToken`, `nextToken` наружу.
 - Экспортировать чистый хелпер пагинации? Не нужно.
 
-- [ ] **Step 1: Тесты** (стиль `fakeClient`/`page` из файла):
+- [x] **Step 1: Тесты** (стиль `fakeClient`/`page` из файла):
 
 ```ts
 test('listObjects с maxKeys отдаёт одну страницу и nextToken', async () => {
@@ -66,10 +71,10 @@ test('listObjects без maxKeys дочитывает всё, nextToken не в�
 });
 ```
 
-- [ ] **Step 2: RED** — `pnpm --filter @amplicada/platform-core build && ... exec node --test dist/backend/services/storage-service.test.js` (падает на `MaxKeys`/`nextToken`).
-- [ ] **Step 3: Реализовать** контракт и сервис (`singlePage`-режим в цикле; добавить `MaxKeys` в команду).
-- [ ] **Step 4: GREEN** — весь пакет (`pnpm --filter @amplicada/platform-core test`), включая прежние «дочитывает все страницы».
-- [ ] **Step 5: Commit** `feat(platform-core): paginated listObjects contract`.
+- [x] **Step 2: RED** — `pnpm --filter @amplicada/platform-core build && ... exec node --test dist/backend/services/storage-service.test.js` (падает на `MaxKeys`/`nextToken`).
+- [x] **Step 3: Реализовать** контракт и сервис (`singlePage`-режим в цикле; добавить `MaxKeys` в команду).
+- [x] **Step 4: GREEN** — весь пакет (`pnpm --filter @amplicada/platform-core test`), включая прежние «дочитывает все страницы».
+- [x] **Step 5: Commit** `feat(platform-core): paginated listObjects contract`.
 
 ---
 
@@ -88,8 +93,8 @@ test('listObjects без maxKeys дочитывает всё, nextToken не в�
   - Вызов core: `listObjects(prefix, { delimiter: '/', maxKeys: limit, continuationToken: cursor })`.
 - Дерево/диалог move продолжают вызывать без курсора — получают первую страницу (в тесте зафиксировать дефолт).
 
-- [ ] **Step 1: Тесты** — страница с `nextToken`, передача `cursor` в core, `limit` вне диапазона → 400, отсутствие курсора → без `ContinuationToken`.
-- [ ] **Step 2: RED**, **Step 3: реализовать**, **Step 4: GREEN** (`module-admin`), **Step 5: Commit** `feat(module-admin): cursor pagination for storage listing`.
+- [x] **Step 1: Тесты** — страница с `nextToken`, передача `cursor` в core, `limit` вне диапазона → 400, отсутствие курсора → без `ContinuationToken`.
+- [x] **Step 2: RED**, **Step 3: реализовать**, **Step 4: GREEN** (`module-admin`), **Step 5: Commit** `feat(module-admin): cursor pagination for storage listing`.
 
 ---
 
@@ -109,9 +114,9 @@ test('listObjects без maxKeys дочитывает всё, nextToken не в�
 - `refetch`/invalidate работают как раньше (инф. кэш сбрасывается на первой странице).
 - Поиск остаётся клиентским по загруженным элементам — поведение задокументировать.
 
-- [ ] **Step 1: реализовать** инфинитив-квери и sentinel; смена `prefix` сбрасывает страницы (ключ запроса включает prefix).
-- [ ] **Step 2:** `pnpm build && pnpm typecheck`; Playwright: сгенерировать `pages/` с 250 файлами через API, открыть, проскроллить вниз — догрузка второй страницы, в DOM > 200 строк, `nextToken` исчерпан → запросов больше нет (считать запросы `page.on('request')` с `cursor=`), смена папки не тянет старые страницы. Скриншоты, `pageerror` пусто.
-- [ ] **Step 3: Commit** `feat(module-admin): infinite scroll for storage listing`.
+- [x] **Step 1: реализовать** инфинитив-квери и sentinel; смена `prefix` сбрасывает страницы (ключ запроса включает prefix).
+- [x] **Step 2:** `pnpm build && pnpm typecheck`; Playwright: сгенерировать `pages/` с 250 файлами через API, открыть, проскроллить вниз — догрузка второй страницы, в DOM > 200 строк, `nextToken` исчерпан → запросов больше нет (считать запросы `page.on('request')` с `cursor=`), смена папки не тянет старые страницы. Скриншоты, `pageerror` пусто.
+- [x] **Step 3: Commit** `feat(module-admin): infinite scroll for storage listing`.
 
 ---
 
@@ -130,19 +135,19 @@ test('listObjects без maxKeys дочитывает всё, nextToken не в�
 - `readText` при URL: `Range: bytes=<offset>-<offset+limit-1>`; `nextOffsetBytes = offset + completePrefixLength`; `truncated` — как раньше.
 - `utf8CompletePrefix`: 0..4 байта незавершённой последовательности в хвосте → отбрасываются; валидные ASCII/2-3-4-байтные — считаются.
 
-- [ ] **Step 1: тесты** `utf8CompletePrefix`: чистый ASCII; хвост из 1 и из 2 байт от 3-байтного символа; полный 4-байтный эмодзи; невалидный лид-байт (возвращает длину до него). И тест оконного чтения: фейковый `fetch` проверяет заголовок `Range` и `nextOffsetBytes` на стыке.
-- [ ] **Step 2: RED**, **Step 3: реализовать**, **Step 4: GREEN** (`file-viewer`), **Step 5:** Playwright: текстовый файл ~1.5 МБ — открыть, «Показать ещё», текст продолжается без `U+FFFD` на стыке (проверить поиск строки, лежащей за первым лимитом); Office-файл > 50 МБ (или подменить порог в тесте) → external-карточка.
-- [ ] **Step 6: Commit** `feat(file-viewer): windowed text reading and office preview size cap`.
+- [x] **Step 1: тесты** `utf8CompletePrefix`: чистый ASCII; хвост из 1 и из 2 байт от 3-байтного символа; полный 4-байтный эмодзи; невалидный лид-байт (возвращает длину до него). И тест оконного чтения: фейковый `fetch` проверяет заголовок `Range` и `nextOffsetBytes` на стыке.
+- [x] **Step 2: RED**, **Step 3: реализовать**, **Step 4: GREEN** (`file-viewer`), **Step 5:** Playwright: текстовый файл ~1.5 МБ — открыть, «Показать ещё», текст продолжается без `U+FFFD` на стыке (проверить поиск строки, лежащей за первым лимитом); Office-файл > 50 МБ (или подменить порог в тесте) → external-карточка.
+- [x] **Step 6: Commit** `feat(file-viewer): windowed text reading and office preview size cap`.
 
 ---
 
 ### Task 5: Docs/notes/plan/roadmap/context
 
-- [ ] `packages/platform-core/docs/reference/storage.md` — постраничный контракт (`maxKeys`/`continuationToken`/`nextToken`), дефолт «дочитать всё».
-- [ ] `packages/module-admin/docs/reference/storage.md` — `cursor`/`limit`, `nextToken`, бесконечный скролл, клиентский поиск по загруженному; `file-viewer` — оконное чтение, потолок Office.
-- [ ] `ref/notes/platform-core.md` — обновить D-006 («Что изменит решение» сбылось) или добавить D-007; `ref/notes/file-viewer.md` — D-008 (оконное чтение и потолок), `module-admin` — дополнение к D-006.
-- [ ] `ref/plans/2026-09-29-admin-storage-roadmap.md` — отметить enabler `nextToken` закрытым, внести оконное чтение; `ref/context.md` — ключевики.
-- [ ] Commit `docs: storage pagination and streaming`.
+- [x] `packages/platform-core/docs/reference/storage.md` — постраничный контракт (`maxKeys`/`continuationToken`/`nextToken`), дефолт «дочитать всё».
+- [x] `packages/module-admin/docs/reference/storage.md` — `cursor`/`limit`, `nextToken`, бесконечный скролл, клиентский поиск по загруженному; `file-viewer` — оконное чтение, потолок Office.
+- [x] `ref/notes/platform-core.md` — обновить D-006 («Что изменит решение» сбылось) или добавить D-007; `ref/notes/file-viewer.md` — D-008 (оконное чтение и потолок), `module-admin` — дополнение к D-006.
+- [x] `ref/plans/2026-09-29-admin-storage-roadmap.md` — отметить enabler `nextToken` закрытым, внести оконное чтение; `ref/context.md` — ключевики.
+- [x] Commit `docs: storage pagination and streaming`.
 
 ---
 

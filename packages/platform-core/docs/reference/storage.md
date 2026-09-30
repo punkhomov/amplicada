@@ -1,8 +1,8 @@
 ---
 title: platform-core — сервис storage (S3)
 type: reference
-updated: 2026-09-29
-verified_commit: 45ab313f
+updated: 2026-09-30
+verified_commit: 61bed2d7
 ---
 
 # platform-core — сервис storage (S3)
@@ -27,10 +27,12 @@ Core-сервис `storage` — тонкая обёртка над S3-совме
 | `deleteObjects(keys)` | Удаление списка ключей пачками по 1000; возвращает число ключей, пустой список — no-op |
 | `deletePrefix(prefix)` | Рекурсивное удаление под префиксом пачками по 1000; возвращает число ключей |
 | `headObject(key)` | `StorageObjectInfo` или `null`, если объекта нет |
-| `listObjects(prefix?, { delimiter })` | Листинг: `{ objects, prefixes }`; с `delimiter` — один уровень |
+| `listObjects(prefix?, { delimiter, maxKeys?, continuationToken? })` | Листинг: `{ objects, prefixes, nextToken? }`; с `delimiter` — один уровень; с `maxKeys` — одна страница, без — все |
 | `getSignedUrl(key, expiresInSeconds?)` | Presigned URL (по умолчанию 3600 с) |
 
 `StorageObjectInfo`: `key`, `size`, `contentType?`, `etag?`, `lastModified?` (`Date`).
+`StorageListResult`: `objects`, `prefixes`, `nextToken?` (последний — только в постраничном
+режиме, см. «Пагинация листинга»).
 
 `copyObject` копирует ровно один объект и поддерево не обходит — «перемещение» в S3
 собирается потребителем как copy + delete. `deleteObjects` режет список на пачки по 1000
@@ -45,10 +47,8 @@ Core-сервис `storage` — тонкая обёртка над S3-совме
 - `objects` — объекты текущего уровня (`StorageObjectInfo[]`),
 - `prefixes` — полные префиксы вложенных «папок» с `/` на конце (`learning/pkg/`).
 
-Без `delimiter` листинг рекурсивный и `prefixes` пуст. `ListObjectsV2` отдаёт максимум 1000
-ключей за вызов — `listObjects` дочитывает все страницы по `ContinuationToken` сам.
-Объекты-маркеры папок (ключ с `/` на конце) приходят в `objects` как есть; отсеивать их —
-дело потребителя.
+Без `delimiter` листинг рекурсивный и `prefixes` пуст. Объекты-маркеры папок (ключ с `/` на
+конце) приходят в `objects` как есть; отсеивать их — дело потребителя.
 
 `deletePrefix` — это и есть удаление «папки»: удаляет все объекты под префиксом, а затем
 `DeleteObject` на сам префикс. Второй вызов нужен для SeaweedFS: его filer держит пустую
@@ -56,6 +56,24 @@ Core-сервис `storage` — тонкая обёртка над S3-совме
 висеть пустой в листинге. В настоящем S3 это no-op (`DeleteObject` на несуществующий ключ
 возвращает 204) плюс добивает объект-маркер, если он был создан. Пустой префикс запрещён
 (означал бы снос бакета целиком) — метод бросает исключение.
+
+## Пагинация листинга
+
+`ListObjectsV2` отдаёт максимум 1000 ключей за вызов, поэтому у `listObjects` два режима
+(`src/backend/services/storage-service.ts:154`):
+
+- **Без `maxKeys`** — прежнее поведение: сервис сам дочитывает все страницы по
+  `ContinuationToken` и возвращает весь уровень целиком; `nextToken` в ответе отсутствует.
+  Форма результата при этом не изменилась — ключ не добавляется «пустым».
+- **С `maxKeys`** — ровно один запрос к S3 с `MaxKeys`; `continuationToken` уходит как
+  `ContinuationToken`. Наружу возвращается `nextToken` (`NextContinuationToken`), только если
+  S3 сообщил `IsTruncated`; отсутствие `nextToken` — страница последняя.
+
+`continuationToken` — opaque-токен из `nextToken` предыдущего ответа: содержимое не
+разбирается. `maxKeys` больше 1000 S3 всё равно урежет до 1000. `continuationToken` без
+`maxKeys` не действует — листинг останется «дочитать всё».
+
+Типы — `StorageListOptions` и `StorageListResult` в `src/contracts/backend/storage.ts:25`.
 
 ## Range и медиа
 
@@ -77,5 +95,6 @@ Core-сервис `storage` — тонкая обёртка над S3-совме
 - Бакет один, задаётся при инициализации сервиса; `ensureBucket` создаёт его при старте.
 - Перемещения в контракте нет: S3 не переименовывает префикс, move — это `copyObject` на
   каждый объект + `deleteObjects`. Рекурсию по поддереву собирает потребитель.
-- `listObjects` не постраничный: отдаёт весь уровень целиком.
+- `listObjects` без `maxKeys` отдаёт весь уровень целиком: на папке с десятками тысяч объектов
+  это память и роута, и ответа — потребителю с UI нужен постраничный режим.
 - `putObject` держит тело в памяти; для крупных файлов — `putObjectStream`.

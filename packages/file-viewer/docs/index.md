@@ -2,8 +2,8 @@
 title: "file-viewer — обзор"
 type: index
 package: file-viewer
-updated: 2026-09-29
-verified_commit: 74e82866
+updated: 2026-09-30
+verified_commit: 61bed2d7
 ---
 
 # file-viewer
@@ -25,6 +25,7 @@ verified_commit: 74e82866
 | Определение типа | `fileKindOf(descriptor)`, `fileExtension(name)`, `monacoLanguageOf(descriptor)` |
 | Реестр рендереров | `defaultRenderers` (image, video, audio, pdf, text, word, spreadsheet, external), `externalRenderer`; свой — проп `renderers` |
 | Байты для рендерера | `RendererProps.readBytes(): Promise<ArrayBuffer>` (часть контракта рендерера) |
+| Оконное чтение текста | `RendererProps.readText({ limitBytes?, offsetBytes? })` → `{ text, truncated, nextOffsetBytes? }`; в просмотре — кнопка `loadMore` |
 | Источник | типы `FileSource`, `FileDescriptor` из `@amplicada/file-viewer/contracts` |
 | Формат размера | `formatBytes(bytes)` |
 
@@ -53,10 +54,13 @@ verified_commit: 74e82866
 
 ## Freshness
 
-- Сверено с кодом: `2026-09-29`, коммит `74e82866` (ветка `feat/admin-storage-explorer`).
+- Сверено с кодом: `2026-09-30`, коммит `61bed2d7` (ветка `feat/admin-storage-explorer`).
 - Проверено живым прогоном через `module-admin` `/admin/storage` в Playwright (headless Chromium):
   предпросмотр текста в Monaco, **правка текста с сохранением** (`mode="edit"`), **Office
   docx/xlsx** (Canvas-рендер), картинки с зумом/панорамированием, скачивание, навигация.
+  **Оконное чтение и потолок Office** проверены живьём там же: текст 1.5 МБ — стык
+  разрезанного `€` без `U+FFFD`, финальный буфер побайтово равен файлу; `.docx` на 51 МБ
+  отдан external-карточкой без запроса байтов и WASM.
 - Production-сборка `apps/web` подтверждает ленивые чанки Monaco и Office (WASM вынесен
   отдельно, в основной бандл не попадает) и работу `?worker`.
 - Фолбэк Office на external-карточку проверен битым `.docx`; битый `.xlsx` библиотека
