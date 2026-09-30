@@ -42,4 +42,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "notification_outbox_dedupe_idx"
   ON "core"."notification_outbox" ("kind", "dedupe_key", "user_id")
   WHERE "dedupe_key" IS NOT NULL;
 
+-- v1-строки шаблонов жили в admin и были документами; после дропа таблицы их индексные
+-- строки остались бы сиротами (список их показывает, карточка падает). Свежая БД — no-op.
+DELETE FROM "core"."document_index" WHERE "type" = 'notification-template';
+
 DROP TABLE IF EXISTS "admin"."notification_template";
