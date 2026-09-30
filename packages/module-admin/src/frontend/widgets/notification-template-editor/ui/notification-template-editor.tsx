@@ -76,6 +76,10 @@ export function NotificationTemplateEditor({ data, fields, readonly, onChange }:
   });
 
   const attachmentsDisabled = locked || documentId === null;
+  const senderItems = [
+    { value: DEFAULT_SENDER, label: t('template_editor_sender_default') },
+    ...(sendersQuery.data?.senders ?? []).map(name => ({ value: name, label: name })),
+  ];
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -88,6 +92,7 @@ export function NotificationTemplateEditor({ data, fields, readonly, onChange }:
       <div>
         <Label className="mb-1 block">{t('template_editor_sender_label')}</Label>
         <Select
+          items={senderItems}
           value={sender || DEFAULT_SENDER}
           onValueChange={value => onChange({ ...data, sender: value === DEFAULT_SENDER ? undefined : value })}
           disabled={locked}
