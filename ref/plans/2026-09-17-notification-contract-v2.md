@@ -2,8 +2,9 @@
 title: Notification API v2 — контракт под разных потребителей
 type: plan
 tier: 2
-status: draft
+status: in-progress
 date: 2026-09-17
+updated: 2026-09-30
 ---
 
 # Notification API v2 — контракт под разных потребителей
@@ -40,22 +41,21 @@ date: 2026-09-17
 7. **Переменные** — `{{path}}` в ядре, HTML-часть экранируется.
 8. **Цепочки каналов** (email → sms) в v2 нет.
 
-## Открытые вопросы — решить до реализации
+## Решения по открытым вопросам (2026-09-30)
 
-1. **Eager для bulk.** Сейчас `send()` делает eager-попытку в процессе вызывающего
-   (`notification-service.ts:96-116`), а диспетчер только добирает ретраи. Наивный `sendMany`
-   даст N SMTP-отправок внутри HTTP-запроса админки (200 получателей = 200 `sendMail`).
-   *Рекомендация:* одиночный `send` — eager как сейчас; `sendMany` — только строки в outbox,
-   доставку делает worker-диспетчер (в ответе сразу `queued`, фактический статус — в логе).
-2. **Неизвестное имя отправителя** — `null`/skip как при отсутствии канала или warn + дефолтный
-   `SMTP_FROM`? *Рекомендация:* warn + дефолт, чтобы опечатка не глушила транзакционные письма.
-3. **Отсутствующая переменная** в `{{path}}` — пустая строка + warn или оставить плейсхолдер?
-   *Рекомендация:* пустая строка + warn.
-4. **Лимиты вложений** — размер одного файла и суммарный (SMTP-провайдеры обычно режут 10–25 МБ).
-   *Рекомендация:* 10 МБ на файл, 20 МБ на письмо; проверять на загрузке и при отправке.
-5. **Очистка объектов storage** при снятии вложения и удалении шаблона — делать сразу или
-   оставить orphan-объекты до отдельной уборки? *Рекомендация:* удалять при снятии и при
-   hard-delete документа шаблона (в `remove`-колбэке extension'а).
+1. **Eager для bulk — без eager у `sendMany`.** Одиночный `send` остаётся eager, как в v1 (кроме
+   `scheduledAt` в будущем); `sendMany` только пишет строки в outbox, доставку делает
+   worker-диспетчер (в ответе `queued`, фактический статус — в логе). Следствие — `sendMany`
+   требует worker-роль, иначе строки лежат `pending`; trade-off фиксируется в docs/notes.
+2. **Неизвестное имя отправителя — warn + дефолтный `SMTP_FROM`.** Fail-open: опечатка в имени
+   не глушит транзакционные письма.
+3. **Отсутствующая переменная `{{path}}` — пустая строка + warn.** Плейсхолдер не утекает
+   в текст письма.
+4. **Лимиты вложений — 10 МБ на файл, 20 МБ на письмо.** Проверка на загрузке (маршрут) и при
+   отправке; при отправке — реальный размер из storage (`headObject`), манифесту `size` не верим.
+5. **Очистка объектов storage — сразу, best-effort.** Удаляем при снятии вложения и при
+   hard-delete документа шаблона (`remove`-хук extension'а); ошибка удаления → warn, orphan
+   допустим. Произвольные `update` манифеста не диффятся — только явные маршруты вложений.
 
 ## Целевой контракт
 
@@ -161,19 +161,24 @@ export interface BackendNotificationService {
 
 ## Поведение сервиса
 
-- **Резолв шаблона:** `{ code, locale }` → точная локаль → `ru` → любая доступная (warn);
-  `{ id }` → документ по id. Нет шаблона → `send` возвращает `null`, `sendMany` считает `skipped`,
-  в лог — warning (как при отсутствии канала).
+- **Резолв шаблона:** `{ code, locale }` → эффективная локаль (`template.locale` ?? `message.locale`)
+  → `ru` → любая доступная (warn); `{ id }` → документ по id. Нет шаблона → `send` возвращает
+  `null`, `sendMany` считает `skipped`, в лог — warning (как при отсутствии канала).
 - **Рендер:** `{{path}}` по dot-path из `data`; `subject`/`body` — как есть, `html` — со
   HTML-экранированием подстановок. Результат снапшотится в outbox: при ретрае контент не
   перерендеривается.
-- **dedupe:** конфликт по `(kind, dedupe_key, user_id)` → возвращается существующий id, новая
-  строка не создаётся; в bulk — счётчик `deduped`. Повторная доставка — только через `retry`.
+- **dedupe:** конфликт по `(kind, dedupe_key, user_id)` (`ON CONFLICT DO NOTHING` + выборка
+  существующей) → возвращается существующий id, новая строка не создаётся; в bulk — счётчик
+  `deduped`. Повторная доставка — только через `retry`.
 - **scheduledAt:** в будущем — eager не запускается, `next_attempt_at = scheduledAt`; в прошлом —
   как «сейчас».
 - **sendMany:** один `batchId` на все строки, по строке на получателя (надёжность и лог — как
-  сейчас); агрегат в ответе. Eager — по открытому вопросу 1.
-- **sender:** имя уходит в `ResolvedNotification`; email-канал резолвит его в свой `from`/`replyTo`.
+  сейчас); агрегат в ответе; **без eager** — доставку делает worker-диспетчер (решение 1).
+- **sender:** имя уходит в `ResolvedNotification`; email-канал резолвит его в свой `from`/`replyTo`;
+  неизвестное имя — warn + дефолтный `SMTP_FROM` (решение 2).
+- **Вложения:** на отправке канал проверяет реальный размер и наличие через `storage.headObject`;
+  превышение лимита или пропавший объект — обычная ошибка доставки (retry/failed с `lastError`),
+  не silent skip (решение 4).
 
 ## Fixtures и read-only
 
@@ -194,20 +199,22 @@ export interface BackendNotificationService {
 `module-notification-email`:
 
 - `SMTP_SENDERS` — JSON-карта имён: `{ "no-reply": { "from": "…", "replyTo": "…" }, "support": {…} }`;
-  неизвестное имя — warn + дефолтный `SMTP_FROM`;
+  неизвестное имя — warn + дефолтный `SMTP_FROM`; явный `replyTo` сообщения приоритетнее sender;
 - `cc`/`bcc`/`replyTo`/`headers` прокидываются в `sendMail`;
-- вложения — через `storage.getObjectStream(storageKey)` (стрим, не буфер), `filename`/`contentType`
-  из манифеста;
+- вложения — `storage.headObject` (существование + реальный размер для лимитов) →
+  `storage.getObjectStream(storageKey)` (стрим, не буфер), `filename`/`contentType` из манифеста;
 - `listSenders()` отдаёт имена из конфига (для select в админке).
 
 ## Админка
 
+- `GET /api/admin/notifications/senders` — имена отправителей для select в редакторе.
 - `POST /api/admin/notifications/send-template` переводится на `sendMany`
   (`content.template.id`), ответ — `SendBatchResult`.
 - `POST /api/admin/notifications/batch/:batchId/retry` — повтор всех `failed` строк батча.
 - `POST/DELETE /api/admin/notifications/template-attachments` — загрузка/удаление вложений
   (multipart уже зарегистрирован глобально, лимит 100 МБ — `app.ts:118`; ключ
-  `notification-templates/<docId>/<uuid>-<filename>`), по образцу `routes/storage.ts`.
+  `notification-templates/<docId>/<uuid>-<filename>`; маршрут режет по лимитам 10/20 МБ),
+  по образцу `routes/storage.ts`.
 - UI: редактор шаблона — select отправителя и компонент вложений; список — бейдж «из кода»;
   карточка fixture-шаблона — read-only; лог доставок — фильтр по `batchId` и «повторить батч».
 
@@ -215,7 +222,8 @@ export interface BackendNotificationService {
 
 | # | Что | Пакеты | Зависит |
 |---|---|---|---|
-| 1 | ADR-07 (заменяет части ADR-04) + актуализация этого плана по открытым вопросам | `ref/adr`, `ref/plans` | решение заказчика |
+| 0 | Синк с main (rebase ветки): резолв конфликтов, политика pnpm «7 дней + strict-набор», перегенерация lock, пересмотр D-001 (`nodemailer` под 7-дневным окном), `build`/`typecheck`/`test` зелёные | `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `ref/*` | — |
+| 1 | ADR-07 (заменяет части ADR-04); решения по открытым вопросам зафиксированы 2026-09-30 | `ref/adr`, `ref/plans` | — |
 | 2 | Контракт v2 + миграция `0007` + сервис: шаблоны, рендер, dedupe, `scheduledAt`, `sendMany`, `listSenders`; unit-тесты | `platform-core` | 1 |
 | 3 | Тип шаблона в core, fixtures, read-only guard, переезд из admin, чистка admin-миграции | `platform-core`, `module-admin` | 2 |
 | 4 | Email-канал: sender, cc/bcc/replyTo/headers, вложения | `module-notification-email` | 2 |
@@ -226,10 +234,14 @@ export interface BackendNotificationService {
 
 - Unit: интерполятор (пути, escape, пропуски), dedupe-конфликт, агрегат `sendMany`, fallback
   локали, `scheduledAt` без eager, лимиты вложений.
-- Live (Mailpit): fixture-шаблон с переменными доходит; вложение открывается; `cc`/`replyTo` видны
-  в заголовках; повтор с тем же `dedupeKey` не создаёт дубль; `scheduledAt` в будущем лежит
-  `pending`; правка fixture-шаблона → `409`; «повторить батч» переводит `failed` в `pending`.
-- `pnpm build`, `pnpm test`, `pnpm lint`; инфра — `pnpm infra:up`.
+- Интеграционные (с БД): fixture register/reconcile и read-only guard (`update`/`delete`/
+  `bulkDelete`), резолв шаблона по code/id, миграция `0007`. Fixture-путь закрыт тестом, пока
+  в сборке нет code-шаблонов (их объявят auth/workflow).
+- Live (Mailpit): документ-шаблон с переменными доходит; вложение открывается; `cc`/`replyTo`
+  видны в заголовках; повтор с тем же `dedupeKey` не создаёт дубль; `scheduledAt` в будущем лежит
+  `pending`; `sendMany` из админки: ответ `queued`, worker доставляет; «повторить батч» переводит
+  `failed` в `pending`.
+- `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`; инфра — `pnpm infra:up`.
 
 ## Вне объёма v2
 
@@ -240,14 +252,15 @@ export interface BackendNotificationService {
 
 - Переезд таблицы шаблонов из `admin` в `core` ломает формат БД — допустимо (данные одноразовые),
   отметить при реализации.
-- `sendMany` без eager меняет наблюдаемость: статус в ответе будет `queued`, а не `sent`; для
-  админки это компенсируется логом доставок.
+- `sendMany` без eager меняет наблюдаемость: статус в ответе `queued`, а не `sent`; на узле без
+  worker-роли строки остаются `pending`. Компенсация — лог доставок; trade-off фиксируется
+  в docs/notes.
 - Read-only fixtures — первое место, где Document System ограничивает правку по признаку индекса;
   если guard окажется неудобен для других fixture-типов, вынести в опциональный флаг типа.
 
 ## Что дальше
 
-После решения по открытым вопросам: ADR-07, затем фазы 2–6. По завершении — распределить знания
-по постоянным документам (`plan-lifecycle`): контракт и его рационал — в ADR-07 и notes
-`platform-core`, потребительская механика — в `packages/platform-core/docs/` и
+Решения приняты 2026-09-30. Порядок: фаза 0 (синк с main), ADR-07, затем фазы 2–6. По завершении —
+распределить знания по постоянным документам (`plan-lifecycle`): контракт и его рационал —
+в ADR-07 и notes `platform-core`, потребительская механика — в `packages/platform-core/docs/` и
 `packages/module-notification-email/docs/`, админские роуты — в docs `module-admin`.
