@@ -1,5 +1,7 @@
+import type { Readable } from 'node:stream';
 import type { NotificationChannel, ResolvedNotification } from '@amplicada/platform-core/contracts';
-import type { BackendDbService } from '@amplicada/platform-core/contracts/backend';
+import { NOTIFICATION_ATTACHMENT_LIMITS } from '@amplicada/platform-core/contracts';
+import type { BackendDbService, BackendStorageService } from '@amplicada/platform-core/contracts/backend';
 import { logger } from '@amplicada/platform-core/backend';
 import { eq } from 'drizzle-orm';
 import type { Transporter } from 'nodemailer';
@@ -87,6 +89,7 @@ export class EmailChannel implements NotificationChannel {
     private transport: Transporter,
     private from: string,
     private senders: Record<string, SenderConfig> = {},
+    private storage: BackendStorageService,
   ) {}
 
   async resolveAddress(userId: string): Promise<string | null> {
@@ -104,6 +107,7 @@ export class EmailChannel implements NotificationChannel {
       logger.warn({ sender: message.sender }, 'Неизвестный отправитель — используется SMTP_FROM');
     }
     const replyTo = message.replyTo ?? sender?.replyTo;
+    const attachments = await this.resolveAttachments(message.attachments ?? []);
 
     await this.transport.sendMail({
       from: sender?.from ?? this.from,
@@ -115,6 +119,36 @@ export class EmailChannel implements NotificationChannel {
       ...(message.cc?.length ? { cc: message.cc } : {}),
       ...(message.bcc?.length ? { bcc: message.bcc } : {}),
       ...(message.headers ? { headers: message.headers } : {}),
+      ...(attachments.length ? { attachments } : {}),
     });
+  }
+
+  /**
+   * Вложения: реальный размер и существование проверяются `headObject` (манифесту не верим),
+   * в письмо уходит поток из storage, а не буфер. Ошибки — обычная ошибка доставки (retry/failed).
+   */
+  private async resolveAttachments(
+    attachments: NonNullable<ResolvedNotification['attachments']>,
+  ): Promise<Array<{ filename: string; content: Readable; contentType?: string }>> {
+    const resolved: Array<{ filename: string; content: Readable; contentType?: string }> = [];
+    let totalBytes = 0;
+
+    for (const attachment of attachments) {
+      const info = await this.storage.headObject(attachment.storageKey);
+      if (!info) throw new Error(`Вложение не найдено: ${attachment.storageKey}`);
+      if (info.size > NOTIFICATION_ATTACHMENT_LIMITS.maxFileBytes) throw new Error('Вложение больше 10 МиБ');
+      totalBytes += info.size;
+      if (totalBytes > NOTIFICATION_ATTACHMENT_LIMITS.maxTotalBytes) throw new Error('Сумма вложений больше 20 МиБ');
+
+      const object = await this.storage.getObjectStream(attachment.storageKey);
+      const contentType = attachment.contentType ?? info.contentType;
+      resolved.push({
+        filename: attachment.filename,
+        content: object.body,
+        ...(contentType ? { contentType } : {}),
+      });
+    }
+
+    return resolved;
   }
 }

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
 import { test } from 'node:test';
-import type { ResolvedNotification } from '@amplicada/platform-core/contracts';
-import type { BackendDbService } from '@amplicada/platform-core/contracts/backend';
+import { NOTIFICATION_ATTACHMENT_LIMITS, type ResolvedNotification } from '@amplicada/platform-core/contracts';
+import type { BackendDbService, BackendStorageService } from '@amplicada/platform-core/contracts/backend';
 import type { Transporter } from 'nodemailer';
 import { EmailChannel, readSendersConfig, type SenderConfig, selectSender } from './email-channel.js';
 
@@ -15,6 +16,7 @@ interface SentMail {
   cc?: string[];
   bcc?: string[];
   headers?: Record<string, string>;
+  attachments?: Array<{ filename?: string; contentType?: string; content?: unknown }>;
 }
 
 function fakeTransport(): { transport: Transporter; sent: SentMail[] } {
@@ -28,6 +30,28 @@ function fakeTransport(): { transport: Transporter; sent: SentMail[] } {
 }
 
 const db = {} as BackendDbService;
+
+/** Хранилище-заглушка: известные ключи отдаются, неизвестные — null (пропавший объект). */
+function fakeStorage(objects: Record<string, { size: number; contentType?: string } | undefined> = {}): BackendStorageService {
+  return {
+    headObject: async (key: string) => {
+      const info = objects[key];
+      return info ? { key, size: info.size, contentType: info.contentType } : null;
+    },
+    getObjectStream: async (key: string) => ({
+      body: Readable.from([`data:${key}`]),
+      contentType: objects[key]?.contentType,
+    }),
+  } as unknown as BackendStorageService;
+}
+
+function channelWith(
+  storage: BackendStorageService,
+  senders: Record<string, SenderConfig> = {},
+): { channel: EmailChannel; sent: SentMail[] } {
+  const { transport, sent } = fakeTransport();
+  return { channel: new EmailChannel(db, transport, 'D <d@b>', senders, storage), sent };
+}
 
 function message(over: Partial<ResolvedNotification> = {}): ResolvedNotification {
   return {
@@ -70,7 +94,7 @@ test('selectSender: известное имя, неизвестное и пус�
 
 test('send: конверты уходят в sendMail', async () => {
   const { transport, sent } = fakeTransport();
-  const channel = new EmailChannel(db, transport, 'D <d@b>', { 'no-reply': { from: 'N <n@b>', replyTo: 'r@b' } });
+  const channel = new EmailChannel(db, transport, 'D <d@b>', { 'no-reply': { from: 'N <n@b>', replyTo: 'r@b' } }, fakeStorage({}));
 
   await channel.send(message({ sender: 'no-reply', cc: ['c@b'], bcc: ['h@b'], headers: { 'X-Test': '1' } }));
 
@@ -83,7 +107,7 @@ test('send: конверты уходят в sendMail', async () => {
 
 test('send: явный replyTo сообщения приоритетнее sender', async () => {
   const { transport, sent } = fakeTransport();
-  const channel = new EmailChannel(db, transport, 'D <d@b>', { 'no-reply': { from: 'N <n@b>', replyTo: 'r@b' } });
+  const channel = new EmailChannel(db, transport, 'D <d@b>', { 'no-reply': { from: 'N <n@b>', replyTo: 'r@b' } }, fakeStorage({}));
 
   await channel.send(message({ sender: 'no-reply', replyTo: 'explicit@b' }));
 
@@ -92,7 +116,7 @@ test('send: явный replyTo сообщения приоритетнее sende
 
 test('send: неизвестный sender → дефолтный from', async () => {
   const { transport, sent } = fakeTransport();
-  const channel = new EmailChannel(db, transport, 'D <d@b>', { 'no-reply': { from: 'N <n@b>' } });
+  const channel = new EmailChannel(db, transport, 'D <d@b>', { 'no-reply': { from: 'N <n@b>' } }, fakeStorage({}));
 
   await channel.send(message({ sender: 'ghost' }));
 
@@ -103,7 +127,60 @@ test('listSenders отдаёт имена из конфига по алфави�
   const channel = new EmailChannel(db, fakeTransport().transport, 'D <d@b>', {
     support: { from: 's@b' },
     'no-reply': { from: 'n@b' },
-  });
+  }, fakeStorage({}));
 
   assert.deepEqual(channel.listSenders(), ['no-reply', 'support']);
+});
+
+test('send: пропавший объект вложения → ошибка доставки', async () => {
+  const { channel } = channelWith(fakeStorage({}));
+
+  await assert.rejects(
+    () => channel.send(message({ attachments: [{ storageKey: 'missing', filename: 'f.txt' }] })),
+    /Вложение не найдено/,
+  );
+});
+
+test('send: файл больше 10 МиБ → ошибка лимита', async () => {
+  const { channel } = channelWith(fakeStorage({ big: { size: NOTIFICATION_ATTACHMENT_LIMITS.maxFileBytes + 1 } }));
+
+  await assert.rejects(
+    () => channel.send(message({ attachments: [{ storageKey: 'big', filename: 'big.bin' }] })),
+    /10 МиБ/,
+  );
+});
+
+test('send: сумма вложений больше 20 МиБ → ошибка лимита', async () => {
+  const ten = NOTIFICATION_ATTACHMENT_LIMITS.maxFileBytes;
+  const { channel } = channelWith(
+    fakeStorage({
+      a: { size: ten },
+      b: { size: ten },
+      c: { size: ten },
+    }),
+  );
+
+  await assert.rejects(
+    () =>
+      channel.send(
+        message({
+          attachments: [
+            { storageKey: 'a', filename: 'a.bin' },
+            { storageKey: 'b', filename: 'b.bin' },
+            { storageKey: 'c', filename: 'c.bin' },
+          ],
+        }),
+      ),
+    /20 МиБ/,
+  );
+});
+
+test('send: вложения уходят стримом с filename/contentType', async () => {
+  const { channel, sent } = channelWith(fakeStorage({ doc: { size: 100, contentType: 'application/pdf' } }));
+
+  await channel.send(message({ attachments: [{ storageKey: 'doc', filename: 'report.pdf' }] }));
+
+  assert.equal(sent[0].attachments?.[0].filename, 'report.pdf');
+  assert.equal(sent[0].attachments?.[0].contentType, 'application/pdf');
+  assert.ok(sent[0].attachments?.[0].content instanceof Readable);
 });

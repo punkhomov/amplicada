@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { logger } from '@amplicada/platform-core/backend';
-import type { BackendDbService, BackendModule, BackendNotificationService } from '@amplicada/platform-core/contracts/backend';
+import type { BackendDbService, BackendModule, BackendNotificationService, BackendStorageService } from '@amplicada/platform-core/contracts/backend';
 import nodemailer from 'nodemailer';
 import { moduleManifest } from '../contracts/manifest.js';
 import { extendUserDoc } from './documents/user.js';
@@ -30,6 +30,7 @@ export const notificationEmailModule: BackendModule = {
 
     const db = context.services.resolve<BackendDbService>('db');
     const notification = context.services.resolve<BackendNotificationService>('notification');
+    const storage = context.services.resolve<BackendStorageService>('storage');
     const transport = nodemailer.createTransport({
       host: smtp.host,
       port: smtp.port,
@@ -37,7 +38,7 @@ export const notificationEmailModule: BackendModule = {
       auth: smtp.user ? { user: smtp.user, pass: smtp.password } : undefined,
     });
 
-    notification.registerChannel(new EmailChannel(db, transport, smtp.from, smtp.senders));
+    notification.registerChannel(new EmailChannel(db, transport, smtp.from, smtp.senders, storage));
     logger.info({ host: smtp.host, port: smtp.port }, 'Канал email зарегистрирован');
   },
 };
