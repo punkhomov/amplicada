@@ -1,0 +1,68 @@
+# Спайк: сборка VitePress из packages/*/docs на GitHub Pages (без версионирования).
+# Триггер — пуш в main, затрагивающий доки или сборку. Деплой — в project Pages
+# https://punkhomov.github.io/amplicada/ (base /amplicada/).
+name: Deploy docs to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/*/docs/**'
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - name: Install dependencies
+        # docs/ — standalone workspace со своим lockfile и политикой
+        # (см. docs/pnpm-workspace.yaml), ставится отдельно от корня.
+        run: pnpm install --frozen-lockfile
+      - name: Build with VitePress
+        run: pnpm docs:build
+        env:
+          DOCS_BASE: /amplicada/
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/content/.vitepress/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
