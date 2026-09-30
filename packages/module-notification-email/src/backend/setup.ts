@@ -37,7 +37,7 @@ export const notificationEmailModule: BackendModule = {
       auth: smtp.user ? { user: smtp.user, pass: smtp.password } : undefined,
     });
 
-    notification.registerChannel(new EmailChannel(db, transport, smtp.from));
+    notification.registerChannel(new EmailChannel(db, transport, smtp.from, smtp.senders));
     logger.info({ host: smtp.host, port: smtp.port }, 'Канал email зарегистрирован');
   },
 };
