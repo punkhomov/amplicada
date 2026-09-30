@@ -16,6 +16,8 @@ export function registerNotificationTemplateDoc(docs: DocumentRegistry, storage:
     module: 'core',
     label: 'core:notification_template_label',
     topic: DashboardTopics.SYSTEM,
+    // Code-шаблоны (fixtures) — источник истины в коде: правка и удаление вручную отклоняются.
+    fixtureReadonly: true,
   });
 
   docs.objects.extend(Documents.NOTIFICATION_TEMPLATE, {

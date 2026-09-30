@@ -72,6 +72,7 @@ const ACTIVE_IN_INDEX: SQL = isNull(documentIndex.deletedAt);
 const INDEX_STATE_COLUMNS: Record<string, PgColumn> = {
   stale: documentIndex.stale,
   deletedAt: documentIndex.deletedAt,
+  fixture: documentIndex.fixture,
 };
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
@@ -496,7 +497,7 @@ export class DocumentRuntime implements BackendDocumentRuntime {
     // Строка индекса и ЕСТЬ документ: она знает тип, живость и владеет id. soft-deleted не отдаётся
     // (undelete-UI отложен — см. план), восстановление — restore().
     const [indexRow] = await this.db
-      .select({ type: documentIndex.type })
+      .select({ type: documentIndex.type, fixture: documentIndex.fixture })
       .from(documentIndex)
       .where(and(eq(documentIndex.id, id), ACTIVE_IN_INDEX))
       .limit(1);
@@ -519,7 +520,7 @@ export class DocumentRuntime implements BackendDocumentRuntime {
           }
         }
 
-        return { id, type: resolvedType, data };
+        return { id, type: resolvedType, data, fixture: indexRow.fixture };
       },
       { isolationLevel: 'repeatable read', accessMode: 'read only' },
     );
@@ -553,11 +554,15 @@ export class DocumentRuntime implements BackendDocumentRuntime {
    */
   private async assertDocumentActive(db: BackendDbService, type: string, id: string): Promise<void> {
     const [row] = await db
-      .select({ id: documentIndex.id })
+      .select({ id: documentIndex.id, fixture: documentIndex.fixture })
       .from(documentIndex)
       .where(and(eq(documentIndex.id, id), eq(documentIndex.type, type), ACTIVE_IN_INDEX))
       .limit(1);
     if (!row) throw new DocumentRuntimeError(404, 'Документ не найден');
+    // Read-only фикстуры — opt-in у типа: source of truth в коде, ручная правка будет перезаписана.
+    if (row.fixture && this.getDocOrFail(type).fixtureReadonly) {
+      throw new DocumentRuntimeError(409, 'Документ объявлен кодом (fixture) и не редактируется вручную');
+    }
   }
 
   async update(type: string, id: string, body: Record<string, unknown>, actor?: DocumentActor): Promise<void> {
@@ -596,6 +601,17 @@ export class DocumentRuntime implements BackendDocumentRuntime {
 
   /** Actor пишется только в soft-delete ветку (document_index переживает удаление). Hard-delete стирает строку целиком — писать некуда и незачем. */
   private async deleteMany(doc: DocumentType, type: string, ids: string[], actor?: DocumentActor): Promise<void> {
+    // Read-only фикстуры: код пересоздаст строку на bootstrap, ручное удаление отклоняем до транзакции.
+    if (doc.fixtureReadonly) {
+      const fixtures = await this.db
+        .select({ id: documentIndex.id })
+        .from(documentIndex)
+        .where(and(inArray(documentIndex.id, ids), eq(documentIndex.fixture, true)));
+      if (fixtures.length) {
+        throw new DocumentRuntimeError(409, 'Документ объявлен кодом (fixture) и не удаляется вручную');
+      }
+    }
+
     await withDbErrors('delete', () =>
       this.db.transaction(async tx => {
         if (doc.softDelete) {

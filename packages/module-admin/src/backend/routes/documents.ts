@@ -80,6 +80,7 @@ export function createDocumentRoutes(fastify: FastifyInstance, context: BackendS
       type: meta.type,
       pages: meta.pages,
       data: doc.data,
+      fixture: doc.fixture ?? false,
       createdAt: idx?.createdAt?.toISOString(),
       updatedAt: idx?.updatedAt?.toISOString() ?? idx?.createdAt?.toISOString(),
       createdBy: idx?.createdByLogin ?? 'Система',

@@ -25,6 +25,12 @@ export interface DocumentType {
    * состояние документа переехало в индекс, поэтому её приходится объявлять явно.
    */
   softDelete?: boolean;
+  /**
+   * По умолчанию false — fixture-строки типа редактируются как обычные документы. Если true,
+   * `update`/`delete`/`bulkDelete` отклоняют fixture-документы (409): источник истины — код,
+   * `reconcileFixtures` перезапишет строку на каждом bootstrap.
+   */
+  fixtureReadonly?: boolean;
   /** Топик дашборда админки (см. DashboardTopics, DocumentRegistry.dashboard). По умолчанию — DashboardTopics.DOCUMENTS. */
   topic?: string;
   /** Секция внутри топика на дашборде (см. DocumentRegistry.dashboard.registerSection). Без секции — прямо под топиком. */
@@ -383,6 +389,8 @@ export interface DocumentObject {
   id: string;
   type: string;
   data: Record<string, Record<string, Record<string, unknown>>>;
+  /** Строка создана fixture-механизмом (code-defined документ). */
+  fixture?: boolean;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string;
