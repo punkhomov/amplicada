@@ -94,7 +94,7 @@ export function NotificationTemplateEditor({ data, fields, readonly, onChange }:
         <Select
           items={senderItems}
           value={sender || DEFAULT_SENDER}
-          onValueChange={value => onChange({ ...data, sender: value === DEFAULT_SENDER ? undefined : value })}
+          onValueChange={value => onChange({ ...data, sender: value === DEFAULT_SENDER ? null : value })}
           disabled={locked}
         >
           <SelectTrigger className="w-full">
