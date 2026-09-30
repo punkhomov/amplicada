@@ -32,6 +32,8 @@ export interface StorageTilesProps {
   isFetchingNextPage: boolean;
   /** Запросить следующую страницу; зовётся sentinel-элементом при попадании в зону видимости. */
   onLoadMore: () => void;
+  /** Догрузка упала: sentinel показывает «Повторить» вместо автозапроса. */
+  loadMoreError?: boolean;
 }
 
 /** Плитка повторяет семантику списка (клик/модификаторы/чекбокс/двойной клик) другими средствами. */
@@ -139,7 +141,16 @@ export function StorageTiles(props: StorageTilesProps) {
       {/* Sentinel бесконечного скролла: на всю ширину сетки, пока есть `nextToken`. */}
       {props.hasNextPage && (
         <div ref={loadMoreRef} data-slot="storage-load-more" className="col-span-full py-2 text-center text-sm text-muted-foreground">
-          {props.isFetchingNextPage ? t('admin_storage_loading_more') : null}
+          {props.loadMoreError ? (
+            <span className="inline-flex items-center gap-2">
+              {t('admin_storage_load_more_error')}
+              <button type="button" className="underline underline-offset-2" onClick={props.onLoadMore}>
+                {t('admin_storage_retry')}
+              </button>
+            </span>
+          ) : props.isFetchingNextPage ? (
+            t('admin_storage_loading_more')
+          ) : null}
         </div>
       )}
     </div>

@@ -102,6 +102,7 @@ export function AdminStorage() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetchNextPageError,
   } = useInfiniteQuery(storageObjectsInfiniteQueryOptions(api, prefix));
   // Правка — опциональная возможность деплоя: пока конфиг не приехал, превью только для чтения.
   const { data: config } = useQuery(adminStorageConfigQueryOptions(api));
@@ -125,7 +126,8 @@ export function AdminStorage() {
   // Догрузку запускает sentinel в конце списка; стабильная ссылка нужна, чтобы наблюдатель
   // не пересоздавался на каждом рендере (возврат к первой странице делает сам queryKey).
   const loadMore = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+    // Ошибку догрузки показываем строкой sentinel'а; reject гасим, чтобы не плодить unhandled rejection.
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage().catch(() => undefined);
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Выбор переживает смену списка, поэтому его надо подрезать до видимых ключей: иначе поиск
@@ -521,7 +523,9 @@ export function AdminStorage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [cancelPendingOpen]);
 
-  if (isError) return <QueryError error={queryError} onRetry={refetch} />;
+  // Полностраничная ошибка — только когда не загружено ни одной страницы: иначе падение догрузки
+  // стирало бы уже показанный список (sentinel покажет «Повторить»).
+  if (isError && !data) return <QueryError error={queryError} onRetry={refetch} />;
 
   const isEmpty = entries.length === 0 && editing?.mode !== 'create';
   const propertiesEntry = propertiesKey !== null ? (entries.find(entry => entry.key === propertiesKey) ?? null) : null;
@@ -645,6 +649,7 @@ export function AdminStorage() {
                       editing={editing}
                       hasNextPage={hasNextPage}
                       isFetchingNextPage={isFetchingNextPage}
+                      loadMoreError={isFetchNextPageError}
                       onLoadMore={loadMore}
                       onSort={handleSort}
                       onRowClick={handleRowClick}
@@ -670,6 +675,7 @@ export function AdminStorage() {
                       editing={editing}
                       hasNextPage={hasNextPage}
                       isFetchingNextPage={isFetchingNextPage}
+                      loadMoreError={isFetchNextPageError}
                       onLoadMore={loadMore}
                       onRowClick={handleRowClick}
                       onOpen={scheduleOpen}

@@ -51,6 +51,8 @@ export interface StorageListProps {
   hasNextPage: boolean;
   /** Идёт догрузка следующей страницы: sentinel показывает текст загрузки. */
   isFetchingNextPage: boolean;
+  /** Догрузка упала: sentinel показывает «Повторить» вместо автозапроса. */
+  loadMoreError?: boolean;
   /** Запросить следующую страницу; зовётся sentinel-строкой при попадании в зону видимости. */
   onLoadMore: () => void;
 }
@@ -60,6 +62,8 @@ export interface StorageLoadMoreProps {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   onLoadMore: () => void;
+  /** Догрузка упала: автоподхват выключается, sentinel показывает «Повторить» вместо запроса. */
+  loadMoreError?: boolean;
 }
 
 /**
@@ -68,11 +72,12 @@ export interface StorageLoadMoreProps {
  * его только когда догрузка закончилась; так исчерпанный `nextToken` (`hasNextPage === false`)
  * гарантированно останавливает цикл запросов.
  */
-export function useLoadMoreSentinel({ hasNextPage, isFetchingNextPage, onLoadMore }: StorageLoadMoreProps) {
+export function useLoadMoreSentinel({ hasNextPage, isFetchingNextPage, onLoadMore, loadMoreError }: StorageLoadMoreProps) {
   const node = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const element = node.current;
-    if (!element || !hasNextPage || isFetchingNextPage) return;
+    // При ошибке ждём ручного «Повторить»: иначе sentinel в зоне видимости зациклит падающие запросы.
+    if (!element || !hasNextPage || isFetchingNextPage || loadMoreError) return;
     const observer = new IntersectionObserver(
       entries => {
         if (!entries.some(entry => entry.isIntersecting)) return;
@@ -84,7 +89,7 @@ export function useLoadMoreSentinel({ hasNextPage, isFetchingNextPage, onLoadMor
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, onLoadMore]);
+  }, [hasNextPage, isFetchingNextPage, loadMoreError, onLoadMore]);
   // Колбэк-ref, а не `useRef`: sentinel появляется только с `hasNextPage`, и ссылка обязана
   // быть записана до пассивного эффекта того же рендера.
   return useCallback((element: HTMLElement | null) => {
@@ -235,7 +240,16 @@ export function StorageList(props: StorageListProps) {
         {props.hasNextPage && (
           <TableRow ref={loadMoreRef} data-slot="storage-load-more">
             <TableCell colSpan={6} className="py-2 text-center text-sm text-muted-foreground">
-              {props.isFetchingNextPage ? t('admin_storage_loading_more') : null}
+              {props.loadMoreError ? (
+                <span className="inline-flex items-center gap-2">
+                  {t('admin_storage_load_more_error')}
+                  <button type="button" className="underline underline-offset-2" onClick={props.onLoadMore}>
+                    {t('admin_storage_retry')}
+                  </button>
+                </span>
+              ) : props.isFetchingNextPage ? (
+                t('admin_storage_loading_more')
+              ) : null}
             </TableCell>
           </TableRow>
         )}
