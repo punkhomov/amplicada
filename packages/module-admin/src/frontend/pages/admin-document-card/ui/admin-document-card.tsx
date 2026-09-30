@@ -261,7 +261,7 @@ export function AdminDocumentCard() {
   const toolbarActions = context.services.resolve<AdminToolbarService>('admin:toolbar').getAll(type);
 
   return (
-    <DocumentCardContext.Provider value={{ documentType: type, documentId: id ?? null, editData, updateField, isNew }}>
+    <DocumentCardContext.Provider value={{ documentType: type, documentId: id ?? null, editData, updateField, isNew, fixture }}>
       <div className="h-full">
         <div className="w-full max-w-screen-2xl mx-auto flex h-full flex-col px-8 py-4 gap-4">
           <div className="shrink-0 flex flex-col gap-4">
