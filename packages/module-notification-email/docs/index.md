@@ -2,8 +2,8 @@
 title: "module-notification-email — обзор"
 type: index
 package: module-notification-email
-updated: 2026-09-16
-verified_commit: 4e61e7a1
+updated: 2026-09-30
+verified_commit: 0551349
 ---
 
 # module-notification-email
@@ -15,8 +15,8 @@ verified_commit: 4e61e7a1
 (`platform-core`) само не знает, что такое email, — модуль регистрирует канал `email` в
 core-сервисе `notification` и решает, по какому адресу слать конкретному пользователю.
 
-В пакет осознанно не входят: шаблоны писем, подтверждение адреса пользователем, вложения,
-очереди и ретраи (ретраи — забота ядра). Модуль также не предоставляет frontend-сторону:
+В пакет осознанно не входят: шаблоны писем, подтверждение адреса пользователем, очереди и
+ретраи (ретраи — забота ядра). Модуль также не предоставляет frontend-сторону:
 метки полей карточки переводит backend-локаль запроса, своей UI у него нет.
 
 ## Публичная поверхность
@@ -27,6 +27,8 @@ core-сервисе `notification` и решает, по какому адрес
 | Сервис для ядра | `registerChannel()` вызывается при подключённом `SMTP_HOST` | `src/backend/setup.ts` |
 | Адресная книга | таблица `notification_email.user_email` | `src/backend/schemas/user-email.ts` |
 | Документ | поля `email`, `verifiedAt` на карточке `user`, группа security | `src/backend/documents/user.ts` |
+| Отправители | `SMTP_SENDERS` → `listSenders()`, резолв `sender` в `from`/`replyTo` | `src/backend/services/email-channel.ts` |
+| Вложения | стрим из storage, лимиты 10/20 МиБ, `headObject` | `src/backend/services/email-channel.ts` |
 | Локали | `notification-email:field_email`, `notification-email:field_verified_at` | `src/backend/locales/` |
 
 ## Зависимости и порядок загрузки
@@ -58,5 +60,7 @@ core-сервисе `notification` и решает, по какому адрес
 | Конфиг: env, зависимости, порядок | [reference/](./reference/index.md) |
 | Интеграции и потребители | [reference/](./reference/index.md) |
 
-Сверено с рабочим деревом на ветке feat/notifications (4e61e7a1). Живая проверка: письмо с text и html доставлено в Mailpit, строка outbox
-перешла в `sent`.
+Сверено с рабочим деревом на ветке feat/notifications (0551349): контракт уведомлений v2
+(ADR-07) — именованные отправители, конверты, вложения. Живой прогон v1: письмо с text и html
+доставлено в Mailpit, строка outbox перешла в `sent`; v2 проверяется живым прогоном плана
+`ref/plans/2026-09-30-notification-v2-implementation.md`.

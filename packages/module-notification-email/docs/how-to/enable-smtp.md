@@ -1,8 +1,8 @@
 ---
 title: "Включить почту на узле"
 type: how-to
-updated: 2026-09-16
-verified_commit: 4e61e7a1
+updated: 2026-09-30
+verified_commit: 0551349
 order: 21
 ---
 
@@ -13,13 +13,12 @@ order: 21
 
 1. Задайте переменные окружения узла (см. [reference](../reference/index.md)):
    `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_FROM`, при необходимости
-   `SMTP_USER` и `SMTP_PASSWORD`.
+   `SMTP_USER`, `SMTP_PASSWORD` и `SMTP_SENDERS` (именованные отправители).
 2. Перезапустите API. В логе должно появиться `Канал email зарегистрирован` с host и port.
 3. Проверьте доставку: выдайте пользователю email (см. [выдать email](./set-user-email.md))
-   и вызовите `notification.send({ userId, kind, subject, body })` из кода потребителя.
-   Публичного HTTP-роута отправки у платформы пока нет — отправители появятся вместе с
-   регистрацией и сбросом пароля. Строка появится в `/admin/notifications` со статусом `sent`;
-   в dev письмо смотрите в Mailpit: `http://127.0.0.1:8025`.
+   и отправьте письмо — из кода потребителя через `notification.send(...)`/`sendMany(...)`
+   или из админки шаблоном (`/admin/notification-template`, кнопка «Отправить»). Строка
+   появится в `/admin/notifications`; в dev письмо смотрите в Mailpit: `http://127.0.0.1:8025`.
 
 Для локальной разработки значения уже есть в `.env.host.example`, а Mailpit поднимается
 вместе с остальной инфраструктурой (`pnpm infra:up`).

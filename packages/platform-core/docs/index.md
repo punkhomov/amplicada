@@ -27,6 +27,7 @@ verified_commit: 61bed2d7
 | Синхронизация кита | `pnpm --filter @amplicada/platform-core ui:sync \| ui:check` | `scripts/shadcn-sync.mjs` |
 | Точки расширения UI | `context.extensions.contribute('<id>', { component })` | `src/frontend/registries/extension-point.ts` |
 | Сервис storage | `context.services.resolve<BackendStorageService>('storage')` | `src/backend/services/storage-service.ts` |
+| Сервис notification | `context.services.resolve<BackendNotificationService>('notification')` — контракт v2 | `src/backend/services/notification-service.ts` |
 
 ## Карта документации
 
@@ -43,6 +44,7 @@ verified_commit: 61bed2d7
 |---|---|
 | Точки расширения (сервисы, токены) | — нет |
 | Сервис storage (S3) | [reference/storage.md](./reference/storage.md) |
+| Уведомления: сервис, шаблоны, outbox | [reference/notifications.md](./reference/notifications.md) |
 | HTTP API | — нет |
 | Схема БД и миграции | — нет |
 | Документы, списки, дашборд | — нет |
@@ -55,7 +57,8 @@ verified_commit: 61bed2d7
 
 ## Freshness
 
-- Сверено с кодом: `2026-09-30`, коммит `61bed2d7`, рабочее дерево чистое (ветка `feat/admin-storage-explorer`).
+- Сверено с кодом: `2026-09-30`, коммит `0551349`, ветка `feat/notifications` (контракт
+  уведомлений v2, ADR-07).
 - Storage проверен живым прогоном: API (листинг по папкам, `Range`/`206`, `inline`/`attachment`,
   CSP `sandbox`, загрузка, рекурсивное удаление) и браузерный e2e-смоук страницы `/admin/storage`
   в Playwright (логин, загрузка, превью текста/изображения, скачивание, навигация по папкам,

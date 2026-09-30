@@ -357,3 +357,11 @@ install-политикой; отправка несохранённого чер
 **Код.** `src/backend/documents/notification-template.ts`, `src/backend/routes/notifications.ts`,
 `src/frontend/widgets/send-notification-template/`, `migrations/0000_init.sql`
 **Связано.** [ADR-04](../adr/04-notifications.md), `packages/module-admin/docs/reference/notification-templates.md`
+
+**Обновление (2026-09-30).** Ожидание из «Что изменит решение» сбылось: контракт уведомлений
+обновлён до v2 (ADR-07). Шаблоны переехали в ядро (`core.notification_template`, тип регистрирует
+platform-core; админка — только UI), рассылка переведена на `notification.sendMany` (один батч,
+worker доставляет, в логе «Повторить батч»), в редакторе появились отправитель и вложения
+(роуты `template-attachments`), fixture-шаблоны read-only. Админская миграция `0000_init` и её
+таблица удалены — формат БД сломан, данные одноразовые. Цикл `send()` в HTTP остался только
+историей D-009.

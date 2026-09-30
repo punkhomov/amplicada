@@ -1,8 +1,8 @@
 ---
 title: "Справочник module-notification-email"
 type: reference
-updated: 2026-09-16
-verified_commit: 4e61e7a1
+updated: 2026-09-30
+verified_commit: 0551349
 order: 10
 ---
 
@@ -17,10 +17,33 @@ core-сервисе `notification`:
 |---|---|---|
 | `id` | `'email'` | `src/backend/services/email-channel.ts` |
 | `resolveAddress(userId)` | `null`, если строки нет или пуст `verified_at`; иначе `email` из `notification_email.user_email` | `src/backend/services/email-channel.ts` |
-| `send(message)` | `transport.sendMail({ from, to, subject, text, html })`; `html` необязателен | `src/backend/services/email-channel.ts` |
+| `listSenders()` | Имена из `SMTP_SENDERS` по алфавиту (для select в редакторе шаблона) | `src/backend/services/email-channel.ts` |
+| `send(message)` | `transport.sendMail` с конвертом: `from` отправителя, `to`, `subject`, `text`, `html`, `replyTo`, `cc`, `bcc`, `headers`, вложения | `src/backend/services/email-channel.ts` |
 
 Адрес нормализуется в нижний регистр при сохранении. Неподтверждённый адрес не попадает в
 доставку: строка outbox для него не создаётся вовсе.
+
+## Именованные отправители
+
+`SMTP_SENDERS` — JSON-карта `имя → { from, replyTo? }`; в контракте сообщения имя едет в поле
+`sender`, резолвит его канал:
+
+- известное имя → `from`/`replyTo` из карты;
+- явный `replyTo` сообщения приоритетнее sender-овского;
+- неизвестное имя → warning и дефолтный `SMTP_FROM` (fail-open: опечатка не глушит письма).
+
+Битый JSON или запись без `from` не роняют узел: такая запись просто игнорируется.
+
+## Вложения
+
+Манифест `NotificationAttachment[]` (`storageKey`, `filename`, `contentType?`, `size?`) приходит
+из контракта сообщения. При отправке канал:
+
+- проверяет существование и **реальный** размер объекта через `storage.headObject` (манифесту
+  `size` не верится);
+- отклоняет файл больше 10 МиБ и сумму больше 20 МиБ (`NOTIFICATION_ATTACHMENT_LIMITS`) —
+  это обычная ошибка доставки с `lastError`, строка уходит в ретрай;
+- стримит объект из storage в письмо (не буфер).
 
 ## Конфиг (env)
 
@@ -30,7 +53,8 @@ core-сервисе `notification`:
 | `SMTP_PORT` | `587` | Для Mailpit — `1025` |
 | `SMTP_SECURE` | `false` | `true` для implicit TLS (порт 465) |
 | `SMTP_USER` / `SMTP_PASSWORD` | — | Передаются в transport, если заданы |
-| `SMTP_FROM` | `Amplicada <no-reply@amplicada.local>` | Отправитель |
+| `SMTP_FROM` | `Amplicada <no-reply@amplicada.local>` | Дефолтный отправитель и fallback неизвестного имени |
+| `SMTP_SENDERS` | `{}` | JSON-карта именованных отправителей |
 
 Секреты живут только в окружении узла; в БД и коде их нет.
 
@@ -72,4 +96,6 @@ Frontend-сторона не требуется: у модуля нет UI и CS
 
 - ADR-04 «Ядро маршрутизирует, каналы доставляют» (`ref/adr/04-notifications.md`) — почему
   маршрутизация в ядре, а транспорт в модулях.
+- ADR-07 «Контракт уведомлений v2» (`ref/adr/07-notification-contract-v2.md`) — именованные
+  отправители, конверты, вложения.
 - План уведомлений (`ref/plans/2026-09-15-notifications/`) — история решения и подпланы.
